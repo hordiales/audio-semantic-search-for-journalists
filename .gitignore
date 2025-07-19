@@ -1,3 +1,7 @@
+#custom files
+dataset/*
+activate-conda-env.sh
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
