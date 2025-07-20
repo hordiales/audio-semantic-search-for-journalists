@@ -11,7 +11,7 @@ from typing import List, Dict, Optional, Tuple
 import json
 from pathlib import Path
 
-#from improved_audio_search import ImprovedAudioSearch #mock
+from improved_audio_search import ImprovedAudioSearch
 from vector_indexing import VectorIndexManager
 
 class HybridAudioSearch:

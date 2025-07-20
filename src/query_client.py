@@ -19,7 +19,7 @@ from audio_embeddings import get_audio_embedding_generator
 from vector_indexing import VectorIndexManager
 from semantic_audio_mapping import semantic_mapper, validate_audio_query, suggest_audio_queries
 from audioset_ontology import AUDIOSET_CLASSES
-#from improved_audio_search import ImprovedAudioSearch #mock
+from improved_audio_search import ImprovedAudioSearch
 from hybrid_audio_search import HybridAudioSearch
 from search_config import SearchConfig
 from semantic_search import SemanticSearchEngine
@@ -297,7 +297,8 @@ class AudioDatasetClient:
         """Inicializa el sistema de búsqueda por sentimientos si es posible"""
         try:
             # Verificar si el dataset tiene análisis de sentimientos
-            if self.df is not None and 'sentiment_score' in self.df.columns:
+            sentiment_columns = [col for col in self.df.columns if 'sentiment' in col.lower()] if self.df is not None else []
+            if self.df is not None and len(sentiment_columns) > 0:
                 print("🎭 Inicializando sistema de análisis de sentimientos...")
                 
                 # Configurar semantic search engine para sentiment
@@ -354,7 +355,7 @@ class AudioDatasetClient:
                     'start_time': row.get('start_time', 0),
                     'end_time': row.get('end_time', 0),
                     'duration': row.get('duration', 0),
-                    'sentiment_score': row.get('sentiment_score', 0.0),
+                    'sentiment_score': row.get('sentiment_positive', 0.0),
                     'dominant_sentiment': row.get('dominant_sentiment', 'UNKNOWN'),
                     'search_method': 'sentiment'
                 }
@@ -396,7 +397,7 @@ class AudioDatasetClient:
                     'start_time': row.get('start_time', 0),
                     'end_time': row.get('end_time', 0),
                     'duration': row.get('duration', 0),
-                    'sentiment_score': row.get('sentiment_score', 0.0),
+                    'sentiment_score': row.get('sentiment_positive', 0.0),
                     'dominant_sentiment': row.get('dominant_sentiment', 'UNKNOWN'),
                     'search_method': 'text_with_sentiment'
                 }
@@ -766,7 +767,7 @@ Ejemplos:
             print(f"  📝 Texto promedio: {stats['text_avg_length']:.1f} caracteres")
             
             # Mostrar estadísticas de sentimientos si están disponibles
-            if self.client.sentiment_enabled and 'sentiment_score' in self.client.df.columns:
+            if self.client.sentiment_enabled and 'dominant_sentiment' in self.client.df.columns:
                 sentiment_counts = self.client.df['dominant_sentiment'].value_counts()
                 print(f"\n🎭 Distribución de Sentimientos:")
                 for sentiment, count in sentiment_counts.head(5).items():
