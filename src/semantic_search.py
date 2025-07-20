@@ -36,8 +36,8 @@ class SemanticSearchEngine:
         # Inicializar componentes
         self.transcriber = AudioTranscriber(model_name=self.config['whisper_model'])
         self.text_embedder = TextEmbeddingGenerator(model_name=self.config['text_embedding_model'])
-        self.audio_embedder = get_audio_embedding_generator(use_mock=self.config['use_mock_audio'])
-        self.sentiment_analyzer = SentimentAnalyzer(use_mock=self.config.get('use_mock_sentiment', self.config['use_mock_audio']))
+        self.audio_embedder = get_audio_embedding_generator()
+        self.sentiment_analyzer = SentimentAnalyzer()
         self.index_manager = VectorIndexManager(
             embedding_dim=self.text_embedder.embedding_dim,
             index_type=self.config['index_type']
@@ -59,7 +59,6 @@ class SemanticSearchEngine:
             return {
                 'whisper_model': SYSTEM_CONFIG.default_whisper_model,
                 'text_embedding_model': SYSTEM_CONFIG.default_text_model,
-                'use_mock_audio': SYSTEM_CONFIG.use_mock_audio,
                 'index_type': SYSTEM_CONFIG.index_type,
                 'segmentation_method': SYSTEM_CONFIG.segmentation_method,
                 'min_silence_len': SYSTEM_CONFIG.min_silence_len,
@@ -72,16 +71,9 @@ class SemanticSearchEngine:
             }
         
         # Fallback a configuración manual si no hay sistema de configuración
-        try:
-            import tensorflow
-            default_mock = False
-        except ImportError:
-            default_mock = True
-            
         return {
             'whisper_model': 'base',
             'text_embedding_model': 'sentence-transformers/all-MiniLM-L6-v2',
-            'use_mock_audio': default_mock,
             'index_type': 'cosine',
             'segmentation_method': 'silence',
             'min_silence_len': 500,
@@ -541,7 +533,6 @@ if __name__ == "__main__":
     # Configuración personalizada
     config = {
         'whisper_model': 'base',
-        'use_mock_audio': True,
         'segmentation_method': 'time',
         'segment_duration': 15.0,
         'top_k_results': 10

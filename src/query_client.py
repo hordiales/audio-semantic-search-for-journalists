@@ -77,14 +77,12 @@ class AudioDatasetClient:
         if self.manifest and 'config' in self.manifest:
             config = self.manifest['config']
             text_model = config.get('text_model', 'sentence-transformers/all-MiniLM-L6-v2')
-            use_mock_audio = config.get('use_mock_audio', False)
         else:
             text_model = 'sentence-transformers/all-MiniLM-L6-v2'
-            use_mock_audio = False
         
         print(f"🧠 Inicializando embedders...")
         self.text_embedder = TextEmbeddingGenerator(model_name=text_model)
-        self.audio_embedder = get_audio_embedding_generator(use_mock=use_mock_audio)
+        self.audio_embedder = get_audio_embedding_generator()
         
         # Cargar índices vectoriales
         indices_dir = self.dataset_dir / "indices"
@@ -183,7 +181,6 @@ class AudioDatasetClient:
     def search_audio(self, query_text: str, k: int = 5) -> List[Dict]:
         """
         Busca por audio usando palabras clave en transcripciones
-        (Funciona correctamente con embeddings mock)
         
         Args:
             query_text: Texto para buscar clases de audio relacionadas
@@ -305,8 +302,6 @@ class AudioDatasetClient:
                 config = {
                     'whisper_model': 'base',
                     'text_embedding_model': 'sentence-transformers/all-MiniLM-L6-v2',
-                    'use_mock_audio': True,
-                    'use_mock_sentiment': False,  # Usar datos reales si están disponibles
                     'index_type': 'cosine',
                     'top_k_results': 10
                 }

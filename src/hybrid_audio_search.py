@@ -51,7 +51,7 @@ class HybridAudioSearch:
                     manifest = json.load(f)
                 
                 config = manifest.get('config', {})
-                audio_model = config.get('audio_embedding_model', 'MockYAMNet')
+                audio_model = config.get('audio_embedding_model', 'YAMNet')
                 
                 if audio_model == "YAMNet":
                     print("✅ Detectado YAMNet real en manifiesto")
@@ -63,7 +63,7 @@ class HybridAudioSearch:
                 with open(indices_metadata, 'r') as f:
                     metadata = json.load(f)
                 
-                audio_model = metadata.get('audio_model', 'MockYAMNet')
+                audio_model = metadata.get('audio_model', 'YAMNet')
                 if audio_model == "YAMNet":
                     print("✅ Detectado YAMNet real en índices")
                     return True
@@ -135,7 +135,7 @@ class HybridAudioSearch:
             # Cargar modelo YAMNet para generar embedding de consulta
             from audio_embeddings import get_audio_embedding_generator
             
-            audio_embedder = get_audio_embedding_generator(use_mock=False)
+            audio_embedder = get_audio_embedding_generator()
             
             # Generar embedding del archivo de consulta
             query_embedding = audio_embedder.generate_embedding(query_audio_file)

@@ -76,26 +76,25 @@ class SentimentAnalyzer:
         'calm': 'NEUTRAL'
     }
     
-    def __init__(self, model_name: str = None, use_mock: bool = False):
+    def __init__(self, model_name: str = None):
         """
         Inicializa el analizador de sentimientos
         
         Args:
             model_name: Nombre del modelo de análisis de sentimientos
-            use_mock: Si usar datos mock en lugar del modelo real
         """
-        self.use_mock = use_mock or not TRANSFORMERS_AVAILABLE
+        if not TRANSFORMERS_AVAILABLE:
+            raise RuntimeError("Transformers library es requerida para análisis de sentimientos. Instala con: pip install transformers")
+        
         self.model_name = model_name or "cardiffnlp/twitter-roberta-base-sentiment-latest"
         self.pipeline = None
         self.tokenizer = None
         self.model = None
         
-        if not self.use_mock:
-            try:
-                self._initialize_model()
-            except Exception as e:
-                logging.warning(f"Error inicializando modelo de sentimientos: {e}")
-                self.use_mock = True
+        try:
+            self._initialize_model()
+        except Exception as e:
+            raise RuntimeError(f"Error inicializando modelo de sentimientos: {e}")
     
     def _initialize_model(self):
         """Inicializa el modelo de análisis de sentimientos"""
@@ -138,8 +137,6 @@ class SentimentAnalyzer:
         Returns:
             Diccionario con scores de sentimiento
         """
-        if self.use_mock:
-            return self._mock_analysis(text)
         
         try:
             # Limpiar texto
@@ -159,7 +156,7 @@ class SentimentAnalyzer:
             
         except Exception as e:
             logging.error(f"Error en análisis de sentimientos: {e}")
-            return self._mock_analysis(text)
+            raise RuntimeError(f"Error analizando sentimiento: {e}")
     
     def _normalize_sentiment_result(self, result: List[Dict]) -> Dict[str, float]:
         """
@@ -212,43 +209,6 @@ class SentimentAnalyzer:
         
         return sentiment_scores
     
-    def _mock_analysis(self, text: str) -> Dict[str, float]:
-        """
-        Análisis mock basado en palabras clave
-        
-        Args:
-            text: Texto a analizar
-            
-        Returns:
-            Scores de sentimiento simulados
-        """
-        text_lower = text.lower()
-        
-        # Palabras positivas
-        positive_words = [
-            'bien', 'bueno', 'excelente', 'genial', 'perfecto', 'fantástico',
-            'alegre', 'feliz', 'contento', 'satisfecho', 'optimista',
-            'éxito', 'victoria', 'logro', 'ganancia', 'crecimiento',
-            'good', 'great', 'excellent', 'amazing', 'happy', 'success'
-        ]
-        
-        # Palabras negativas  
-        negative_words = [
-            'mal', 'malo', 'terrible', 'horrible', 'pésimo',
-            'triste', 'enojado', 'furioso', 'molesto', 'frustrado',
-            'problema', 'crisis', 'fracaso', 'pérdida', 'error',
-            'bad', 'terrible', 'awful', 'sad', 'angry', 'problem', 'crisis'
-        ]
-        
-        positive_count = sum(1 for word in positive_words if word in text_lower)
-        negative_count = sum(1 for word in negative_words if word in text_lower)
-        
-        if positive_count > negative_count:
-            return {'POSITIVE': 0.7, 'NEGATIVE': 0.1, 'NEUTRAL': 0.2}
-        elif negative_count > positive_count:
-            return {'POSITIVE': 0.1, 'NEGATIVE': 0.7, 'NEUTRAL': 0.2}
-        else:
-            return {'POSITIVE': 0.3, 'NEGATIVE': 0.3, 'NEUTRAL': 0.4}
     
     def process_dataframe(self, df: pd.DataFrame, text_column: str = 'text') -> pd.DataFrame:
         """
@@ -419,7 +379,11 @@ if __name__ == "__main__":
     df = pd.DataFrame(sample_data)
     
     # Inicializar analizador
-    analyzer = SentimentAnalyzer(use_mock=True)  # Usar mock para ejemplo
+    if not TRANSFORMERS_AVAILABLE:
+        print("❌ Transformers no está disponible. No se pueden ejecutar las pruebas.")
+        exit(1)
+    
+    analyzer = SentimentAnalyzer()
     
     # Procesar sentimientos
     df_with_sentiment = analyzer.process_dataframe(df)

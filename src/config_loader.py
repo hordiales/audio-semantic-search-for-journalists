@@ -33,7 +33,6 @@ class SystemConfig:
     default_llm_backend: str = "auto"
     default_whisper_model: str = "base"
     default_text_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    use_mock_audio: bool = True
     
     # API
     api_host: str = "0.0.0.0"
@@ -147,7 +146,6 @@ class ConfigLoader:
             default_llm_backend=os.getenv("DEFAULT_LLM_BACKEND", "auto"),
             default_whisper_model=os.getenv("DEFAULT_WHISPER_MODEL", "base"),
             default_text_model=os.getenv("DEFAULT_TEXT_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
-            use_mock_audio=self._parse_bool(os.getenv("USE_MOCK_AUDIO", "true")),
             
             # API
             api_host=os.getenv("API_HOST", "0.0.0.0"),
@@ -220,7 +218,6 @@ class ConfigLoader:
         return {
             'whisper_model': config.default_whisper_model,
             'text_embedding_model': config.default_text_model,
-            'use_mock_audio': config.use_mock_audio,
             'index_type': config.index_type,
             'segmentation_method': config.segmentation_method,
             'min_silence_len': config.min_silence_len,
@@ -248,7 +245,6 @@ class ConfigLoader:
         print(f"\n🤖 LLM Backend: {config.default_llm_backend}")
         print(f"🎤 Whisper Model: {config.default_whisper_model}")
         print(f"📝 Text Model: {config.default_text_model}")
-        print(f"🔊 Mock Audio: {config.use_mock_audio}")
         
         # API
         print(f"\n🌐 API: {config.api_host}:{config.api_port}")
@@ -281,7 +277,6 @@ GOOGLE_API_KEY=
 # ================================
 DEFAULT_LLM_BACKEND=auto
 DEFAULT_WHISPER_MODEL=base
-USE_MOCK_AUDIO=true
 
 # ================================
 # API REST

@@ -34,7 +34,7 @@ python run_dataset_pipeline.py --input /data --output ./dataset \\
 
 # Procesamiento rápido para desarrollo
 python run_dataset_pipeline.py --input /data --output ./dataset \\
-    --whisper-model tiny --mock-audio --workers 2
+    --whisper-model tiny --workers 2
         """
     )
     
@@ -131,9 +131,6 @@ python run_dataset_pipeline.py --input /data --output ./dataset \\
     )
     
     parser.add_argument(
-        "--mock-audio",
-        action="store_true",
-        help="Usar embeddings de audio mock (más rápido)"
     )
     
     parser.add_argument(
@@ -244,7 +241,6 @@ def create_dataset_config(args) -> DatasetConfig:
         
         # Embeddings
         text_model=file_config.get("text_model", args.text_model),
-        use_mock_audio=file_config.get("use_mock_audio", args.mock_audio),
         
         # Paralelización
         max_workers=file_config.get("max_workers", args.workers),
@@ -266,7 +262,6 @@ def print_config_summary(config: DatasetConfig):
     print(f"📁 Output: {config.output_dir}")
     print(f"🎤 Whisper: {config.whisper_model}")
     print(f"📝 Text Model: {config.text_model}")
-    print(f"🔊 Audio Mock: {config.use_mock_audio}")
     print(f"📊 Segmentación: {config.segmentation_method}")
     print(f"👥 Workers: {config.max_workers}")
     print(f"💾 Intermediate: {config.save_intermediate}")

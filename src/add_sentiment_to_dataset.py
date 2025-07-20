@@ -22,18 +22,16 @@ from config_loader import get_config
 class DatasetSentimentProcessor:
     """Procesador para agregar sentimientos a datasets existentes"""
     
-    def __init__(self, dataset_dir: str, batch_size: int = 32, use_mock: bool = False):
+    def __init__(self, dataset_dir: str, batch_size: int = 32):
         """
         Inicializa el procesador
         
         Args:
             dataset_dir: Directorio del dataset
             batch_size: Tamaño de lote para procesamiento
-            use_mock: Usar análisis mock (más rápido para testing)
         """
         self.dataset_dir = Path(dataset_dir)
         self.batch_size = batch_size
-        self.use_mock = use_mock
         
         # Verificar que el dataset existe
         if not self.dataset_dir.exists():
@@ -54,15 +52,14 @@ class DatasetSentimentProcessor:
         try:
             config = get_config()
             self.sentiment_analyzer = SentimentAnalyzer(
-                use_mock=self.use_mock,
                 model_name=config.sentiment_model if hasattr(config, 'sentiment_model') else None
             )
         except Exception as e:
             self.logger.warning(f"Usando configuración por defecto para sentimientos: {e}")
-            self.sentiment_analyzer = SentimentAnalyzer(use_mock=self.use_mock)
+            self.sentiment_analyzer = SentimentAnalyzer()
         
         self.logger.info(f"Procesador inicializado - Dataset: {dataset_dir}")
-        self.logger.info(f"Batch size: {batch_size}, Mock: {use_mock}")
+        self.logger.info(f"Batch size: {batch_size}")
     
     def find_dataset_files(self) -> dict:
         """Encuentra los archivos del dataset disponibles"""
@@ -252,7 +249,6 @@ class DatasetSentimentProcessor:
                 'processed': True,
                 'processed_date': datetime.now().isoformat(),
                 'analyzer_version': '1.0',
-                'use_mock': self.use_mock,
                 'total_segments': len(df)
             },
             'columns': list(df.columns),
@@ -296,8 +292,8 @@ Ejemplos de uso:
 # Procesar dataset existente
 python add_sentiment_to_dataset.py ./dataset
 
-# Procesar con análisis mock (rápido para testing)
-python add_sentiment_to_dataset.py ./dataset --mock
+# Procesar con análisis de sentimientos
+python add_sentiment_to_dataset.py ./dataset
 
 # Reemplazar análisis existente
 python add_sentiment_to_dataset.py ./dataset --overwrite
@@ -323,9 +319,6 @@ python add_sentiment_to_dataset.py ./dataset --batch-size 64
     )
     
     parser.add_argument(
-        "--mock",
-        action="store_true",
-        help="Usar análisis de sentimientos mock (más rápido)"
     )
     
     parser.add_argument(
@@ -356,7 +349,6 @@ python add_sentiment_to_dataset.py ./dataset --batch-size 64
     print("=" * 50)
     print(f"📁 Dataset: {args.dataset_dir}")
     print(f"📊 Batch size: {args.batch_size}")
-    print(f"🎭 Mock analysis: {args.mock}")
     print(f"🔄 Overwrite: {args.overwrite}")
     print(f"💾 Backup: {not args.no_backup}")
     print()
@@ -366,7 +358,6 @@ python add_sentiment_to_dataset.py ./dataset --batch-size 64
         processor = DatasetSentimentProcessor(
             dataset_dir=args.dataset_dir,
             batch_size=args.batch_size,
-            use_mock=args.mock
         )
         
         # Ejecutar procesamiento

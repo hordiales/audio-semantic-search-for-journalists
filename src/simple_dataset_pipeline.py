@@ -42,7 +42,6 @@ class SimpleDatasetPipeline:
         self.config = {
             'whisper_model': kwargs.get('whisper_model', system_config.default_whisper_model),
             'text_model': kwargs.get('text_model', system_config.default_text_model),
-            'use_mock_audio': kwargs.get('use_mock_audio', system_config.use_mock_audio),
             'sample_rate': kwargs.get('sample_rate', 16000),
             'channels': kwargs.get('channels', 1),
             'segmentation_method': kwargs.get('segmentation_method', system_config.segmentation_method),
@@ -76,7 +75,7 @@ class SimpleDatasetPipeline:
         self.audio_converter = AudioConverter()
         self.transcriber = AudioTranscriber(model_name=self.config['whisper_model'])
         self.text_embedder = TextEmbeddingGenerator(model_name=self.config['text_model'])
-        self.audio_embedder = get_audio_embedding_generator(use_mock=self.config['use_mock_audio'])
+        self.audio_embedder = get_audio_embedding_generator()
         
         # Estadísticas
         self.stats = {
@@ -231,8 +230,9 @@ class SimpleDatasetPipeline:
         all_segments = []
         for transcription in transcriptions:
             for segment in transcription["segments"]:
-                segment["source_file"] = transcription["file_name"]
-                segment["file_path"] = transcription["file_path"]
+                # Mantener la ruta completa del archivo WAV convertido
+                segment["source_file"] = transcription["file_path"] 
+                segment["original_file_name"] = transcription["file_name"]
                 all_segments.append(segment)
         
         df = pd.DataFrame(all_segments)
@@ -286,7 +286,7 @@ class SimpleDatasetPipeline:
                 "text_index_created": text_success,
                 "audio_index_created": audio_success,
                 "text_model": self.config['text_model'],
-                "audio_model": "mock" if self.config['use_mock_audio'] else "yamnet"
+                "audio_model": "yamnet"
             }
             
             metadata_file = indices_dir / "indices_metadata.json"
@@ -400,7 +400,6 @@ if __name__ == "__main__":
     parser.add_argument("--input", "-i", required=True, help="Directorio de entrada")
     parser.add_argument("--output", "-o", default="./dataset", help="Directorio de salida")
     parser.add_argument("--whisper-model", default="base", help="Modelo Whisper")
-    parser.add_argument("--mock-audio", action="store_true", help="Usar embeddings mock")
     parser.add_argument("--segmentation", default="silence", choices=["silence", "time"])
     
     args = parser.parse_args()
@@ -410,7 +409,6 @@ if __name__ == "__main__":
         input_dir=args.input,
         output_dir=args.output,
         whisper_model=args.whisper_model,
-        use_mock_audio=args.mock_audio,
         segmentation_method=args.segmentation
     )
     

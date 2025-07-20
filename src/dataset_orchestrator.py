@@ -156,7 +156,6 @@ class DatasetConfig:
     
     # Embeddings
     text_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    use_mock_audio: bool = False
     
     # Paralelización
     max_workers: int = 4
@@ -187,7 +186,7 @@ class DatasetOrchestrator:
         self.audio_converter = AudioConverter()
         self.transcriber = AudioTranscriber(model_name=self.config.whisper_model)
         self.text_embedder = TextEmbeddingGenerator(model_name=self.config.text_model)
-        self.audio_embedder = get_audio_embedding_generator(use_mock=self.config.use_mock_audio)
+        self.audio_embedder = get_audio_embedding_generator()
         
         # Crear directorios
         self._create_directories()
@@ -201,7 +200,6 @@ class DatasetOrchestrator:
         return DatasetConfig(
             whisper_model=system_config.default_whisper_model,
             text_model=system_config.default_text_model,
-            use_mock_audio=system_config.use_mock_audio,
             segmentation_method=system_config.segmentation_method,
             min_silence_len=system_config.min_silence_len,
             silence_thresh=system_config.silence_thresh,
@@ -461,7 +459,7 @@ class DatasetOrchestrator:
             "text_index_created": text_success,
             "audio_index_created": audio_success,
             "text_model": self.config.text_model,
-            "audio_model": "mock" if self.config.use_mock_audio else "yamnet"
+            "audio_model": "yamnet"
         }
         
         metadata_file = indices_dir / "indices_metadata.json"
@@ -668,7 +666,6 @@ if __name__ == "__main__":
         output_dir="./audio_dataset",
         whisper_model="base",
         max_workers=4,
-        use_mock_audio=True  # Cambiar a False para embeddings reales
     )
     
     orchestrator = DatasetOrchestrator(config)

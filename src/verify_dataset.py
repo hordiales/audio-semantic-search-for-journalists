@@ -82,10 +82,15 @@ def verify_dataset(dataset_dir: str):
         
         # Verificar embeddings
         if 'text_embedding' in df.columns and 'audio_embedding' in df.columns:
-            text_emb_shape = df['text_embedding'].iloc[0].shape
-            audio_emb_shape = df['audio_embedding'].iloc[0].shape
-            print(f"  🧠 Embeddings de texto: {text_emb_shape}")
-            print(f"  🔊 Embeddings de audio: {audio_emb_shape}")
+            text_emb = df['text_embedding'].iloc[0]
+            audio_emb = df['audio_embedding'].iloc[0]
+            
+            # Obtener dimensiones sin importar si es lista o numpy array
+            text_emb_dim = len(text_emb) if isinstance(text_emb, list) else text_emb.shape
+            audio_emb_dim = len(audio_emb) if isinstance(audio_emb, list) else audio_emb.shape
+            
+            print(f"  🧠 Embeddings de texto: {text_emb_dim} dimensiones")
+            print(f"  🔊 Embeddings de audio: {audio_emb_dim} dimensiones")
             
             # Verificar que no hay valores nulos
             text_nulls = df['text_embedding'].isnull().sum()
@@ -142,7 +147,6 @@ def verify_dataset(dataset_dir: str):
             config = manifest['config']
             print(f"  🎤 Modelo Whisper: {config.get('whisper_model', 'N/A')}")
             print(f"  🧠 Modelo texto: {config.get('text_model', 'N/A')}")
-            print(f"  🔊 Audio mock: {config.get('use_mock_audio', 'N/A')}")
         
     except Exception as e:
         print(f"  ❌ Error leyendo manifiesto: {e}")

@@ -37,17 +37,16 @@ Si no existe, crear archivo .env
   python simple_dataset_pipeline.py -i data/ -o ./dataset
   
 
-check
 
 para continuar desde donde fallo: 
-	python resume_pipeline.py ./dataset	
+	python src/resume_pipeline.py ./dataset	
 
 
  Verificación del Dataset
 
   1. Verificar integridad del dataset:
 
-  python verify_dataset.py ./dataset
+  python src/verify_dataset.py ./dataset
   
   
   ## Procesar por lotes
@@ -312,3 +311,60 @@ formato original: .m4a
 
 Dataset de referencia [Europarl-ST](https://www.mllp.upv.es/europarl-st/) is a multilingual Spoken Language Translation corpus containing paired audio-text samples for SLT from and into 9 European languages, for a total of 72 different translation directions. This corpus has been compiled using the debates held in the European Parliament in the period between 2008 and 2012.
 Nota: Este dataset ya contiene las transcripciones (evita el paso de speech2text)
+
+---
+# Usar YAMNet real (requiere TensorFlow)
+  
+ % python src/regenerate_audio_embeddings.py ./dataset --use-real-yamnet
+
+  1. Verificar Requisitos para YAMNet Real
+
+  python src/check_yamnet_requirements.py
+
+  2. Configuración Personalizada
+
+  Crea un archivo config.json:
+
+  {
+    "whisper_model": "medium",
+    "sample_rate": 16000,
+    "max_workers": 4,
+    "batch_size": 8
+  }
+
+  python src/run_dataset_pipeline.py --input ../data --output ../dataset --config-file config.json
+
+  📊 Estructura de Salida
+
+  El proceso creará:
+  dataset_output/
+  ├── converted/          # Archivos de audio convertidos
+  ├── transcriptions/     # Transcripciones de Whisper
+  ├── embeddings/         # Embeddings de texto y audio
+  ├── indices/           # Índices vectoriales para búsqueda
+  └── final/
+      ├── complete_dataset.pkl    # Dataset completo
+      ├── dataset_manifest.json   # Metadatos
+      └── dataset_metadata.csv    # Vista sin embeddings
+
+# Extra tools to build a dataset
+
+Bajar archivos de youtube, por ejemplo entrevistas o podcasts
+
+Youtube Downloader
+  $ pip install yt-dlp 
+
+-x es para extract-audio
+recordar poner url entre "
+
+  yt-dlp -x "URL"
+
+Herramienta: 
+
+
+# Otras fuentes de información útil
+
+RadioCut es un servicio en línea que permite a los usuarios escuchar radios en vivo y, lo más importante, acceder a grabaciones de programas pasados para escucharlos en diferido y crear recortes de audio para compartir con otros. Es una plataforma que combina la escucha de radio tradicional con la posibilidad de crear y compartir contenido basado en programas de radio. 
+Contiene grabaciones de diferentes paises
+* Radiocut AR https://ar.radiocut.fm/
+https://ar.radiocut.fm/about/

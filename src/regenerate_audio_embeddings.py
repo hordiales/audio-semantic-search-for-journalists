@@ -25,7 +25,7 @@ class AudioEmbeddingRegeneration:
         
         Args:
             dataset_dir: Directorio del dataset
-            use_real_yamnet: Si usar YAMNet real o mock
+            use_real_yamnet: Si usar YAMNet real
         """
         self.dataset_dir = Path(dataset_dir)
         self.use_real_yamnet = use_real_yamnet
@@ -93,10 +93,10 @@ class AudioEmbeddingRegeneration:
     def regenerate_audio_embeddings(self, df: pd.DataFrame) -> pd.DataFrame:
         """Regenera embeddings de audio"""
         print(f"🎵 Regenerando embeddings de audio...")
-        print(f"   Usando: {'YAMNet real' if self.use_real_yamnet else 'Mock YAMNet'}")
+        print(f"   Usando: YAMNet real")
         
         # Inicializar generador de embeddings
-        audio_embedder = get_audio_embedding_generator(use_mock=not self.use_real_yamnet)
+        audio_embedder = get_audio_embedding_generator()
         
         if self.use_real_yamnet:
             print("🔄 Cargando modelo YAMNet... (puede tomar unos minutos)")
@@ -145,7 +145,7 @@ class AudioEmbeddingRegeneration:
                 "embedding_dimension": embedding_dim,
                 "text_index_created": text_success,
                 "audio_index_created": audio_success,
-                "audio_model": "YAMNet" if self.use_real_yamnet else "MockYAMNet",
+                "audio_model": "YAMNet",
                 "regeneration_info": {
                     "regenerated_from_backup": str(self.backup_dir),
                     "regeneration_date": datetime.now().isoformat()
@@ -177,14 +177,13 @@ class AudioEmbeddingRegeneration:
         if 'config' not in manifest:
             manifest['config'] = {}
         
-        manifest['config']['use_mock_audio'] = not self.use_real_yamnet
-        manifest['config']['audio_embedding_model'] = "YAMNet" if self.use_real_yamnet else "MockYAMNet"
+        manifest['config']['audio_embedding_model'] = "YAMNet"
         
         # Agregar información de regeneración
         manifest['regeneration_info'] = {
             "regenerated_date": datetime.now().isoformat(),
             "backup_location": str(self.backup_dir),
-            "audio_model_used": "YAMNet" if self.use_real_yamnet else "MockYAMNet",
+            "audio_model_used": "YAMNet",
             "segments_processed": len(df)
         }
         
@@ -238,7 +237,7 @@ class AudioEmbeddingRegeneration:
             
             print("\n✅ REGENERACIÓN COMPLETADA EXITOSAMENTE")
             print(f"📊 Segmentos procesados: {len(df_updated):,}")
-            print(f"🎵 Modelo usado: {'YAMNet real' if self.use_real_yamnet else 'Mock YAMNet'}")
+            print(f"🎵 Modelo usado: YAMNet")
             print(f"💾 Backup en: {self.backup_dir}")
             
             return True
@@ -253,7 +252,7 @@ def main():
     parser = argparse.ArgumentParser(description="Regenerar embeddings de audio con YAMNet real")
     parser.add_argument("dataset_dir", help="Directorio del dataset")
     parser.add_argument("--use-real-yamnet", action="store_true", 
-                       help="Usar YAMNet real (por defecto usa mock)")
+                       help="Usar YAMNet real (siempre activo)")
     parser.add_argument("--verify-only", action="store_true",
                        help="Solo verificar requisitos sin regenerar")
     

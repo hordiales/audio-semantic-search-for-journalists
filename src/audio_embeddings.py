@@ -14,7 +14,7 @@ try:
     TF_AVAILABLE = True
 except ImportError:
     TF_AVAILABLE = False
-    print("⚠️  TensorFlow no disponible. Usando embeddings mock para audio.")
+    print("⚠️  TensorFlow no disponible.")
 
 
 class AudioEmbeddingGenerator:
@@ -39,7 +39,7 @@ class AudioEmbeddingGenerator:
         Carga el modelo YAMNet desde TensorFlow Hub
         """
         if not TF_AVAILABLE:
-            print("TensorFlow no disponible. Usando modelo mock.")
+            print("TensorFlow no disponible.")
             self.model = None
             return
             
@@ -49,7 +49,7 @@ class AudioEmbeddingGenerator:
             print("Modelo YAMNet cargado exitosamente")
         except Exception as e:
             print(f"Error cargando YAMNet: {e}")
-            print("Usando modelo mock para pruebas")
+            print("TensorFlow no disponible, no se pueden generar embeddings de audio.")
             self.model = None
     
     def preprocess_audio(self, audio_path: str, target_sr: int = 16000) -> np.ndarray:
@@ -85,8 +85,8 @@ class AudioEmbeddingGenerator:
             Array numpy con el embedding del audio
         """
         if self.model is None:
-            # Generar embedding mock para pruebas
-            return np.random.rand(self.embedding_dim).astype(np.float32)
+            # Error: no se pueden generar embeddings sin TensorFlow
+            raise RuntimeError("TensorFlow requerido para generar embeddings de audio")
         
         try:
             # Preprocesar audio
@@ -106,8 +106,8 @@ class AudioEmbeddingGenerator:
             
         except Exception as e:
             print(f"Error generando embedding para {audio_path}: {e}")
-            # Retornar embedding mock en caso de error
-            return np.random.rand(self.embedding_dim).astype(np.float32)
+            # Error en procesamiento de audio
+            raise RuntimeError(f"Error procesando audio: {e}")
     
     def generate_embeddings_batch(self, audio_paths: List[str]) -> np.ndarray:
         """
@@ -254,137 +254,34 @@ class AudioEmbeddingGenerator:
         
         return result_df
     
-    def generate_mock_embedding_from_text(self, text: str) -> np.ndarray:
-        """
-        Genera un embedding mock basado en texto (para consultas)
-        Fallback cuando no hay archivo de audio disponible
-        
-        Args:
-            text: Texto de consulta
-            
-        Returns:
-            Embedding mock basado en el texto
-        """
-        # Usar hash del texto para generar embedding consistente
-        text_hash = hash(text) % 1000
-        np.random.seed(text_hash)
-        embedding = np.random.rand(self.embedding_dim).astype(np.float32)
-        return embedding
 
 
-class MockAudioEmbeddingGenerator:
-    """
-    Versión mock del generador de embeddings de audio para pruebas sin internet
-    """
-    
-    def __init__(self):
-        self.embedding_dim = 1024
-        self.model = "MockModel"
-        np.random.seed(42)  # Para reproducibilidad
-    
-    def generate_embedding(self, audio_path: str) -> np.ndarray:
-        """
-        Genera un embedding mock basado en características simples del audio
-        """
-        try:
-            # Cargar audio y extraer características básicas
-            audio, sr = librosa.load(audio_path, sr=16000, mono=True)
-            
-            # Características básicas
-            duration = len(audio) / sr
-            energy = np.mean(audio**2)
-            zero_crossing_rate = np.mean(librosa.feature.zero_crossing_rate(audio))
-            spectral_centroid = np.mean(librosa.feature.spectral_centroid(audio, sr=sr))
-            
-            # Crear embedding determinístico basado en características
-            features = np.array([duration, energy, zero_crossing_rate, spectral_centroid])
-            
-            # Usar las características para generar un embedding reproducible
-            np.random.seed(int(np.sum(features * 1000)))
-            embedding = np.random.rand(self.embedding_dim).astype(np.float32)
-            
-            return embedding
-            
-        except Exception as e:
-            print(f"Error en mock embedding: {e}")
-            return np.random.rand(self.embedding_dim).astype(np.float32)
-    
-    def generate_embeddings_batch(self, audio_paths: List[str]) -> np.ndarray:
-        """
-        Genera embeddings mock para una lista de archivos
-        """
-        embeddings = []
-        for audio_path in audio_paths:
-            embedding = self.generate_embedding(audio_path)
-            embeddings.append(embedding)
-        return np.array(embeddings)
-    
-    def process_transcription_dataframe(self, df: pd.DataFrame, 
-                                      temp_audio_dir: str = "temp_audio") -> pd.DataFrame:
-        """
-        Versión mock del procesamiento de DataFrame
-        """
-        # Generar embeddings mock basados en características del texto
-        result_df = df.copy()
-        embeddings = []
-        
-        for idx, row in df.iterrows():
-            # Usar características del texto para generar embedding consistente
-            text_hash = hash(row.get('text', '')) % 1000
-            np.random.seed(text_hash)
-            embedding = np.random.rand(self.embedding_dim).astype(np.float32)
-            embeddings.append(embedding.tolist())
-        
-        result_df['audio_embedding'] = embeddings
-        result_df['audio_embedding_model'] = "MockYAMNet"
-        result_df['audio_embedding_dim'] = self.embedding_dim
-        
-        return result_df
-    
-    def generate_mock_embedding_from_text(self, text: str) -> np.ndarray:
-        """
-        Genera un embedding mock basado en texto (para consultas)
-        
-        Args:
-            text: Texto de consulta
-            
-        Returns:
-            Embedding mock basado en el texto
-        """
-        # Usar hash del texto para generar embedding consistente
-        text_hash = hash(text) % 1000
-        np.random.seed(text_hash)
-        embedding = np.random.rand(self.embedding_dim).astype(np.float32)
-        return embedding
 
 
 # Función para seleccionar el generador apropiado
-def get_audio_embedding_generator(use_mock: bool = None):
+def get_audio_embedding_generator():
     """
-    Retorna el generador de embeddings apropiado
+    Retorna el generador de embeddings YAMNet
     
-    Args:
-        use_mock: Si True, usa el generador mock. Si None, detecta automáticamente.
-        
     Returns:
         Instancia del generador de embeddings
     """
-    # Auto-detectar si usar mock basado en disponibilidad de TensorFlow
-    if use_mock is None:
-        use_mock = not TF_AVAILABLE
+    if not TF_AVAILABLE:
+        raise RuntimeError("TensorFlow es requerido para generar embeddings de audio. Instala con: pip install tensorflow")
     
-    if use_mock or not TF_AVAILABLE:
-        return MockAudioEmbeddingGenerator()
-    else:
-        return AudioEmbeddingGenerator()
+    return AudioEmbeddingGenerator()
 
 
 # Ejemplo de uso
 if __name__ == "__main__":
     # Ejemplo de uso del generador de embeddings de audio
     
-    # Usar versión mock para pruebas
-    embedder = get_audio_embedding_generator(use_mock=True)
+    # Verificar que TensorFlow esté disponible
+    if not TF_AVAILABLE:
+        print("❌ TensorFlow no está disponible. No se pueden ejecutar las pruebas.")
+        exit(1)
+    
+    embedder = get_audio_embedding_generator()
     
     # Datos de ejemplo
     sample_data = {
@@ -399,7 +296,7 @@ if __name__ == "__main__":
     
     df = pd.DataFrame(sample_data)
     
-    # Generar embeddings (mock)
+    # Generar embeddings reales
     # df_with_embeddings = embedder.process_transcription_dataframe(df)
     # print(f"DataFrame con embeddings: {df_with_embeddings.columns.tolist()}")
     
