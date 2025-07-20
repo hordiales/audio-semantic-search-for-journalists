@@ -3,6 +3,7 @@ data/*
 dataset/*
 activate-conda-env.sh
 tmp/
+TODO.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

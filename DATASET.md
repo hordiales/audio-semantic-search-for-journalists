@@ -25,10 +25,15 @@
 
   Para dataset grande (>1000 archivos):
 
-  # Procesar por lotes
+# Construir dataset
+
+  python simple_dataset_pipeline.py -i data/ -o ./dataset
+  
+  
+  ## Procesar por lotes
   python simple_dataset_pipeline.py -i data/ -o ./dataset --batch_size 50
 
-## RECOMENDACIÓN PRÁCTICA
+### RECOMENDACIÓN PRÁCTICA
 
   1. Para empezar (primeros tests):
   python simple_dataset_pipeline.py \

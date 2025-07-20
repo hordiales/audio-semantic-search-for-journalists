@@ -55,6 +55,10 @@ semantic-search-periodismo/
 
 TODO: add diagrama de arquitectura
 
+# Audioset ontology
+
+
+
 ## Uso
 
 ### Crear dataset/corpus
@@ -77,9 +81,52 @@ Nota: Este dataset ya contiene las transcripciones (evita el paso de speech2text
 
     En ./dataset quedará la siguiente estructura
 
+# Consulta (query) por línea de comando
+
+    $ python query_client.py ./dataset --interactive
+
+"""
+Sistema híbrido de búsqueda de audio que combina:
+1. Búsqueda por palabras clave (siempre funciona)
+2. Búsqueda con embeddings YAMNet reales (si están disponibles)
+"""
+
+
+# Configuración
+
+## Config entorno
+Revisar módulo config_loader.py
+y archivo .env para variables de entorno
+
+
+## Config de consulta
+
+"""
+Configuración de parámetros de búsqueda y filtros de score
+"""
+
+### Umbrales de score
+    min_text_score: float = 0.3
+    min_audio_score: float = 0.3
+    min_hybrid_score: float = 0.3
+    min_keyword_score: float = 0.3
+    min_yamnet_score: float = 0.5
 
 
 ### Consulta
 
 Modo interactivo por línea de comando: 
     $ python query_client.py ./dataset --interactive --load-real
+
+# Referencias
+
+- [OpenAI Whisper](https://github.com/openai/whisper)
+- [Sentence Transformers](https://github.com/UKPLab/sentence-transformers)
+- [FAISS](https://github.com/facebookresearch/faiss)
+- [YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet)
+    Audioset
+- [Streamlit](https://streamlit.io/)
+
+## 📝 Licencia
+
+Este proyecto está bajo la licencia GPLv3. Ver `LICENSE` para más detalles.
