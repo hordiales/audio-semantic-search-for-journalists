@@ -865,8 +865,7 @@ Ejemplos:
         try:
             limit = int(arg) if arg else 20
             
-            self.client.log(f"\n
- Explorando {limit} segmentos del dataset:")
+            self.client.log(f"\n📊 Explorando {limit} segmentos del dataset:")
             self.client.log("=" * 100)
             self.client.log(f"{'Índice':<6} {'Archivo':<20} {'Tiempo':<12} {'Duración':<8} {'Texto':<40}")
             self.client.log("-" * 100)
@@ -888,8 +887,7 @@ Ejemplos:
                 
                 self.client.log(f"{idx:<6} {archivo:<20} {tiempo:<12} {duracion:<8} {texto:<40}")
             
-            self.client.log(f"\n
-💡 Para buscar similares a un segmento: similar <índice>")
+            self.client.log(f"\n💡 Para buscar similares a un segmento: similar <índice>")
             self.client.log(f"   Ejemplo: similar {self.client.df.index[0]}")
             
         except ValueError:

@@ -3,6 +3,8 @@
 Mapeo semántico entre conceptos de texto y clases de audio
 """
 
+import logging
+
 from typing import List, Dict, Set
 from audioset_ontology import AUDIOSET_CLASSES, AUDIOSET_CATEGORIES
 
@@ -316,24 +318,24 @@ if __name__ == "__main__":
     mapper = SemanticAudioMapper()
     
     # Ejemplo 1: Consulta política
-    print("🔍 Consulta: 'discurso político'")
+    logging.info("🔍 Consulta: 'discurso político'")
     classes = mapper.get_audio_classes_for_text("discurso político")
-    print(f"Clases de audio: {classes}")
+    logging.info(f"Clases de audio: {classes}")
     
     # Ejemplo 2: Sugerencias
-    print("\n💡 Sugerencias para 'manifestación':")
+    logging.info("\n💡 Sugerencias para 'manifestación':")
     suggestions = mapper.suggest_audio_queries("manifestación")
     for suggestion in suggestions[:5]:
-        print(f"  • {suggestion['query']} (score: {suggestion['score']:.2f}) - {suggestion['name']}")
+        logging.info(f"  • {suggestion['query']} (score: {suggestion['score']:.2f}) - {suggestion['name']}")
     
     # Ejemplo 3: Validación
-    print("\n✅ Validación de 'aplausos':")
+    logging.info("\n✅ Validación de 'aplausos':")
     validation = mapper.validate_audio_query("aplausos")
-    print(f"Válido: {validation['valid']}")
+    logging.info(f"Válido: {validation['valid']}")
     
     # Estadísticas
     stats = mapper.get_mapping_stats()
-    print(f"\n📊 Estadísticas:")
-    print(f"  Conceptos de texto: {stats['total_text_concepts']}")
-    print(f"  Mapeos de audio: {stats['total_audio_mappings']}")
-    print(f"  Promedio por concepto: {stats['avg_mappings_per_concept']:.1f}")
+    logging.info(f"\n📊 Estadísticas:")
+    logging.info(f"  Conceptos de texto: {stats['total_text_concepts']}")
+    logging.info(f"  Mapeos de audio: {stats['total_audio_mappings']}")
+    logging.info(f"  Promedio por concepto: {stats['avg_mappings_per_concept']:.1f}")

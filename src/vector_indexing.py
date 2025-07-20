@@ -7,6 +7,9 @@ from typing import List, Dict, Optional, Tuple
 import json
 
 
+import logging
+
+
 class VectorIndexManager:
     """
     Clase para gestionar índices vectoriales usando FAISS
@@ -27,6 +30,7 @@ class VectorIndexManager:
         self.text_metadata = None
         self.audio_metadata = None
         self.is_trained = False
+        self.logger = logging.getLogger(__name__)
         
     def _create_index(self, embedding_dim: int, index_type: str = "L2") -> faiss.Index:
         """
@@ -74,7 +78,7 @@ class VectorIndexManager:
             True si se creó exitosamente
         """
         if embedding_column not in df.columns:
-            print(f"Columna {embedding_column} no encontrada")
+            self.logger.error(f"Columna {embedding_column} no encontrada")
             return False
         
         # Extraer embeddings
@@ -82,7 +86,7 @@ class VectorIndexManager:
         
         # Verificar dimensiones
         if embeddings.shape[1] != self.embedding_dim:
-            print(f"Dimensión de embeddings ({embeddings.shape[1]}) no coincide con la esperada ({self.embedding_dim})")
+            self.logger.warning(f"Dimensión de embeddings ({embeddings.shape[1]}) no coincide con la esperada ({self.embedding_dim})")
             # Actualizar dimensión
             self.embedding_dim = embeddings.shape[1]
         
@@ -100,7 +104,7 @@ class VectorIndexManager:
         self.text_metadata = df.copy()
         self.text_metadata['faiss_id'] = range(len(df))
         
-        print(f"Índice de texto creado con {len(embeddings)} vectores")
+        self.logger.info(f"Índice de texto creado con {len(embeddings)} vectores")
         return True
     
     def create_audio_index(self, df: pd.DataFrame, embedding_column: str = 'audio_embedding') -> bool:
@@ -115,14 +119,14 @@ class VectorIndexManager:
             True si se creó exitosamente
         """
         if embedding_column not in df.columns:
-            print(f"Columna {embedding_column} no encontrada")
+            self.logger.error(f"Columna {embedding_column} no encontrada")
             return False
         
         # Filtrar filas con embeddings válidos
         valid_df = df[df[embedding_column].notna()].copy()
         
         if len(valid_df) == 0:
-            print("No se encontraron embeddings de audio válidos")
+            self.logger.warning("No se encontraron embeddings de audio válidos")
             return False
         
         # Extraer embeddings
@@ -142,7 +146,7 @@ class VectorIndexManager:
         self.audio_metadata = valid_df.copy()
         self.audio_metadata['faiss_id'] = range(len(valid_df))
         
-        print(f"Índice de audio creado con {len(embeddings)} vectores")
+        self.logger.info(f"Índice de audio creado con {len(embeddings)} vectores")
         return True
     
     def search_text_index(self, query_embedding: np.ndarray, k: int = 5) -> Tuple[np.ndarray, np.ndarray]:
@@ -312,7 +316,7 @@ class VectorIndexManager:
         with open(os.path.join(base_path, "config.json"), 'w') as f:
             json.dump(config, f, indent=2)
         
-        print(f"Índices guardados en: {base_path}")
+        self.logger.info(f"Índices guardados en: {base_path}")
     
     def load_indices(self, base_path: str):
         """
@@ -348,7 +352,7 @@ class VectorIndexManager:
         if os.path.exists(audio_metadata_path):
             self.audio_metadata = pd.read_pickle(audio_metadata_path)
         
-        print(f"Índices cargados desde: {base_path}")
+        self.logger.info(f"Índices cargados desde: {base_path}")
     
     def get_index_stats(self) -> Dict:
         """
@@ -370,31 +374,7 @@ class VectorIndexManager:
 # Ejemplo de uso
 if __name__ == "__main__":
     # Ejemplo de uso del gestor de índices
+    logging.info("VectorIndexManager cargado correctamente.")
+    logging.info("Para usar, proporciona un DataFrame con embeddings reales.")
     
-    # Crear datos de ejemplo
-    sample_text_data = {
-        'text': ['Ejemplo 1', 'Ejemplo 2', 'Ejemplo 3'],
-        'text_embedding': [
-            np.random.rand(384).tolist(),
-            np.random.rand(384).tolist(),
-            np.random.rand(384).tolist()
-        ],
-        'start_time': [0, 10, 20],
-        'source_file': ['audio1.wav'] * 3
-    }
-    
-    df = pd.DataFrame(sample_text_data)
-    
-    # Crear gestor de índices
-    index_manager = VectorIndexManager(embedding_dim=384, index_type="cosine")
-    
-    # Crear índice de texto
-    # index_manager.create_text_index(df)
-    
-    # Buscar
-    # query_embedding = np.random.rand(384)
-    # distances, indices = index_manager.search_text_index(query_embedding, k=3)
-    # results = index_manager.get_text_results(distances, indices)
-    # print(results[['text', 'similarity_score']])
-    
-    print("Módulo de indexación vectorial listo.")
+    logging.info("Módulo de indexación vectorial listo.")

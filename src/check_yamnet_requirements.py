@@ -7,46 +7,51 @@ import sys
 import subprocess
 import importlib
 
+import logging
+
+# Configuración de logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', stream=sys.stderr)
+
 def check_python_version():
     """Verifica la versión de Python"""
     version = sys.version_info
-    print(f"🐍 Python: {version.major}.{version.minor}.{version.micro}")
+    logging.info(f"🐍 Python: {version.major}.{version.minor}.{version.micro}")
     
     if version.major == 3 and 8 <= version.minor <= 11:
-        print("✅ Versión de Python compatible con TensorFlow")
+        logging.info("✅ Versión de Python compatible con TensorFlow")
         return True
     else:
-        print("❌ Versión de Python no compatible (necesita 3.8-3.11)")
+        logging.error("❌ Versión de Python no compatible (necesita 3.8-3.11)")
         return False
 
 def check_tensorflow():
     """Verifica TensorFlow"""
     try:
         import tensorflow as tf
-        print(f"✅ TensorFlow: {tf.__version__}")
+        logging.info(f"✅ TensorFlow: {tf.__version__}")
         
         # Verificar GPU
         gpus = tf.config.list_physical_devices('GPU')
         if gpus:
-            print(f"🚀 GPU disponible: {len(gpus)} dispositivos")
+            logging.info(f"🚀 GPU disponible: {len(gpus)} dispositivos")
             for i, gpu in enumerate(gpus):
-                print(f"   GPU {i}: {gpu.name}")
+                logging.info(f"   GPU {i}: {gpu.name}")
         else:
-            print("💻 Solo CPU disponible (más lento)")
+            logging.info("💻 Solo CPU disponible (más lento)")
         
         return True
     except ImportError:
-        print("❌ TensorFlow no instalado")
+        logging.error("❌ TensorFlow no instalado")
         return False
 
 def check_tensorflow_hub():
     """Verifica TensorFlow Hub"""
     try:
         import tensorflow_hub as hub
-        print(f"✅ TensorFlow Hub disponible")
+        logging.info(f"✅ TensorFlow Hub disponible")
         return True
     except ImportError:
-        print("❌ TensorFlow Hub no instalado")
+        logging.error("❌ TensorFlow Hub no instalado")
         return False
 
 def check_audio_libraries():
@@ -61,9 +66,9 @@ def check_audio_libraries():
     for lib, description in libraries.items():
         try:
             importlib.import_module(lib)
-            print(f"✅ {lib}: {description}")
+            logging.info(f"✅ {lib}: {description}")
         except ImportError:
-            print(f"❌ {lib}: {description} - NO INSTALADO")
+            logging.error(f"❌ {lib}: {description} - NO INSTALADO")
             all_available = False
     
     return all_available
@@ -73,13 +78,13 @@ def check_disk_space():
     import shutil
     total, used, free = shutil.disk_usage('/')
     free_gb = free // (1024**3)
-    print(f"💾 Espacio libre: {free_gb} GB")
+    logging.info(f"💾 Espacio libre: {free_gb} GB")
     
     if free_gb >= 2:
-        print("✅ Suficiente espacio para modelo YAMNet (~500MB)")
+        logging.info("✅ Suficiente espacio para modelo YAMNet (~500MB)")
         return True
     else:
-        print("❌ Poco espacio en disco")
+        logging.error("❌ Poco espacio en disco")
         return False
 
 def check_internet():
@@ -87,23 +92,23 @@ def check_internet():
     try:
         import urllib.request
         urllib.request.urlopen('https://tfhub.dev', timeout=5)
-        print("✅ Conexión a TensorFlow Hub disponible")
+        logging.info("✅ Conexión a TensorFlow Hub disponible")
         return True
     except:
-        print("❌ Sin conexión a TensorFlow Hub")
+        logging.error("❌ Sin conexión a TensorFlow Hub")
         return False
 
 def estimate_processing_time():
     """Estima tiempo de procesamiento"""
-    print(f"\n⏱️  Estimación de Tiempos (31,954 segmentos):")
-    print(f"  💻 Solo CPU: ~8-12 horas")
-    print(f"  🚀 Con GPU: ~2-4 horas")
-    print(f"  📊 Dependiente de duración promedio de segmentos")
+    logging.info(f"\n⏱️  Estimación de Tiempos (31,954 segmentos):")
+    logging.info(f"  💻 Solo CPU: ~8-12 horas")
+    logging.info(f"  🚀 Con GPU: ~2-4 horas")
+    logging.info(f"  📊 Dependiente de duración promedio de segmentos")
 
 def print_installation_instructions():
     """Imprime instrucciones de instalación"""
-    print(f"\n🔧 Instrucciones de Instalación:")
-    print(f"""
+    logging.info(f"\n🔧 Instrucciones de Instalación:")
+    logging.info(f"""
 # Instalar TensorFlow (CPU)
 pip install tensorflow
 
@@ -122,8 +127,8 @@ python -c "import tensorflow_hub as hub; print('TF Hub OK')"
 """)
 
 def main():
-    print("🔍 Verificación de Requisitos para YAMNet Real")
-    print("=" * 50)
+    logging.info("🔍 Verificación de Requisitos para YAMNet Real")
+    logging.info("=" * 50)
     
     all_good = True
     
@@ -137,15 +142,16 @@ def main():
     
     estimate_processing_time()
     
-    print(f"\n📊 RESUMEN:")
+    logging.info(f"\n📊 RESUMEN:")
     if all_good:
-        print("✅ Sistema listo para YAMNet real")
-        print("🚀 Puedes proceder con la generación de embeddings reales")
+        logging.info("✅ Sistema listo para YAMNet real")
+        logging.info("🚀 Puedes proceder con la generación de embeddings reales")
     else:
-        print("❌ Faltan requisitos para YAMNet real")
+        logging.error("❌ Faltan requisitos para YAMNet real")
         print_installation_instructions()
     
     return all_good
+
 
 if __name__ == "__main__":
     main()

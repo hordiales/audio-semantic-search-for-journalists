@@ -416,10 +416,10 @@ if __name__ == "__main__":
     result = pipeline.run_pipeline()
     
     if result["success"]:
-        print(f"\n✅ Pipeline completado exitosamente!")
-        print(f"📊 Segmentos procesados: {result['stats']['total_segments']}")
-        print(f"⏱️ Tiempo: {result['stats']['processing_time']:.2f} segundos")
-        print(f"📁 Dataset: {pipeline.output_dir}")
+        logging.info(f"\n✅ Pipeline completado exitosamente!")
+        logging.info(f"📊 Segmentos procesados: {result['stats']['total_segments']}")
+        logging.info(f"⏱️ Tiempo: {result['stats']['processing_time']:.2f} segundos")
+        logging.info(f"📁 Dataset: {pipeline.output_dir}")
     else:
-        print(f"\n❌ Error: {result['error']}")
+        logging.error(f"\n❌ Error: {result['error']}")
         exit(1)

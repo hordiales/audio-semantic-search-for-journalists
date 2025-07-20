@@ -555,4 +555,4 @@ if __name__ == "__main__":
     # results = search_engine.search("economía y inflación", search_type="combined")
     # print(results[['text', 'combined_score', 'start_time', 'source_file']])
     
-    print("Motor de búsqueda semántica listo.")
+    logging.info("Motor de búsqueda semántica listo.")

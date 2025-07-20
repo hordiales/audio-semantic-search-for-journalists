@@ -6,6 +6,9 @@ import pickle
 import os
 
 
+import logging
+
+
 class TextEmbeddingGenerator:
     """
     Clase para generar embeddings de texto usando sentence-transformers
@@ -68,10 +71,10 @@ class TextEmbeddingGenerator:
         valid_rows = df[df[text_column].notna() & (df[text_column].str.len() > 3)]
         
         if len(valid_rows) == 0:
-            print("No se encontraron textos válidos para procesar")
+            logging.info("No se encontraron textos válidos para procesar")
             return df
         
-        print(f"Generando embeddings para {len(valid_rows)} textos...")
+        logging.info(f"Generando embeddings para {len(valid_rows)} textos...")
         
         # Generar embeddings
         texts = valid_rows[text_column].tolist()
@@ -134,7 +137,7 @@ class TextEmbeddingGenerator:
         """
         with open(file_path, 'wb') as f:
             pickle.dump(df, f)
-        print(f"Embeddings guardados en: {file_path}")
+        logging.info(f"Embeddings guardados en: {file_path}")
     
     def load_embeddings(self, file_path: str) -> pd.DataFrame:
         """
@@ -148,7 +151,7 @@ class TextEmbeddingGenerator:
         """
         with open(file_path, 'rb') as f:
             df = pickle.load(f)
-        print(f"Embeddings cargados desde: {file_path}")
+        logging.info(f"Embeddings cargados desde: {file_path}")
         return df
     
     def search_similar_texts(self, query: str, df: pd.DataFrame, 
@@ -266,4 +269,4 @@ if __name__ == "__main__":
     # results = embedder.search_similar_texts("economía y inflación", df_with_embeddings)
     # print(results[['text', 'similarity_score']])
     
-    print("Módulo de embeddings de texto listo. Usar TextEmbeddingGenerator para procesar textos.")
+    logging.info("Módulo de embeddings de texto listo. Usar TextEmbeddingGenerator para procesar textos.")

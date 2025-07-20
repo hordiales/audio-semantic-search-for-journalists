@@ -13,22 +13,26 @@ import shutil
 from datetime import datetime
 from tqdm import tqdm
 
+import logging
+
 from audio_embeddings import AudioEmbeddingGenerator, get_audio_embedding_generator
 from vector_indexing import VectorIndexManager
 
 class AudioEmbeddingRegeneration:
     """Regenera embeddings de audio usando YAMNet real"""
     
-    def __init__(self, dataset_dir: str, use_real_yamnet: bool = True):
+    def __init__(self, dataset_dir: str, use_real_yamnet: bool = True, logger=None):
         """
         Inicializa el regenerador
         
         Args:
             dataset_dir: Directorio del dataset
             use_real_yamnet: Si usar YAMNet real
+            logger: A logger instance (optional)
         """
         self.dataset_dir = Path(dataset_dir)
         self.use_real_yamnet = use_real_yamnet
+        self.logger = logger or logging.getLogger(__name__)
         
         # Verificar que el dataset existe
         self.dataset_file = self.dataset_dir / "final" / "complete_dataset.pkl"
@@ -39,12 +43,12 @@ class AudioEmbeddingRegeneration:
         self.backup_dir = self.dataset_dir / "backup" / f"before_yamnet_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         
-        print(f"📁 Dataset: {self.dataset_dir}")
-        print(f"💾 Backup: {self.backup_dir}")
+        self.logger.info(f"📁 Dataset: {self.dataset_dir}")
+        self.logger.info(f"💾 Backup: {self.backup_dir}")
     
     def create_backup(self):
         """Crea backup del dataset actual"""
-        print("💾 Creando backup del dataset actual...")
+        self.logger.info("💾 Creando backup del dataset actual...")
         
         files_to_backup = [
             "final/complete_dataset.pkl",
@@ -62,15 +66,15 @@ class AudioEmbeddingRegeneration:
                     dest = self.backup_dir / file_path
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source, dest)
-                print(f"  ✅ {file_path}")
+                self.logger.info(f"  ✅ {file_path}")
         
-        print(f"✅ Backup completado en: {self.backup_dir}")
+        self.logger.info(f"✅ Backup completado en: {self.backup_dir}")
     
     def load_current_dataset(self) -> pd.DataFrame:
         """Carga el dataset actual"""
-        print("📊 Cargando dataset actual...")
+        self.logger.info("📊 Cargando dataset actual...")
         df = pd.read_pickle(self.dataset_file)
-        print(f"✅ Dataset cargado: {len(df):,} segmentos")
+        self.logger.info(f"✅ Dataset cargado: {len(df):,} segmentos")
         
         # Verificar que tiene embeddings de texto
         if 'text_embedding' not in df.columns:
@@ -85,39 +89,39 @@ class AudioEmbeddingRegeneration:
                 missing_files.append(audio_file)
         
         if missing_files:
-            print(f"⚠️  Advertencia: {len(missing_files)} archivos de audio no encontrados")
-            print("   Esto puede causar errores en la regeneración")
+            self.logger.warning(f"⚠️  Advertencia: {len(missing_files)} archivos de audio no encontrados")
+            self.logger.warning("   Esto puede causar errores en la regeneración")
         
         return df
     
     def regenerate_audio_embeddings(self, df: pd.DataFrame) -> pd.DataFrame:
         """Regenera embeddings de audio"""
-        print(f"🎵 Regenerando embeddings de audio...")
-        print(f"   Usando: YAMNet real")
+        self.logger.info(f"🎵 Regenerando embeddings de audio...")
+        self.logger.info(f"   Usando: YAMNet real")
         
         # Inicializar generador de embeddings
         audio_embedder = get_audio_embedding_generator()
         
         if self.use_real_yamnet:
-            print("🔄 Cargando modelo YAMNet... (puede tomar unos minutos)")
+            self.logger.info("🔄 Cargando modelo YAMNet... (puede tomar unos minutos)")
         
         # Procesar dataset
         try:
             result_df = audio_embedder.process_transcription_dataframe(df.copy())
-            print(f"✅ Embeddings regenerados para {len(result_df)} segmentos")
+            self.logger.info(f"✅ Embeddings regenerados para {len(result_df)} segmentos")
             return result_df
             
         except Exception as e:
-            print(f"❌ Error regenerando embeddings: {e}")
-            print("💡 Verifica que:")
-            print("   - TensorFlow está instalado correctamente")
-            print("   - Los archivos de audio existen")
-            print("   - Hay suficiente espacio en disco")
+            self.logger.error(f"❌ Error regenerando embeddings: {e}")
+            self.logger.error("💡 Verifica que:")
+            self.logger.error("   - TensorFlow está instalado correctamente")
+            self.logger.error("   - Los archivos de audio existen")
+            self.logger.error("   - Hay suficiente espacio en disco")
             raise
     
     def regenerate_indices(self, df: pd.DataFrame):
         """Regenera índices vectoriales"""
-        print("🔍 Regenerando índices vectoriales...")
+        self.logger.info("🔍 Regenerando índices vectoriales...")
         
         indices_dir = self.dataset_dir / "indices"
         
@@ -156,13 +160,13 @@ class AudioEmbeddingRegeneration:
             with open(metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=2)
             
-            print(f"✅ Índices regenerados - Texto: {text_success}, Audio: {audio_success}")
+            self.logger.info(f"✅ Índices regenerados - Texto: {text_success}, Audio: {audio_success}")
         else:
             raise RuntimeError("No se pudo regenerar ningún índice")
     
     def update_manifest(self, df: pd.DataFrame):
         """Actualiza el manifiesto del dataset"""
-        print("📋 Actualizando manifiesto...")
+        self.logger.info("📋 Actualizando manifiesto...")
         
         manifest_file = self.dataset_dir / "final" / "dataset_manifest.json"
         
@@ -195,7 +199,7 @@ class AudioEmbeddingRegeneration:
     
     def save_updated_dataset(self, df: pd.DataFrame):
         """Guarda el dataset actualizado"""
-        print("💾 Guardando dataset actualizado...")
+        self.logger.info("💾 Guardando dataset actualizado...")
         
         # Guardar dataset completo
         df.to_pickle(self.dataset_file)
@@ -209,12 +213,12 @@ class AudioEmbeddingRegeneration:
         csv_file = self.dataset_dir / "final" / "dataset_metadata.csv"
         csv_df.to_csv(csv_file, index=False)
         
-        print("✅ Dataset guardado")
+        self.logger.info("✅ Dataset guardado")
     
     def run_regeneration(self):
         """Ejecuta la regeneración completa"""
-        print("🚀 INICIANDO REGENERACIÓN DE EMBEDDINGS DE AUDIO")
-        print("=" * 60)
+        self.logger.info("🚀 INICIANDO REGENERACIÓN DE EMBEDDINGS DE AUDIO")
+        self.logger.info("=" * 60)
         
         try:
             # Paso 1: Backup
@@ -235,59 +239,20 @@ class AudioEmbeddingRegeneration:
             # Paso 6: Guardar dataset
             self.save_updated_dataset(df_updated)
             
-            print("\n✅ REGENERACIÓN COMPLETADA EXITOSAMENTE")
-            print(f"📊 Segmentos procesados: {len(df_updated):,}")
-            print(f"🎵 Modelo usado: YAMNet")
-            print(f"💾 Backup en: {self.backup_dir}")
+            self.logger.info("\n✅ REGENERACIÓN COMPLETADA EXITOSAMENTE")
+            self.logger.info(f"📊 Segmentos procesados: {len(df_updated):,}")
+            self.logger.info(f"🎵 Modelo usado: YAMNet")
+            self.logger.info(f"💾 Backup en: {self.backup_dir}")
             
             return True
             
         except Exception as e:
-            print(f"\n❌ ERROR EN REGENERACIÓN: {e}")
-            print(f"💾 Los datos originales están seguros en: {self.backup_dir}")
-            print("🔄 Puedes restaurar desde el backup si es necesario")
+            self.logger.error(f"\n❌ ERROR EN REGENERACIÓN: {e}")
+            self.logger.error(f"💾 Los datos originales están seguros en: {self.backup_dir}")
+            self.logger.error("🔄 Puedes restaurar desde el backup si es necesario")
             return False
 
-def main():
-    parser = argparse.ArgumentParser(description="Regenerar embeddings de audio con YAMNet real")
-    parser.add_argument("dataset_dir", help="Directorio del dataset")
-    parser.add_argument("--use-real-yamnet", action="store_true", 
-                       help="Usar YAMNet real (siempre activo)")
-    parser.add_argument("--verify-only", action="store_true",
-                       help="Solo verificar requisitos sin regenerar")
-    
-    args = parser.parse_args()
-    
-    if args.verify_only:
-        # Solo verificar requisitos
-        from check_yamnet_requirements import main as check_requirements
-        success = check_requirements()
-        if success:
-            print("\n✅ Sistema listo para YAMNet real")
-        else:
-            print("\n❌ Sistema no cumple requisitos")
-        sys.exit(0 if success else 1)
-    
-    # Verificar requisitos si se va a usar YAMNet real
-    if args.use_real_yamnet:
-        print("🔍 Verificando requisitos para YAMNet real...")
-        try:
-            import tensorflow as tf
-            import tensorflow_hub as hub
-            print(f"✅ TensorFlow {tf.__version__} disponible")
-        except ImportError:
-            print("❌ TensorFlow no disponible")
-            print("💡 Instala con: pip install tensorflow tensorflow-hub")
-            sys.exit(1)
-    
-    # Ejecutar regeneración
-    regenerator = AudioEmbeddingRegeneration(
-        args.dataset_dir, 
-        use_real_yamnet=args.use_real_yamnet
-    )
-    
-    success = regenerator.run_regeneration()
-    sys.exit(0 if success else 1)
+def main():    parser = argparse.ArgumentParser(description="Regenerar embeddings de audio con YAMNet real")    parser.add_argument("dataset_dir", help="Directorio del dataset")    parser.add_argument("--use-real-yamnet", action="store_true",                        help="Usar YAMNet real (siempre activo)")    parser.add_argument("--verify-only", action="store_true",                       help="Solo verificar requisitos sin regenerar")        args = parser.parse_args()        if args.verify_only:        # Solo verificar requisitos        from check_yamnet_requirements import main as check_requirements        success = check_requirements()        if success:            logging.info("\n✅ Sistema listo para YAMNet real")        else:            logging.error("\n❌ Sistema no cumple requisitos")        sys.exit(0 if success else 1)        # Verificar requisitos si se va a usar YAMNet real    if args.use_real_yamnet:        logging.info("🔍 Verificando requisitos para YAMNet real...")        try:            import tensorflow as tf            import tensorflow_hub as hub            logging.info(f"✅ TensorFlow {tf.__version__} disponible")        except ImportError:            logging.error("❌ TensorFlow no disponible")            logging.error("💡 Instala con: pip install tensorflow tensorflow-hub")            sys.exit(1)        # Ejecutar regeneración    regenerator = AudioEmbeddingRegeneration(        args.dataset_dir,         use_real_yamnet=args.use_real_yamnet    )        success = regenerator.run_regeneration()    sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
     main()

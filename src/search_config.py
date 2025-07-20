@@ -8,6 +8,8 @@ from typing import Dict, Optional
 import json
 from pathlib import Path
 
+import logging
+
 @dataclass
 class SearchConfig:
     """Configuración de parámetros de búsqueda"""
@@ -278,8 +280,8 @@ def get_config_for_use_case(use_case: str) -> SearchConfig:
 
 if __name__ == "__main__":
     # Ejemplo de uso
-    print("📊 Configuraciones de Búsqueda Disponibles:")
-    print("=" * 50)
+    logging.info("📊 Configuraciones de Búsqueda Disponibles:")
+    logging.info("=" * 50)
     
     configs = {
         'Permisiva': PERMISSIVE_CONFIG,
@@ -288,12 +290,12 @@ if __name__ == "__main__":
     }
     
     for name, config in configs.items():
-        print(f"\n{name}:")
-        print(f"  Texto: {config.min_text_score}")
-        print(f"  Audio: {config.min_audio_score}")
-        print(f"  YAMNet: {config.min_yamnet_score}")
-        print(f"  Híbrida: {config.min_hybrid_score}")
+        logging.info(f"\n{name}:")
+        logging.info(f"  Texto: {config.min_text_score}")
+        logging.info(f"  Audio: {config.min_audio_score}")
+        logging.info(f"  YAMNet: {config.min_yamnet_score}")
+        logging.info(f"  Híbrida: {config.min_hybrid_score}")
     
     # Guardar configuración por defecto
     DEFAULT_CONFIG.save_to_file("search_config.json")
-    print(f"\n💾 Configuración por defecto guardada en: search_config.json")
+    logging.info(f"\n💾 Configuración por defecto guardada en: search_config.json")

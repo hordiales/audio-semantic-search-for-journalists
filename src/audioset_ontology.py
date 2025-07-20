@@ -1,7 +1,4 @@
-#!/usr/bin/env python3
-"""
-Ontología de AudioSet para clasificación de audio
-"""
+import logging
 
 # AudioSet ontology - principales clases de sonidos
 AUDIOSET_CLASSES = {
@@ -167,20 +164,20 @@ def get_all_classes():
 # Función para mostrar la ontología
 def print_ontology():
     """Imprime la ontología completa"""
-    print("🎵 AudioSet Ontology")
-    print("=" * 50)
+    logging.info("🎵 AudioSet Ontology")
+    logging.info("=" * 50)
     
     for category, classes in AUDIOSET_CATEGORIES.items():
-        print(f"\n📂 {category.upper().replace('_', ' ')}")
-        print("-" * 30)
+        logging.info(f"\n📂 {category.upper().replace('_', ' ')}")
+        logging.info("-" * 30)
         
         for class_name in classes:
             info = AUDIOSET_CLASSES.get(class_name, {})
             name = info.get("name", class_name)
             description = info.get("description", "")
-            print(f"  🔊 {class_name:<20} → {name}")
+            logging.info(f"  🔊 {class_name:<20} → {name}")
             if description:
-                print(f"      {description}")
+                logging.info(f"      {description}")
 
 if __name__ == "__main__":
     print_ontology()

@@ -383,24 +383,24 @@ if __name__ == "__main__":
     
     # Inicializar analizador
     if not TRANSFORMERS_AVAILABLE:
-        print("❌ Transformers no está disponible. No se pueden ejecutar las pruebas.")
+        logging.error("❌ Transformers no está disponible. No se pueden ejecutar las pruebas.")
         exit(1)
     
     analyzer = SentimentAnalyzer()
     
     # Procesar sentimientos
     df_with_sentiment = analyzer.process_dataframe(df)
-    print("Resultados del análisis:")
-    print(df_with_sentiment[['text', 'dominant_sentiment', 'sentiment_positive', 'sentiment_negative']])
+    logging.info("Resultados del análisis:")
+    logging.info(df_with_sentiment[['text', 'dominant_sentiment', 'sentiment_positive', 'sentiment_negative']])
     
     # Buscar por estado de ánimo
     happy_results = analyzer.search_by_sentiment(df_with_sentiment, "feliz", threshold=0.5)
-    print(f"\nTextos 'felices' encontrados: {len(happy_results)}")
+    logging.info(f"\nTextos 'felices' encontrados: {len(happy_results)}")
     
     # Mostrar distribución
     distribution = analyzer.get_sentiment_distribution(df_with_sentiment)
-    print(f"\nDistribución de sentimientos: {distribution}")
+    logging.info(f"\nDistribución de sentimientos: {distribution}")
     
     # Mostrar estados de ánimo disponibles
     moods = analyzer.get_available_moods()
-    print(f"\nEstados de ánimo disponibles: {moods[:10]}...")  # Primeros 10
+    logging.info(f"\nEstados de ánimo disponibles: {moods[:10]}...")  # Primeros 10
