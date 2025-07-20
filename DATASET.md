@@ -271,7 +271,7 @@ Se analiza el sentimiento del texto
   ]
             
 
- $ python add_sentiment_to_dataset.py dataset
+ $ python src/add_sentiment_to_dataset.py ./dataset
 
     - 4 columnas de sentimiento:
       - sentiment_positive

@@ -61,6 +61,10 @@ class AudioDatasetClient:
         
         # Cargar dataset principal
         dataset_file = self.dataset_dir / "final" / "complete_dataset.pkl"
+        print(f"🔍 Buscando dataset en: {dataset_file}")
+        print(f"🔍 Ruta absoluta: {dataset_file.absolute()}")
+        print(f"🔍 Dataset dir existe: {self.dataset_dir.exists()}")
+        print(f"🔍 Final dir existe: {(self.dataset_dir / 'final').exists()}")
         if not dataset_file.exists():
             raise FileNotFoundError(f"Dataset no encontrado: {dataset_file}")
         
