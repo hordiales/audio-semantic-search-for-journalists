@@ -1,6 +1,8 @@
 #custom files
+data/*
 dataset/*
 activate-conda-env.sh
+tmp/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
