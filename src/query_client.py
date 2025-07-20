@@ -315,7 +315,8 @@ class AudioDatasetClient:
                 
                 # Crear índices si es necesario
                 if 'text_embedding' in self.df.columns:
-                    self.sentiment_search_engine.create_indices(self.df)
+                    indices_dir = self.dataset_dir / "indices"
+                    self.sentiment_search_engine.create_indices(self.df, str(indices_dir))
                 
                 self.sentiment_enabled = True
                 print("✅ Sistema de sentimientos habilitado")

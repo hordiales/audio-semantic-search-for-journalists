@@ -2,8 +2,13 @@
 data/*
 dataset/*
 activate-conda-env.sh
-tmp/
+tmp/*
 TODO.md
+
+# tools files, and binary data
+*.lock
+*.pkl
+*.faiss
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
