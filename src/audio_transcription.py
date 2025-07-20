@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import soundfile as sf
 from pydub import AudioSegment
-from pydub.silence import split_on_silence
+from pydub.silence import split_on_silence, detect_silence
 
 
 class AudioTranscriber:
@@ -42,7 +42,7 @@ class AudioTranscriber:
     def segment_by_silence(self, audio_path: str, min_silence_len: int = 500, 
                           silence_thresh: int = -40) -> List[Dict]:
         """
-        Segmenta el audio basándose en silencios
+        Segmenta el audio basándose en silencios preservando timestamps originales
         
         Args:
             audio_path: Ruta al archivo de audio
@@ -50,23 +50,46 @@ class AudioTranscriber:
             silence_thresh: Umbral de silencio en dB
             
         Returns:
-            Lista de diccionarios con información de segmentos
+            Lista de diccionarios con información de segmentos con timestamps correctos
         """
         audio = AudioSegment.from_file(audio_path)
         
-        # Dividir por silencios
-        chunks = split_on_silence(
-            audio,
-            min_silence_len=min_silence_len,
-            silence_thresh=silence_thresh,
-            keep_silence=100  # Mantener 100ms de silencio
+        # PASO 1: Detectar silencios para obtener las posiciones originales
+        silence_ranges = detect_silence(
+            audio, 
+            min_silence_len=min_silence_len, 
+            silence_thresh=silence_thresh
         )
         
-        segments = []
-        current_time = 0
+        # PASO 2: Calcular los rangos de audio (no-silencio) con timestamps originales
+        audio_ranges = []
+        start_pos = 0
         
-        for i, chunk in enumerate(chunks):
-            duration = len(chunk) / 1000.0  # Duración en segundos
+        for silence_start, silence_end in silence_ranges:
+            if start_pos < silence_start:
+                # Hay audio antes de este silencio
+                audio_ranges.append((start_pos, silence_start))
+            start_pos = silence_end
+        
+        # Añadir el último segmento si existe audio después del último silencio
+        if start_pos < len(audio):
+            audio_ranges.append((start_pos, len(audio)))
+        
+        # Si no hay silencios detectados, todo el audio es un segmento
+        if not silence_ranges and len(audio) > 0:
+            audio_ranges = [(0, len(audio))]
+        
+        # PASO 3: Crear segmentos con timestamps originales correctos
+        segments = []
+        
+        for i, (start_ms, end_ms) in enumerate(audio_ranges):
+            # Extraer el chunk con las posiciones originales
+            chunk = audio[start_ms:end_ms]
+            
+            # Calcular timestamps en segundos (basados en posiciones originales)
+            start_time = start_ms / 1000.0
+            end_time = end_ms / 1000.0
+            duration = (end_ms - start_ms) / 1000.0
             
             # Guardar segmento temporal
             temp_path = f"temp_segment_{i}.wav"
@@ -74,16 +97,23 @@ class AudioTranscriber:
             
             segment_info = {
                 'segment_id': i,
-                'start_time': current_time,
-                'end_time': current_time + duration,
+                'start_time': start_time,
+                'end_time': end_time,
                 'duration': duration,
                 'temp_path': temp_path,
-                'source_file': audio_path
+                'source_file': audio_path,
+                'original_start_ms': start_ms,  # Para debugging
+                'original_end_ms': end_ms       # Para debugging
             }
             
             segments.append(segment_info)
-            current_time += duration
-            
+        
+        print(f"Segmentación por silencio: {len(segments)} segmentos detectados")
+        if len(segments) > 0:
+            total_audio_time = sum(seg['duration'] for seg in segments)
+            original_duration = len(audio) / 1000.0
+            print(f"Tiempo total de audio: {total_audio_time:.2f}s de {original_duration:.2f}s originales")
+        
         return segments
     
     def segment_by_time(self, audio_path: str, segment_duration: float = 10.0) -> List[Dict]:
