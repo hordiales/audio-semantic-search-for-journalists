@@ -4,6 +4,7 @@ dataset/*
 activate-conda-env.sh
 tmp/*
 TODO.md
+BUGS-SOLVED/*
 
 # tools files, and binary data
 *.lock

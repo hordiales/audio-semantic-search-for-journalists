@@ -10,20 +10,32 @@ from pydub import AudioSegment
 from pydub.silence import split_on_silence, detect_silence
 
 
+import logging
+import sys
+
+# Configuración de logging
+handler = logging.StreamHandler(sys.stderr)
+handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logging.basicConfig(level=logging.INFO, handlers=[handler])
+
+
 class AudioTranscriber:
-    """
-    Clase para transcribir audio usando Whisper y segmentarlo por pausas o tiempo
-    """
+    """Transcripción de audio usando Whisper"""
     
     def __init__(self, model_name: str = "base"):
         """
-        Inicializa el transcriptor con el modelo Whisper especificado
+        Inicializa el transcriptor
         
         Args:
-            model_name: Nombre del modelo Whisper ('tiny', 'base', 'small', 'medium', 'large')
+            model_name: Nombre del modelo Whisper (tiny, base, small, medium, large)
         """
-        self.model = whisper.load_model(model_name)
+        if not WHISPER_AVAILABLE:
+            raise RuntimeError("Whisper no está disponible. Instala con: pip install openai-whisper")
+        
         self.model_name = model_name
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = whisper.load_model(model_name, device=self.device)
+        logging.info(f"Modelo Whisper '{model_name}' cargado en {self.device}")
         
     def load_audio(self, file_path: str) -> np.ndarray:
         """
@@ -108,11 +120,11 @@ class AudioTranscriber:
             
             segments.append(segment_info)
         
-        print(f"Segmentación por silencio: {len(segments)} segmentos detectados")
+        logging.info(f"Segmentación por silencio: {len(segments)} segmentos detectados")
         if len(segments) > 0:
             total_audio_time = sum(seg['duration'] for seg in segments)
             original_duration = len(audio) / 1000.0
-            print(f"Tiempo total de audio: {total_audio_time:.2f}s de {original_duration:.2f}s originales")
+            logging.info(f"Tiempo total de audio: {total_audio_time:.2f}s de {original_duration:.2f}s originales")
         
         return segments
     
@@ -192,7 +204,7 @@ class AudioTranscriber:
                     os.remove(segment['temp_path'])
                     
             except Exception as e:
-                print(f"Error transcribiendo segmento {segment['segment_id']}: {e}")
+                logging.error(f"Error transcribiendo segmento {segment['segment_id']}: {e}")
                 continue
         
         return transcribed_segments
@@ -204,23 +216,25 @@ class AudioTranscriber:
         
         Args:
             file_path: Ruta al archivo de audio
-            segmentation_method: Método de segmentación ('silence' o 'time')
-            **kwargs: Argumentos adicionales para el método de segmentación
+            segmentation_method: 'silence' o 'time'
+            min_silence_len: Duración mínima de silencio para segmentar (ms)
+            silence_thresh: Umbral de silencio (dBFS)
+            segment_duration: Duración de cada segmento en segundos (para método 'time')
             
         Returns:
-            DataFrame con información de todos los segmentos transcritos
+            DataFrame con segmentos y transcripciones
         """
-        print(f"Procesando archivo: {file_path}")
+        logging.info(f"Procesando archivo: {file_path}")
         
-        # Segmentar audio
-        if segmentation_method == "silence":
+        # Cargar y segmentar audio
+        if segmentation_method == 'silence':
             segments = self.segment_by_silence(file_path, **kwargs)
         elif segmentation_method == "time":
             segments = self.segment_by_time(file_path, **kwargs)
         else:
             raise ValueError("segmentation_method debe ser 'silence' o 'time'")
         
-        print(f"Encontrados {len(segments)} segmentos")
+        logging.info(f"Encontrados {len(segments)} segmentos")
         
         # Transcribir segmentos
         transcribed_segments = self.transcribe_segments(segments)
@@ -254,7 +268,7 @@ class AudioTranscriber:
                 segments_df = self.process_audio_file(file_path, segmentation_method, **kwargs)
                 all_segments.append(segments_df)
             except Exception as e:
-                print(f"Error procesando {file_path}: {e}")
+                logging.error(f"Error procesando {file_path}: {e}")
                 continue
         
         if all_segments:
@@ -278,4 +292,4 @@ if __name__ == "__main__":
     # df = transcriber.process_multiple_files(files)
     # print(f"Total de segmentos: {len(df)}")
     
-    print("Módulo de transcripción listo. Usar AudioTranscriber para procesar archivos.")
+    logging.info("Módulo de transcripción listo. Usar AudioTranscriber para procesar archivos.")

@@ -256,26 +256,26 @@ def create_dataset_config(args) -> DatasetConfig:
 
 def print_config_summary(config: DatasetConfig):
     """Imprime resumen de la configuración"""
-    print("🔧 Configuración del Pipeline")
-    print("=" * 50)
-    print(f"📁 Input:  {config.input_dir}")
-    print(f"📁 Output: {config.output_dir}")
-    print(f"🎤 Whisper: {config.whisper_model}")
-    print(f"📝 Text Model: {config.text_model}")
-    print(f"📊 Segmentación: {config.segmentation_method}")
-    print(f"👥 Workers: {config.max_workers}")
-    print(f"💾 Intermediate: {config.save_intermediate}")
-    print()
+    logging.info("🔧 Configuración del Pipeline")
+    logging.info("=" * 50)
+    logging.info(f"📁 Input:  {config.input_dir}")
+    logging.info(f"📁 Output: {config.output_dir}")
+    logging.info(f"🎤 Whisper: {config.whisper_model}")
+    logging.info(f"📝 Text Model: {config.text_model}")
+    logging.info(f"📊 Segmentación: {config.segmentation_method}")
+    logging.info(f"👥 Workers: {config.max_workers}")
+    logging.info(f"💾 Intermediate: {config.save_intermediate}")
+    logging.info("")
 
 
 def dry_run_analysis(config: DatasetConfig):
     """Analiza qué se haría en un dry run"""
-    print("🔍 Análisis de Dry Run")
-    print("=" * 30)
+    logging.info("🔍 Análisis de Dry Run")
+    logging.info("=" * 30)
     
     input_path = Path(config.input_dir)
     if not input_path.exists():
-        print(f"❌ Directorio de entrada no existe: {input_path}")
+        logging.error(f"❌ Directorio de entrada no existe: {input_path}")
         return False
     
     # Contar archivos de audio
@@ -286,22 +286,22 @@ def dry_run_analysis(config: DatasetConfig):
         audio_files.extend(input_path.rglob(f"*{ext}"))
         audio_files.extend(input_path.rglob(f"*{ext.upper()}"))
     
-    print(f"📊 Archivos encontrados: {len(audio_files)}")
+    logging.info(f"📊 Archivos encontrados: {len(audio_files)}")
     
     # Estimar tiempo de procesamiento
     if audio_files:
-        print("📁 Ejemplos de archivos:")
+        logging.info("📁 Ejemplos de archivos:")
         for i, file in enumerate(audio_files[:5]):
-            print(f"  {i+1}. {file.name}")
+            logging.info(f"  {i+1}. {file.name}")
         if len(audio_files) > 5:
-            print(f"  ... y {len(audio_files) - 5} más")
+            logging.info(f"  ... y {len(audio_files) - 5} más")
     
     # Estimar espacio en disco
     total_size = sum(f.stat().st_size for f in audio_files)
-    print(f"💾 Tamaño total: {total_size / (1024**2):.1f} MB")
+    logging.info(f"💾 Tamaño total: {total_size / (1024**2):.1f} MB")
     
     # Directorios que se crearían
-    print("\n📁 Directorios que se crearán:")
+    logging.info("\n📁 Directorios que se crearán:")
     dirs = [
         config.output_dir,
         f"{config.output_dir}/converted",
@@ -313,93 +313,12 @@ def dry_run_analysis(config: DatasetConfig):
     
     for dir_path in dirs:
         exists = "✅" if Path(dir_path).exists() else "📁"
-        print(f"  {exists} {dir_path}")
+        logging.info(f"  {exists} {dir_path}")
     
     return len(audio_files) > 0
 
 
-def main():
-    """Función principal"""
-    args = parse_arguments()
-    
-    print("🎵 Pipeline de Generación de Dataset de Audio")
-    print("=" * 60)
-    print(f"⏰ Inicio: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print()
-    
-    try:
-        # Crear configuración
-        config = create_dataset_config(args)
-        
-        # Mostrar configuración
-        if args.verbose:
-            print_config_summary(config)
-        
-        # Dry run si se solicita
-        if args.dry_run:
-            success = dry_run_analysis(config)
-            if success:
-                print("\n✅ Dry run completado. Todo listo para procesamiento.")
-                return 0
-            else:
-                print("\n❌ Dry run falló. Revisa la configuración.")
-                return 1
-        
-        # Verificar directorio de entrada
-        if not Path(config.input_dir).exists():
-            print(f"❌ Error: Directorio de entrada no existe: {config.input_dir}")
-            return 1
-        
-        # Crear orquestador
-        orchestrator = DatasetOrchestrator(config)
-        
-        # Ejecutar pipeline
-        if args.skip_embeddings:
-            print("⚠️  Modo solo transcripción - embeddings omitidos")
-            # TODO: Implementar modo solo transcripción
-            print("❌ Modo solo transcripción no implementado aún")
-            return 1
-        else:
-            result = orchestrator.run_full_pipeline()
-        
-        # Mostrar resultados
-        if result["success"]:
-            print(f"\n✅ ¡Pipeline completado exitosamente!")
-            print(f"📊 Estadísticas:")
-            stats = result["stats"]
-            print(f"  • Archivos procesados: {stats['converted_files']}/{stats['total_files']}")
-            print(f"  • Segmentos generados: {stats['total_segments']}")
-            print(f"  • Tiempo total: {stats['processing_time']:.2f} segundos")
-            print(f"  • Archivos fallidos: {stats['failed_files']}")
-            
-            print(f"\n📁 Dataset creado en: {result['dataset']['dataset_dir']}")
-            print(f"📋 Manifiesto: {result['dataset']['manifest']}")
-            
-            if args.verbose:
-                print(f"\n📄 Archivos generados:")
-                for key, path in result['dataset'].items():
-                    if key != 'dataset_dir':
-                        print(f"  • {key}: {path}")
-            
-            return 0
-        else:
-            print(f"\n❌ Pipeline falló: {result['error']}")
-            print(f"⏱️  Tiempo transcurrido: {result['stats']['processing_time']:.2f} segundos")
-            return 1
-            
-    except KeyboardInterrupt:
-        print("\n⚠️  Procesamiento interrumpido por el usuario")
-        return 1
-    except Exception as e:
-        print(f"\n❌ Error inesperado: {str(e)}")
-        if args.verbose:
-            import traceback
-            traceback.print_exc()
-        return 1
-    finally:
-        # Limpieza
-        if 'orchestrator' in locals():
-            orchestrator.cleanup()
+def main():    """Función principal"""    args = parse_arguments()        logging.info("🎵 Pipeline de Generación de Dataset de Audio")    logging.info("=" * 60)    logging.info(f"⏰ Inicio: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")    logging.info("")        try:        # Crear configuración        config = create_dataset_config(args)                # Mostrar configuración        if args.verbose:            print_config_summary(config)                # Dry run si se solicita        if args.dry_run:            success = dry_run_analysis(config)            if success:                logging.info("\n✅ Dry run completado. Todo listo para procesamiento.")                return 0            else:                logging.error("\n❌ Dry run falló. Revisa la configuración.")                return 1                # Verificar directorio de entrada        if not Path(config.input_dir).exists():            logging.error(f"❌ Error: Directorio de entrada no existe: {config.input_dir}")            return 1                # Crear orquestador        orchestrator = DatasetOrchestrator(config)                # Ejecutar pipeline        if args.skip_embeddings:            logging.warning("⚠️  Modo solo transcripción - embeddings omitidos")            # TODO: Implementar modo solo transcripción            logging.error("❌ Modo solo transcripción no implementado aún")            return 1        else:            result = orchestrator.run_full_pipeline()                # Mostrar resultados        if result["success"]:            logging.info(f"\n✅ ¡Pipeline completado exitosamente!")            logging.info(f"📊 Estadísticas:")            stats = result["stats"]            logging.info(f"  • Archivos procesados: {stats['converted_files']}/{stats['total_files']}")            logging.info(f"  • Segmentos generados: {stats['total_segments']}")            logging.info(f"  • Tiempo total: {stats['processing_time']:.2f} segundos")            logging.info(f"  • Archivos fallidos: {stats['failed_files']}")                        logging.info(f"\n📁 Dataset creado en: {result['dataset']['dataset_dir']}")            logging.info(f"📋 Manifiesto: {result['dataset']['manifest']}")                        if args.verbose:                logging.info(f"\n📄 Archivos generados:")                for key, path in result['dataset'].items():                    if key != 'dataset_dir':                        logging.info(f"  • {key}: {path}")                        return 0        else:            logging.error(f"\n❌ Pipeline falló: {result['error']}")            logging.info(f"⏱️  Tiempo transcurrido: {result['stats']['processing_time']:.2f} segundos")            return 1                except KeyboardInterrupt:        logging.warning("\n⚠️  Procesamiento interrumpido por el usuario")        return 1    except Exception as e:        logging.error(f"\n❌ Error inesperado: {str(e)}")        if args.verbose:            import traceback            traceback.print_exc()        return 1    finally:        # Limpieza        if 'orchestrator' in locals():            orchestrator.cleanup()
 
 
 if __name__ == "__main__":

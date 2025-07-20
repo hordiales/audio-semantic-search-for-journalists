@@ -3,6 +3,7 @@ Sistema de carga de configuración desde variables de entorno y archivos .env
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, Union
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ try:
     DOTENV_AVAILABLE = True
 except ImportError:
     DOTENV_AVAILABLE = False
-    print("⚠️  python-dotenv no instalado. Instala con: pip install python-dotenv")
+    logging.warning("⚠️  python-dotenv no instalado. Instala con: pip install python-dotenv")
 
 
 @dataclass
@@ -96,7 +97,7 @@ class ConfigLoader:
     def _load_env_file(self):
         """Carga archivo .env si está disponible"""
         if not DOTENV_AVAILABLE:
-            print("🔧 Usando solo variables de entorno del sistema")
+            logging.warning("🔧 Usando solo variables de entorno del sistema")
             return
         
         # Buscar archivo .env
@@ -115,9 +116,9 @@ class ConfigLoader:
         
         if env_path and env_path.exists():
             load_dotenv(env_path)
-            print(f"✅ Archivo .env cargado desde: {env_path}")
+            logging.info(f"✅ Archivo .env cargado desde: {env_path}")
         else:
-            print("ℹ️  No se encontró archivo .env, usando variables del sistema")
+            logging.info("ℹ️  No se encontró archivo .env, usando variables del sistema")
     
     def load_config(self) -> SystemConfig:
         """
@@ -232,28 +233,28 @@ class ConfigLoader:
         """Imprime un resumen de la configuración cargada"""
         config = self.load_config()
         
-        print("🔧 Configuración del Sistema")
-        print("=" * 40)
+        logging.info("🔧 Configuración del Sistema")
+        logging.info("=" * 40)
         
         # API Keys disponibles
-        print("\n📡 API Keys:")
-        print(f"  OpenAI: {'✅' if config.openai_api_key else '❌'}")
-        print(f"  Anthropic: {'✅' if config.anthropic_api_key else '❌'}")
-        print(f"  Google: {'✅' if config.google_api_key else '❌'}")
+        logging.info("\n📡 API Keys:")
+        logging.info(f"  OpenAI: {'✅' if config.openai_api_key else '❌'}")
+        logging.info(f"  Anthropic: {'✅' if config.anthropic_api_key else '❌'}")
+        logging.info(f"  Google: {'✅' if config.google_api_key else '❌'}")
         
         # Configuración principal
-        print(f"\n🤖 LLM Backend: {config.default_llm_backend}")
-        print(f"🎤 Whisper Model: {config.default_whisper_model}")
-        print(f"📝 Text Model: {config.default_text_model}")
+        logging.info(f"\n🤖 LLM Backend: {config.default_llm_backend}")
+        logging.info(f"🎤 Whisper Model: {config.default_whisper_model}")
+        logging.info(f"📝 Text Model: {config.default_text_model}")
         
         # API
-        print(f"\n🌐 API: {config.api_host}:{config.api_port}")
-        print(f"🐛 Debug: {config.debug_mode}")
-        print(f"📊 Log Level: {config.log_level}")
+        logging.info(f"\n🌐 API: {config.api_host}:{config.api_port}")
+        logging.info(f"🐛 Debug: {config.debug_mode}")
+        logging.info(f"📊 Log Level: {config.log_level}")
         
         # Ollama
-        print(f"\n🦙 Ollama: {config.ollama_base_url}")
-        print(f"📦 Modelos: {', '.join(config.ollama_models)}")
+        logging.info(f"\n🦙 Ollama: {config.ollama_base_url}")
+        logging.info(f"📦 Modelos: {', '.join(config.ollama_models)}")
     
     def create_env_file(self, output_path: str = ".env"):
         """
@@ -296,8 +297,8 @@ TEXT_WEIGHT=0.7
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(env_content)
         
-        print(f"✅ Archivo .env creado en: {output_path}")
-        print("🔑 ¡No olvides agregar tus API keys!")
+        logging.info(f"✅ Archivo .env creado en: {output_path}")
+        logging.info("🔑 ¡No olvides agregar tus API keys!")
 
 
 # Instancia global del cargador de configuración
@@ -320,11 +321,12 @@ def setup_logging():
     
     level = getattr(logging, config.log_level.upper(), logging.INFO)
     
-    logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    # Configurar el handler para que escriba en stderr
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    
+    # Configurar el logger raíz
+    logging.basicConfig(level=level, handlers=[handler])
     
     if config.verbose_logging:
         # Habilitar logs detallados para librerías específicas

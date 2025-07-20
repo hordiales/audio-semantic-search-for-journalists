@@ -7,14 +7,9 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-# TensorFlow imports opcionales
-try:
-    import tensorflow as tf
-    import tensorflow_hub as hub
-    TF_AVAILABLE = True
-except ImportError:
-    TF_AVAILABLE = False
-    print("⚠️  TensorFlow no disponible.")
+# TensorFlow imports requeridos
+import tensorflow as tf
+import tensorflow_hub as hub
 
 
 class AudioEmbeddingGenerator:
@@ -38,19 +33,13 @@ class AudioEmbeddingGenerator:
         """
         Carga el modelo YAMNet desde TensorFlow Hub
         """
-        if not TF_AVAILABLE:
-            print("TensorFlow no disponible.")
-            self.model = None
-            return
-            
         try:
             print("Cargando modelo YAMNet...")
             self.model = hub.load(self.model_url)
             print("Modelo YAMNet cargado exitosamente")
         except Exception as e:
             print(f"Error cargando YAMNet: {e}")
-            print("TensorFlow no disponible, no se pueden generar embeddings de audio.")
-            self.model = None
+            raise RuntimeError(f"No se pudo cargar YAMNet: {e}")
     
     def preprocess_audio(self, audio_path: str, target_sr: int = 16000) -> np.ndarray:
         """
@@ -85,8 +74,7 @@ class AudioEmbeddingGenerator:
             Array numpy con el embedding del audio
         """
         if self.model is None:
-            # Error: no se pueden generar embeddings sin TensorFlow
-            raise RuntimeError("TensorFlow requerido para generar embeddings de audio")
+            raise RuntimeError("Modelo YAMNet no está cargado")
         
         try:
             # Preprocesar audio
@@ -97,12 +85,8 @@ class AudioEmbeddingGenerator:
             scores, embeddings, spectrogram = self.model(audio)
             
             # Promediar embeddings a lo largo del tiempo
-            if TF_AVAILABLE:
-                embedding = tf.reduce_mean(embeddings, axis=0)
-                return embedding.numpy()
-            else:
-                # Fallback si TF no está disponible
-                return np.random.rand(self.embedding_dim).astype(np.float32)
+            embedding = tf.reduce_mean(embeddings, axis=0)
+            return embedding.numpy()
             
         except Exception as e:
             print(f"Error generando embedding para {audio_path}: {e}")
@@ -258,7 +242,7 @@ class AudioEmbeddingGenerator:
 
 
 
-# Función para seleccionar el generador apropiado
+# Función para obtener el generador de embeddings
 def get_audio_embedding_generator():
     """
     Retorna el generador de embeddings YAMNet
@@ -266,21 +250,12 @@ def get_audio_embedding_generator():
     Returns:
         Instancia del generador de embeddings
     """
-    if not TF_AVAILABLE:
-        raise RuntimeError("TensorFlow es requerido para generar embeddings de audio. Instala con: pip install tensorflow")
-    
     return AudioEmbeddingGenerator()
 
 
 # Ejemplo de uso
 if __name__ == "__main__":
     # Ejemplo de uso del generador de embeddings de audio
-    
-    # Verificar que TensorFlow esté disponible
-    if not TF_AVAILABLE:
-        print("❌ TensorFlow no está disponible. No se pueden ejecutar las pruebas.")
-        exit(1)
-    
     embedder = get_audio_embedding_generator()
     
     # Datos de ejemplo

@@ -76,12 +76,13 @@ class SentimentAnalyzer:
         'calm': 'NEUTRAL'
     }
     
-    def __init__(self, model_name: str = None):
+    def __init__(self, model_name: str = None, logger=None):
         """
         Inicializa el analizador de sentimientos
         
         Args:
             model_name: Nombre del modelo de análisis de sentimientos
+            logger: A logger instance (optional)
         """
         if not TRANSFORMERS_AVAILABLE:
             raise RuntimeError("Transformers library es requerida para análisis de sentimientos. Instala con: pip install transformers")
@@ -90,6 +91,8 @@ class SentimentAnalyzer:
         self.pipeline = None
         self.tokenizer = None
         self.model = None
+        self.log = logger.info if logger else print
+        self.log_error = logger.error if logger else lambda msg: print(msg, file=sys.stderr)
         
         try:
             self._initialize_model()
@@ -224,12 +227,12 @@ class SentimentAnalyzer:
         if text_column not in df.columns:
             raise ValueError(f"Columna '{text_column}' no encontrada en DataFrame")
         
-        print(f"Analizando sentimientos de {len(df)} textos...")
+        self.log(f"Analizando sentimientos de {len(df)} textos...")
         
         results = []
         for idx, text in enumerate(df[text_column]):
             if idx % 100 == 0:
-                print(f"Procesando texto {idx + 1}/{len(df)}")
+                self.log(f"Procesando texto {idx + 1}/{len(df)}")
             
             sentiment_scores = self.analyze_text(str(text))
             results.append(sentiment_scores)
@@ -251,7 +254,7 @@ class SentimentAnalyzer:
         
         df_result['dominant_sentiment'] = df_result.apply(get_dominant_sentiment, axis=1)
         
-        print("Análisis de sentimientos completado")
+        self.log("Análisis de sentimientos completado")
         return df_result
     
     def search_by_sentiment(self, df: pd.DataFrame, mood_query: str, 
@@ -280,14 +283,14 @@ class SentimentAnalyzer:
                     break
         
         if not target_sentiment:
-            print(f"No se pudo mapear '{mood_query}' a un sentimiento conocido")
+            self.log_error(f"No se pudo mapear '{mood_query}' a un sentimiento conocido")
             return pd.DataFrame()
         
         # Filtrar por sentimiento
         sentiment_column = f'sentiment_{target_sentiment.lower()}'
         
         if sentiment_column not in df.columns:
-            print(f"Columna {sentiment_column} no encontrada. Ejecutar process_dataframe primero.")
+            self.log_error(f"Columna {sentiment_column} no encontrada. Ejecutar process_dataframe primero.")
             return pd.DataFrame()
         
         # Filtrar por umbral y ordenar por score

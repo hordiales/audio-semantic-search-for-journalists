@@ -8,11 +8,14 @@ import numpy as np
 from typing import List, Dict
 import re
 
+import logging
+
 class ImprovedAudioSearch:
     """Búsqueda de audio mejorada que funciona sin embeddings reales"""
     
-    def __init__(self):
+    def __init__(self, logger=None):
         """Inicializa el sistema de búsqueda mejorado"""
+        self.logger = logger or logging.getLogger(__name__)
         self.audio_keywords_mapping = self._build_audio_keywords()
     
     def _build_audio_keywords(self) -> Dict[str, List[str]]:
@@ -269,15 +272,4 @@ def create_improved_audio_search():
     """Crea una instancia del buscador de audio mejorado"""
     return ImprovedAudioSearch()
 
-if __name__ == "__main__":
-    # Ejemplo de uso
-    search_engine = ImprovedAudioSearch()
-    
-    print("🔍 Clases de audio disponibles:")
-    for audio_class in search_engine.get_available_audio_classes():
-        keywords = search_engine.get_keywords_for_class(audio_class)[:3]
-        print(f"  {audio_class}: {', '.join(keywords)}...")
-    
-    print(f"\n💡 Ejemplo de búsqueda por 'aplausos':")
-    keywords = search_engine.get_keywords_for_class('applause')
-    print(f"Palabras clave: {', '.join(keywords)}")
+if __name__ == "__main__":    # Ejemplo de uso    search_engine = ImprovedAudioSearch()        search_engine.logger.info("🔍 Clases de audio disponibles:")    for audio_class in search_engine.get_available_audio_classes():        keywords = search_engine.get_keywords_for_class(audio_class)[:3]        search_engine.logger.info(f"  {audio_class}: {', '.join(keywords)}...")        search_engine.logger.info(f"\n💡 Ejemplo de búsqueda por 'aplausos':")    keywords = search_engine.get_keywords_for_class('applause')    search_engine.logger.info(f"Palabras clave: {', '.join(keywords)}")

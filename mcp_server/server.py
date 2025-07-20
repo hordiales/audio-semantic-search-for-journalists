@@ -13,6 +13,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import json
+import logging
 
 # Add src directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -36,6 +37,7 @@ class AudioSearchMCPServer:
         self.server = Server("audio-search")
         self.client: Optional[AudioDatasetClient] = None
         self.dataset_dir = None
+        self.logger = logging.getLogger(__name__)
         
         # Register handlers
         self._register_handlers()
@@ -898,17 +900,17 @@ class AudioSearchMCPServer:
         """Initialize the audio search client"""
         try:
             self.dataset_dir = Path(dataset_dir)
-            self.client = AudioDatasetClient(dataset_dir)
+            self.client = AudioDatasetClient(dataset_dir, logger=self.logger)
             await asyncio.get_event_loop().run_in_executor(
                 None, self.client._load_dataset
             )
             # Only print status if running in terminal
             if hasattr(sys, 'stdout') and sys.stdout.isatty():
-                print(f"✅ MCP Server initialized with dataset from: {dataset_dir}")
+                self.logger.info(f"✅ MCP Server initialized with dataset from: {dataset_dir}")
             return True
         except Exception as e:
             # Always log errors
-            print(f"❌ Failed to initialize MCP server: {e}", file=sys.stderr)
+            self.logger.error(f"❌ Failed to initialize MCP server: {e}")
             return False
     
     def run(self, dataset_dir: str = "../dataset"):
@@ -916,7 +918,7 @@ class AudioSearchMCPServer:
         async def main():
             # Initialize the client
             if not await self.initialize_client(dataset_dir):
-                print("❌ Failed to start MCP server")
+                self.logger.error("❌ Failed to start MCP server")
                 return
             
             # Run the server

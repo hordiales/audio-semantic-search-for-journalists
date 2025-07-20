@@ -11,20 +11,24 @@ from typing import List, Dict, Optional, Tuple
 import json
 from pathlib import Path
 
+import logging
+
 from improved_audio_search import ImprovedAudioSearch
 from vector_indexing import VectorIndexManager
 
 class HybridAudioSearch:
     """Búsqueda híbrida que combina palabras clave + embeddings YAMNet"""
     
-    def __init__(self, dataset_dir: str):
+    def __init__(self, dataset_dir: str, logger=None):
         """
         Inicializa el sistema híbrido
         
         Args:
             dataset_dir: Directorio del dataset
+            logger: A logger instance (optional)
         """
         self.dataset_dir = Path(dataset_dir)
+        self.logger = logger or logging.getLogger(__name__)
         
         # Inicializar búsqueda por palabras clave (siempre disponible)
         self.keyword_search = ImprovedAudioSearch()
@@ -37,9 +41,9 @@ class HybridAudioSearch:
         if self.has_real_yamnet:
             self._load_vector_index()
         
-        print(f"🎵 Sistema híbrido inicializado:")
-        print(f"  🔑 Búsqueda por palabras clave: ✅ Disponible")
-        print(f"  🧠 Búsqueda con YAMNet real: {'✅ Disponible' if self.has_real_yamnet else '❌ No disponible'}")
+        self.logger.info(f"🎵 Sistema híbrido inicializado:")
+        self.logger.info(f"  🔑 Búsqueda por palabras clave: ✅ Disponible")
+        self.logger.info(f"  🧠 Búsqueda con YAMNet real: {'✅ Disponible' if self.has_real_yamnet else '❌ No disponible'}")
     
     def _check_real_yamnet_availability(self) -> bool:
         """Verifica si el dataset tiene embeddings YAMNet reales"""
@@ -54,7 +58,7 @@ class HybridAudioSearch:
                 audio_model = config.get('audio_embedding_model', 'YAMNet')
                 
                 if audio_model == "YAMNet":
-                    print("✅ Detectado YAMNet real en manifiesto")
+                    self.logger.info("✅ Detectado YAMNet real en manifiesto")
                     return True
             
             # Verificar metadatos de índices
@@ -65,13 +69,13 @@ class HybridAudioSearch:
                 
                 audio_model = metadata.get('audio_model', 'YAMNet')
                 if audio_model == "YAMNet":
-                    print("✅ Detectado YAMNet real en índices")
+                    self.logger.info("✅ Detectado YAMNet real en índices")
                     return True
             
             return False
             
         except Exception as e:
-            print(f"⚠️  Error verificando YAMNet: {e}")
+            self.logger.warning(f"⚠️  Error verificando YAMNet: {e}")
             return False
     
     def _load_vector_index(self):
@@ -90,9 +94,9 @@ class HybridAudioSearch:
                 
                 self.index_manager = VectorIndexManager(embedding_dim=embedding_dim)
                 self.index_manager.load_indices(str(indices_dir))
-                print("✅ Índices vectoriales cargados")
+                self.logger.info("✅ Índices vectoriales cargados")
         except Exception as e:
-            print(f"⚠️  Error cargando índices: {e}")
+            self.logger.warning(f"⚠️  Error cargando índices: {e}")
             self.index_manager = None
     
     def search_by_keywords(self, df: pd.DataFrame, query: str, k: int = 10) -> List[Dict]:
@@ -141,7 +145,7 @@ class HybridAudioSearch:
             query_embedding = audio_embedder.generate_embedding(query_audio_file)
             
             if query_embedding is None:
-                print("❌ No se pudo generar embedding del archivo de consulta")
+                self.logger.error("❌ No se pudo generar embedding del archivo de consulta")
                 return []
             
             # Buscar con índice FAISS
@@ -168,7 +172,7 @@ class HybridAudioSearch:
             return results
             
         except Exception as e:
-            print(f"⚠️  Error en búsqueda por embeddings YAMNet: {e}")
+            self.logger.warning(f"⚠️  Error en búsqueda por embeddings YAMNet: {e}")
             return []
     
     def search_by_yamnet_similarity(self, df: pd.DataFrame, reference_segment: Dict, k: int = 10) -> List[Dict]:
@@ -189,7 +193,7 @@ class HybridAudioSearch:
         try:
             # Usar embedding del segmento de referencia
             if 'audio_embedding' not in reference_segment:
-                print("❌ Segmento de referencia no tiene embedding de audio")
+                self.logger.error("❌ Segmento de referencia no tiene embedding de audio")
                 return []
             
             query_embedding = np.array(reference_segment['audio_embedding'])
@@ -227,20 +231,17 @@ class HybridAudioSearch:
             return results
             
         except Exception as e:
-            print(f"⚠️  Error en búsqueda por similitud YAMNet: {e}")
+            self.logger.warning(f"⚠️  Error en búsqueda por similitud YAMNet: {e}")
             return []
     
     def _generate_query_embedding_from_classes(self, audio_classes: List[str]) -> Optional[np.ndarray]:
         """
         Genera embedding de consulta basado en clases de audio
-        (Aproximación - en un sistema real usarías audio de ejemplo)
+        Requiere audio de ejemplo real para funcionar correctamente
         """
-        try:
-            # Usar embeddings promedio de segmentos que contengan estas clases
-            # Esto es una aproximación basada en el contenido del dataset
-            return np.random.rand(1024).astype(np.float32)  # Placeholder
-        except:
-            return None
+        # Esta función requiere implementación con audio real
+        # No se puede generar embeddings sin archivo de audio
+        return None
     
     def search_hybrid(self, df: pd.DataFrame, query: str, k: int = 10, 
                      keyword_weight: float = 0.7) -> List[Dict]:
@@ -256,19 +257,19 @@ class HybridAudioSearch:
         Returns:
             Lista de resultados combinados y rankeados
         """
-        print(f"🔍 Búsqueda híbrida para: '{query}'")
+        self.logger.info(f"🔍 Búsqueda híbrida para: '{query}'")
         
         # Método 1: Búsqueda por palabras clave
         keyword_results = self.search_by_keywords(df, query, k * 2)
-        print(f"🔑 Palabras clave: {len(keyword_results)} resultados")
+        self.logger.info(f"🔑 Palabras clave: {len(keyword_results)} resultados")
         
         # Método 2: Búsqueda por embeddings (si disponible)
         embedding_results = []
         if self.has_real_yamnet:
             embedding_results = self.search_by_yamnet_embeddings(df, query, k * 2)
-            print(f"🧠 Embeddings YAMNet: {len(embedding_results)} resultados")
+            self.logger.info(f"🧠 Embeddings YAMNet: {len(embedding_results)} resultados")
         else:
-            print("🧠 Embeddings YAMNet: No disponible")
+            self.logger.info("🧠 Embeddings YAMNet: No disponible")
         
         # Combinar resultados
         combined_results = self._combine_results(
@@ -284,7 +285,7 @@ class HybridAudioSearch:
         for i, result in enumerate(final_results):
             result['rank'] = i + 1
         
-        print(f"🎯 Resultados finales: {len(final_results)}")
+        self.logger.info(f"🎯 Resultados finales: {len(final_results)}")
         return final_results
     
     def _combine_results(self, keyword_results: List[Dict], 
@@ -364,7 +365,7 @@ if __name__ == "__main__":
     import sys
     
     if len(sys.argv) != 2:
-        print("Uso: python hybrid_audio_search.py <dataset_dir>")
+        logging.error("Uso: python hybrid_audio_search.py <dataset_dir>")
         sys.exit(1)
     
     dataset_dir = sys.argv[1]
@@ -374,24 +375,24 @@ if __name__ == "__main__":
     
     # Mostrar capacidades
     capabilities = search_engine.get_search_capabilities()
-    print(f"\n🎯 Capacidades de búsqueda:")
+    logging.info(f"\n🎯 Capacidades de búsqueda:")
     for capability, available in capabilities.items():
         status = "✅" if available else "❌"
-        print(f"  {status} {capability.replace('_', ' ').title()}: {available}")
+        logging.info(f"  {status} {capability.replace('_', ' ').title()}: {available}")
     
     # Cargar dataset para prueba
     df = pd.read_pickle(Path(dataset_dir) / "final" / "complete_dataset.pkl")
     
     # Prueba de búsqueda
     query = "aplausos"
-    print(f"\n🔍 Prueba de búsqueda híbrida para: '{query}'")
+    logging.info(f"\n🔍 Prueba de búsqueda híbrida para: '{query}'")
     results = search_engine.search_hybrid(df, query, k=3)
     
     for result in results:
-        print(f"\n🏆 Rank {result['rank']} - Score: {result['score']:.3f}")
-        print(f"📝 Texto: {result['text'][:80]}...")
-        print(f"🔍 Métodos: {', '.join(result.get('search_methods', []))}")
+        logging.info(f"\n🏆 Rank {result['rank']} - Score: {result['score']:.3f}")
+        logging.info(f"📝 Texto: {result['text'][:80]}...")
+        logging.info(f"🔍 Métodos: {', '.join(result.get('search_methods', []))}")
         if 'keyword_score' in result:
-            print(f"🔑 Score palabras: {result['keyword_score']:.3f}")
+            logging.info(f"🔑 Score palabras: {result['keyword_score']:.3f}")
         if 'embedding_score' in result:
-            print(f"🧠 Score embeddings: {result['embedding_score']:.3f}")
+            logging.info(f"🧠 Score embeddings: {result['embedding_score']:.3f}")

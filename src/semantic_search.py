@@ -11,6 +11,8 @@ from audio_embeddings import get_audio_embedding_generator
 from vector_indexing import VectorIndexManager
 from sentiment_analysis import SentimentAnalyzer
 
+import logging
+
 # Cargar configuración automáticamente
 try:
     from config_loader import get_config
@@ -24,20 +26,23 @@ class SemanticSearchEngine:
     Motor de búsqueda semántica para contenido de audio transcrito
     """
     
-    def __init__(self, config: Dict = None):
+    def __init__(self, config: Dict = None, logger=None):
         """
         Inicializa el motor de búsqueda semántica
         
         Args:
             config: Configuración del motor de búsqueda
+            logger: A logger instance (optional)
         """
         self.config = config or self._default_config()
+        self.log = logger.info if logger else print
+        self.log_error = logger.error if logger else lambda msg: print(msg, file=sys.stderr)
         
         # Inicializar componentes
         self.transcriber = AudioTranscriber(model_name=self.config['whisper_model'])
         self.text_embedder = TextEmbeddingGenerator(model_name=self.config['text_embedding_model'])
         self.audio_embedder = get_audio_embedding_generator()
-        self.sentiment_analyzer = SentimentAnalyzer()
+        self.sentiment_analyzer = SentimentAnalyzer(logger=logger)
         self.index_manager = VectorIndexManager(
             embedding_dim=self.text_embedder.embedding_dim,
             index_type=self.config['index_type']
@@ -97,13 +102,13 @@ class SemanticSearchEngine:
         Returns:
             DataFrame con todos los datos procesados
         """
-        print(f"Procesando {len(audio_files)} archivos de audio...")
+        self.log(f"Procesando {len(audio_files)} archivos de audio...")
         
         # Crear directorio de salida
         os.makedirs(output_dir, exist_ok=True)
         
         # Paso 1: Transcripción
-        print("Paso 1: Transcripción de audio...")
+        self.log("Paso 1: Transcripción de audio...")
         if self.config['segmentation_method'] == 'silence':
             transcription_df = self.transcriber.process_multiple_files(
                 audio_files,
@@ -119,31 +124,31 @@ class SemanticSearchEngine:
             )
         
         if len(transcription_df) == 0:
-            print("No se pudo procesar ningún archivo de audio")
+            self.log("No se pudo procesar ningún archivo de audio")
             return pd.DataFrame()
         
-        print(f"Transcripción completada: {len(transcription_df)} segmentos")
+        self.log(f"Transcripción completada: {len(transcription_df)} segmentos")
         
         # Paso 2: Preprocesamiento de texto
-        print("Paso 2: Preprocesamiento de texto...")
+        self.log("Paso 2: Preprocesamiento de texto...")
         transcription_df = TextPreprocessor.preprocess_dataframe(transcription_df)
         
         # Paso 3: Generación de embeddings de texto
-        print("Paso 3: Generación de embeddings de texto...")
+        self.log("Paso 3: Generación de embeddings de texto...")
         text_embeddings_df = self.text_embedder.process_transcription_dataframe(transcription_df)
         
         # Paso 4: Generación de embeddings de audio
-        print("Paso 4: Generación de embeddings de audio...")
+        self.log("Paso 4: Generación de embeddings de audio...")
         audio_df = self.audio_embedder.process_transcription_dataframe(text_embeddings_df)
         
         # Paso 5: Análisis de sentimientos
-        print("Paso 5: Análisis de sentimientos...")
+        self.log("Paso 5: Análisis de sentimientos...")
         full_df = self.sentiment_analyzer.process_dataframe(audio_df)
         
         # Guardar datos procesados
         output_path = os.path.join(output_dir, "processed_segments.pkl")
         full_df.to_pickle(output_path)
-        print(f"Datos procesados guardados en: {output_path}")
+        self.log(f"Datos procesados guardados en: {output_path}")
         
         # Guardar también en formato JSON para inspección
         json_path = os.path.join(output_dir, "processed_segments.json")
@@ -174,10 +179,10 @@ class SemanticSearchEngine:
             df = self.processed_data
         
         if df is None or len(df) == 0:
-            print("No hay datos para indexar")
+            self.log_error("No hay datos para indexar")
             return False
         
-        print("Creando índices vectoriales...")
+        self.log("Creando índices vectoriales...")
         
         # Crear índice de texto
         text_success = self.index_manager.create_text_index(df)
@@ -189,10 +194,10 @@ class SemanticSearchEngine:
             # Guardar índices
             self.index_manager.save_indices(index_dir)
             self.is_indexed = True
-            print("Índices creados exitosamente")
+            self.log("Índices creados exitosamente")
             return True
         else:
-            print("Error creando índices")
+            self.log_error("Error creando índices")
             return False
     
     def load_indices(self, index_dir: str = "indices") -> bool:
@@ -208,10 +213,10 @@ class SemanticSearchEngine:
         try:
             self.index_manager.load_indices(index_dir)
             self.is_indexed = True
-            print("Índices cargados exitosamente")
+            self.log("Índices cargados exitosamente")
             return True
         except Exception as e:
-            print(f"Error cargando índices: {e}")
+            self.log_error(f"Error cargando índices: {e}")
             return False
     
     def search(self, query: str, search_type: str = "combined", 
@@ -304,7 +309,7 @@ class SemanticSearchEngine:
             results['query'] = query
             return results
         except Exception as e:
-            print(f"Error en búsqueda de texto: {e}")
+            self.log_error(f"Error en búsqueda de texto: {e}")
             return pd.DataFrame()
     
     def _search_audio_by_text(self, query: str, top_k: int) -> pd.DataFrame:
@@ -342,13 +347,13 @@ class SemanticSearchEngine:
             DataFrame con resultados filtrados por sentimiento
         """
         if self.processed_data is None:
-            print("No hay datos procesados disponibles")
+            self.log_error("No hay datos procesados disponibles")
             return pd.DataFrame()
         
         # Verificar si el dataset tiene análisis de sentimientos
         sentiment_columns = ['sentiment_positive', 'sentiment_negative', 'sentiment_neutral', 'dominant_sentiment']
         if not any(col in self.processed_data.columns for col in sentiment_columns):
-            print("Datos no tienen análisis de sentimientos. Procesando...")
+            self.log("Datos no tienen análisis de sentimientos. Procesando...")
             self.processed_data = self.sentiment_analyzer.process_dataframe(self.processed_data)
         
         # Buscar por sentimiento
@@ -361,7 +366,7 @@ class SemanticSearchEngine:
             )
             return results
         except Exception as e:
-            print(f"Error en búsqueda de sentimientos: {e}")
+            self.log_error(f"Error en búsqueda de sentimientos: {e}")
             return pd.DataFrame()
     
     def _apply_sentiment_filter(self, df: pd.DataFrame, sentiment_filter: str) -> pd.DataFrame:
@@ -393,7 +398,7 @@ class SemanticSearchEngine:
             return filtered_df
             
         except Exception as e:
-            print(f"Error aplicando filtro de sentimientos: {e}")
+            self.log_error(f"Error aplicando filtro de sentimientos: {e}")
             return df  # Retornar resultados originales si hay error
     
     def _combine_results(self, text_results: pd.DataFrame, 
@@ -525,7 +530,7 @@ class SemanticSearchEngine:
         else:
             export_df.to_pickle(output_path)
         
-        print(f"Resultados exportados a: {output_path}")
+        self.log(f"Resultados exportados a: {output_path}")
 
 
 # Ejemplo de uso

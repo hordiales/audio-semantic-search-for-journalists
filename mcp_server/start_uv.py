@@ -7,6 +7,10 @@ import sys
 import os
 import subprocess
 from pathlib import Path
+import logging
+
+# Configure logging to stderr
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', stream=sys.stderr)
 
 def get_project_root():
     """Get the project root directory"""
@@ -35,8 +39,8 @@ def run_with_uv():
     
     # Check if dataset exists
     if not dataset_dir.exists():
-        print(f"❌ Dataset directory not found: {dataset_dir}")
-        print("Please ensure the dataset is available before starting the MCP server.")
+        logging.error(f"❌ Dataset directory not found: {dataset_dir}")
+        logging.error("Please ensure the dataset is available before starting the MCP server.")
         sys.exit(1)
     
     # Import and run the server
@@ -47,11 +51,11 @@ def run_with_uv():
         server.run(str(dataset_dir))
         
     except ImportError as e:
-        print(f"❌ Import error: {e}")
-        print("Please ensure all dependencies are installed with: uv sync")
+        logging.error(f"❌ Import error: {e}")
+        logging.error("Please ensure all dependencies are installed with: uv sync")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Error starting server: {e}")
+        logging.error(f"❌ Error starting server: {e}")
         sys.exit(1)
 
 def main():
@@ -78,8 +82,8 @@ def main():
     
     # Check if dataset exists
     if not dataset_dir.exists():
-        print(f"❌ Dataset directory not found: {dataset_dir}")
-        print("Please ensure the dataset is available before starting the MCP server.")
+        logging.error(f"❌ Dataset directory not found: {dataset_dir}")
+        logging.error("Please ensure the dataset is available before starting the MCP server.")
         sys.exit(1)
     
     # Import and run the server
@@ -88,9 +92,9 @@ def main():
         
         # Only print status if running in terminal (not MCP mode)
         if sys.stdout.isatty():
-            print(f"🚀 Starting Audio Search MCP Server with UV")
-            print(f"📁 Dataset directory: {dataset_dir}")
-            print(f"🐍 Python path: {sys.path[0]}")
+            logging.info(f"🚀 Starting Audio Search MCP Server with UV")
+            logging.info(f"📁 Dataset directory: {dataset_dir}")
+            logging.info(f"🐍 Python path: {sys.path[0]}")
         
         # Redirect stdout during initialization to avoid JSON parse errors
         if not sys.stdout.isatty():
@@ -110,11 +114,11 @@ def main():
             server.run(str(dataset_dir))
         
     except ImportError as e:
-        print(f"❌ Import error: {e}")
-        print("Please ensure all dependencies are installed with: uv sync")
+        logging.error(f"❌ Import error: {e}")
+        logging.error("Please ensure all dependencies are installed with: uv sync")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Error starting server: {e}")
+        logging.error(f"❌ Error starting server: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -28,15 +28,18 @@ from sentiment_analysis import SentimentAnalyzer
 class AudioDatasetClient:
     """Cliente para consultas al dataset de audio"""
     
-    def __init__(self, dataset_dir: str, config_file: str = None):
+    def __init__(self, dataset_dir: str, config_file: str = None, logger=None):
         """
         Inicializa el cliente
         
         Args:
             dataset_dir: Directorio del dataset
             config_file: Archivo de configuración (opcional)
+            logger: A logger instance (optional)
         """
         self.dataset_dir = Path(dataset_dir)
+        self.log = logger.info if logger else print
+        self.log_error = logger.error if logger else lambda msg: print(msg, file=sys.stderr)
         self.df = None
         self.text_embedder = None
         self.audio_embedder = None
@@ -54,22 +57,22 @@ class AudioDatasetClient:
         
         # Cargar dataset
         self._load_dataset()
-    
+
     def _load_dataset(self):
         """Carga el dataset y componentes"""
-        print("🔄 Cargando dataset...")
+        self.log("🔄 Cargando dataset...")
         
         # Cargar dataset principal
         dataset_file = self.dataset_dir / "final" / "complete_dataset.pkl"
-        print(f"🔍 Buscando dataset en: {dataset_file}")
-        print(f"🔍 Ruta absoluta: {dataset_file.absolute()}")
-        print(f"🔍 Dataset dir existe: {self.dataset_dir.exists()}")
-        print(f"🔍 Final dir existe: {(self.dataset_dir / 'final').exists()}")
+        self.log(f"🔍 Buscando dataset en: {dataset_file}")
+        self.log(f"🔍 Ruta absoluta: {dataset_file.absolute()}")
+        self.log(f"🔍 Dataset dir existe: {self.dataset_dir.exists()}")
+        self.log(f"🔍 Final dir existe: {(self.dataset_dir / 'final').exists()}")
         if not dataset_file.exists():
             raise FileNotFoundError(f"Dataset no encontrado: {dataset_file}")
         
         self.df = pd.read_pickle(dataset_file)
-        print(f"✅ Dataset cargado: {len(self.df):,} segmentos")
+        self.log(f"✅ Dataset cargado: {len(self.df):,} segmentos")
         
         # Cargar manifiesto
         manifest_file = self.dataset_dir / "final" / "dataset_manifest.json"
@@ -84,24 +87,24 @@ class AudioDatasetClient:
         else:
             text_model = 'sentence-transformers/all-MiniLM-L6-v2'
         
-        print(f"🧠 Inicializando embedders...")
+        self.log(f"🧠 Inicializando embedders...")
         self.text_embedder = TextEmbeddingGenerator(model_name=text_model)
         self.audio_embedder = get_audio_embedding_generator()
         
         # Cargar índices vectoriales
         indices_dir = self.dataset_dir / "indices"
         if indices_dir.exists():
-            print(f"🔍 Cargando índices vectoriales...")
+            self.log(f"🔍 Cargando índices vectoriales...")
             self.index_manager = VectorIndexManager(embedding_dim=self.text_embedder.embedding_dim)
             self.index_manager.load_indices(str(indices_dir))
-            print(f"✅ Índices cargados")
+            self.log(f"✅ Índices cargados")
         else:
-            print(f"⚠️  No se encontraron índices vectoriales")
+            self.log(f"⚠️  No se encontraron índices vectoriales")
         
         # Inicializar sistemas de búsqueda de audio
         self.improved_audio_search = ImprovedAudioSearch()
         self.hybrid_audio_search = HybridAudioSearch(str(self.dataset_dir))
-        print(f"🎵 Sistemas de búsqueda de audio inicializados")
+        self.log(f"🎵 Sistemas de búsqueda de audio inicializados")
         
         # Intentar cargar sentiment search si el dataset lo soporta
         self._initialize_sentiment_search()
@@ -117,7 +120,7 @@ class AudioDatasetClient:
         Returns:
             Lista de resultados
         """
-        print(f"🔍 Buscando: '{query}'")
+        self.log(f"🔍 Buscando: '{query}'")
         
         # Generar embedding de la consulta
         query_embedding = self.text_embedder.generate_query_embedding(query)
@@ -144,12 +147,12 @@ class AudioDatasetClient:
             filtered_results = self.config.filter_results_by_score(results, 'text')
             
             if len(filtered_results) < len(results):
-                print(f"🔍 Filtrados {len(results) - len(filtered_results)} resultados por umbral de score ({self.config.min_text_score})")
+                self.log(f"🔍 Filtrados {len(results) - len(filtered_results)} resultados por umbral de score ({self.config.min_text_score})")
             
             return filtered_results
         else:
             # Búsqueda por similaridad coseno manual
-            print("⚠️  Usando búsqueda manual (sin índices)")
+            self.log("⚠️  Usando búsqueda manual (sin índices)")
             
             # Calcular similaridades
             embeddings = np.stack(self.df['text_embedding'].values)
@@ -178,7 +181,7 @@ class AudioDatasetClient:
             filtered_results = self.config.filter_results_by_score(results, 'text')
             
             if len(filtered_results) < len(results):
-                print(f"🔍 Filtrados {len(results) - len(filtered_results)} resultados por umbral de score ({self.config.min_text_score})")
+                self.log(f"🔍 Filtrados {len(results) - len(filtered_results)} resultados por umbral de score ({self.config.min_text_score})")
             
             return filtered_results
     
@@ -193,7 +196,7 @@ class AudioDatasetClient:
         Returns:
             Lista de resultados basados en palabras clave reales
         """
-        print(f"🔊 Buscando audio para: '{query_text}' (búsqueda por palabras clave)")
+        self.log(f"🔊 Buscando audio para: '{query_text}' (búsqueda por palabras clave)")
         
         # Usar el sistema de búsqueda mejorado
         results = self.improved_audio_search.search_audio_by_text(self.df, query_text, k)
@@ -202,10 +205,10 @@ class AudioDatasetClient:
         filtered_results = self.config.filter_results_by_score(results, 'keyword')
         
         if filtered_results:
-            print(f"✅ Encontrados {len(filtered_results)} segmentos con contenido de audio relevante")
+            self.log(f"✅ Encontrados {len(filtered_results)} segmentos con contenido de audio relevante")
             
             if len(filtered_results) < len(results):
-                print(f"🔍 Filtrados {len(results) - len(filtered_results)} resultados por umbral de score ({self.config.min_keyword_score})")
+                self.log(f"🔍 Filtrados {len(results) - len(filtered_results)} resultados por umbral de score ({self.config.min_keyword_score})")
             
             # Mostrar clases de audio detectadas
             detected_classes = set()
@@ -214,19 +217,19 @@ class AudioDatasetClient:
                     detected_classes.add(result['audio_class'])
             
             if detected_classes:
-                print(f"🎵 Clases de audio detectadas: {', '.join(detected_classes)}")
+                self.log(f"🎵 Clases de audio detectadas: {', '.join(detected_classes)}")
         else:
-            print("❌ No se encontraron segmentos con palabras clave de audio relevantes")
+            self.log("❌ No se encontraron segmentos con palabras clave de audio relevantes")
             
             # Mostrar clases disponibles
             available_classes = self.improved_audio_search.get_available_audio_classes()
-            print("💡 Clases de audio disponibles:")
+            self.log("💡 Clases de audio disponibles:")
             for audio_class in available_classes[:10]:
                 keywords = self.improved_audio_search.get_keywords_for_class(audio_class)
-                print(f"  • {audio_class}: {', '.join(keywords[:3])}...")
+                self.log(f"  • {audio_class}: {', '.join(keywords[:3])}...")
             
             if len(available_classes) > 10:
-                print(f"  ... y {len(available_classes) - 10} más")
+                self.log(f"  ... y {len(available_classes) - 10} más")
         
         return filtered_results
     
@@ -242,7 +245,7 @@ class AudioDatasetClient:
         Returns:
             Lista de resultados combinados
         """
-        print(f"🔄 Búsqueda combinada: '{query}'")
+        self.log(f"🔄 Búsqueda combinada: '{query}'")
         
         # Obtener resultados de texto y audio
         text_results = self.search_text(query, k * 2)  # Obtener más para combinar
@@ -300,7 +303,7 @@ class AudioDatasetClient:
             # Verificar si el dataset tiene análisis de sentimientos
             sentiment_columns = [col for col in self.df.columns if 'sentiment' in col.lower()] if self.df is not None else []
             if self.df is not None and len(sentiment_columns) > 0:
-                print("🎭 Inicializando sistema de análisis de sentimientos...")
+                self.log("🎭 Inicializando sistema de análisis de sentimientos...")
                 
                 # Configurar semantic search engine para sentiment
                 config = {
@@ -319,21 +322,21 @@ class AudioDatasetClient:
                     self.sentiment_search_engine.create_indices(self.df, str(indices_dir))
                 
                 self.sentiment_enabled = True
-                print("✅ Sistema de sentimientos habilitado")
+                self.log("✅ Sistema de sentimientos habilitado")
             else:
-                print("⚠️  Dataset sin análisis de sentimientos - funcionalidad limitada")
+                self.log("⚠️  Dataset sin análisis de sentimientos - funcionalidad limitada")
         except Exception as e:
-            print(f"⚠️  No se pudo inicializar sentiment search: {e}")
+            self.log_error(f"⚠️  No se pudo inicializar sentiment search: {e}")
             self.sentiment_enabled = False
     
     def search_by_sentiment(self, sentiment: str, k: int = 5) -> List[Dict]:
         """Busca contenido por sentimiento/estado de ánimo"""
         if not self.sentiment_enabled:
-            print("❌ Sistema de sentimientos no disponible")
+            self.log_error("❌ Sistema de sentimientos no disponible")
             return []
         
         try:
-            print(f"🎭 Buscando contenido con sentimiento: '{sentiment}'")
+            self.log(f"🎭 Buscando contenido con sentimiento: '{sentiment}'")
             
             results_df = self.sentiment_search_engine.search(
                 sentiment,
@@ -364,17 +367,17 @@ class AudioDatasetClient:
             return results
             
         except Exception as e:
-            print(f"❌ Error en búsqueda por sentimiento: {e}")
+            self.log_error(f"❌ Error en búsqueda por sentimiento: {e}")
             return []
     
     def search_combined_with_sentiment(self, query: str, sentiment_filter: str = None, k: int = 5) -> List[Dict]:
         """Búsqueda combinada de texto con filtro de sentimiento"""
         if not self.sentiment_enabled:
-            print("❌ Sistema de sentimientos no disponible")
+            self.log_error("❌ Sistema de sentimientos no disponible")
             return self.search_text(query, k)  # Fallback a búsqueda de texto
         
         try:
-            print(f"🔍 Búsqueda combinada: '{query}'" + (f" + sentimiento '{sentiment_filter}'" if sentiment_filter else ""))
+            self.log(f"🔍 Búsqueda combinada: '{query}'" + (f" + sentimiento '{sentiment_filter}'" if sentiment_filter else ""))
             
             results_df = self.sentiment_search_engine.search(
                 query,
@@ -406,17 +409,17 @@ class AudioDatasetClient:
             return results
             
         except Exception as e:
-            print(f"❌ Error en búsqueda combinada: {e}")
+            self.log_error(f"❌ Error en búsqueda combinada: {e}")
             return []
     
     def analyze_content_mood(self, topic: str) -> Dict:
         """Analiza el estado de ánimo general del contenido sobre un tema"""
         if not self.sentiment_enabled:
-            print("❌ Sistema de sentimientos no disponible")
+            self.log_error("❌ Sistema de sentimientos no disponible")
             return {}
         
         try:
-            print(f"📊 Analizando estado de ánimo sobre: '{topic}'")
+            self.log(f"📊 Analizando estado de ánimo sobre: '{topic}'")
             
             # Buscar contenido sobre el tema
             results_df = self.sentiment_search_engine.search(topic, search_type="text", top_k=50)
@@ -470,7 +473,7 @@ class AudioDatasetClient:
             }
             
         except Exception as e:
-            print(f"❌ Error en análisis de estado de ánimo: {e}")
+            self.log_error(f"❌ Error en análisis de estado de ánimo: {e}")
             return {'error': str(e)}
     
     def get_available_sentiments(self) -> List[str]:
@@ -500,69 +503,69 @@ class AudioDatasetClient:
     def print_results(self, results: List[Dict], show_details: bool = True):
         """Imprime resultados de búsqueda"""
         if not results:
-            print("❌ No se encontraron resultados")
+            self.log("❌ No se encontraron resultados")
             return
         
-        print(f"\n📊 Encontrados {len(results)} resultados:")
-        print("-" * 80)
+        self.log(f"\n📊 Encontrados {len(results)} resultados:")
+        self.log("-" * 80)
         
         for result in results:
             score = result['score']
-            print(f"\n🏆 Rank {result['rank']} - Score: {score:.3f}")
+            self.log(f"\n🏆 Rank {result['rank']} - Score: {score:.3f}")
             
             # Mostrar interpretación del score si está configurado
             if self.config.show_score_details:
                 method = result.get('search_method', 'text')
                 interpretation = self.config.get_score_interpretation(score, method)
-                print(f"📊 Calidad: {interpretation}")
+                self.log(f"📊 Calidad: {interpretation}")
             
-            print(f"📁 Archivo: {result['source_file']}")
-            print(f"⏱️  Tiempo: {result['start_time']:.1f}s - {result['end_time']:.1f}s ({result['duration']:.1f}s)")
+            self.log(f"📁 Archivo: {result['source_file']}")
+            self.log(f"⏱️  Tiempo: {result['start_time']:.1f}s - {result['end_time']:.1f}s ({result['duration']:.1f}s)")
             
             if show_details:
                 # Mostrar scores individuales si están disponibles
                 if 'text_score' in result and 'audio_score' in result:
-                    print(f"📝 Score texto: {result['text_score']:.3f} | 🔊 Score audio: {result['audio_score']:.3f}")
+                    self.log(f"📝 Score texto: {result['text_score']:.3f} | 🔊 Score audio: {result['audio_score']:.3f}")
                 
                 # Mostrar información de sentimiento si está disponible
                 if 'sentiment_score' in result and result['sentiment_score'] is not None:
-                    print(f"🎭 Sentimiento: {result['sentiment_score']:.3f}")
+                    self.log(f"🎭 Sentimiento: {result['sentiment_score']:.3f}")
                 if 'dominant_sentiment' in result and result['dominant_sentiment']:
                     emoji = {"POSITIVE": "😊", "NEGATIVE": "😢", "NEUTRAL": "😐"}.get(result['dominant_sentiment'], "❓")
-                    print(f"💭 Estado: {emoji} {result['dominant_sentiment']}")
+                    self.log(f"💭 Estado: {emoji} {result['dominant_sentiment']}")
                 
                 # Mostrar métodos de búsqueda utilizados
                 if 'search_methods' in result and self.config.show_method_breakdown:
                     methods_str = ', '.join(result['search_methods'])
-                    print(f"🔍 Métodos: {methods_str}")
+                    self.log(f"🔍 Métodos: {methods_str}")
                 
                 # Mostrar clases de audio coincidentes
                 if 'matched_audio_classes' in result and result['matched_audio_classes']:
                     classes_str = ', '.join(result['matched_audio_classes'])
-                    print(f"🎵 Clases de audio: {classes_str}")
+                    self.log(f"🎵 Clases de audio: {classes_str}")
                 
                 # Mostrar palabras clave encontradas
                 if 'matched_keywords' in result and result['matched_keywords']:
                     keywords_str = ', '.join(result['matched_keywords'])
-                    print(f"🔑 Palabras clave: {keywords_str}")
+                    self.log(f"🔑 Palabras clave: {keywords_str}")
                 
                 # Mostrar clase de audio detectada
                 if 'audio_class' in result:
-                    print(f"🔊 Tipo de audio: {result['audio_class']}")
+                    self.log(f"🔊 Tipo de audio: {result['audio_class']}")
                 
                 # Mostrar consulta de audio si está disponible
                 if 'audio_query' in result:
-                    print(f"🔍 Consulta audio: {result['audio_query']}")
+                    self.log(f"🔍 Consulta audio: {result['audio_query']}")
             
             # Mostrar texto (limitado)
             text = result['text']
             text_length = self.config.truncate_text_length
             if len(text) > text_length:
                 text = text[:text_length] + "..."
-            print(f"📝 Texto: {text}")
+            self.log(f"📝 Texto: {text}")
             
             if show_details:
-                print(f"🔗 Contexto: {result['source_file']} @ {result['start_time']:.1f}s")
+                self.log(f"🔗 Contexto: {result['source_file']} @ {result['start_time']:.1f}s")
 
 class InteractiveClient(cmd.Cmd):
     """Cliente interactivo de consola"""
@@ -618,38 +621,38 @@ Ejemplos:
     def do_search(self, arg):
         """Búsqueda por texto"""
         if not arg:
-            print("❌ Proporciona una consulta: search <consulta>")
+            self.client.log_error("❌ Proporciona una consulta: search <consulta>")
             return
         
         try:
             results = self.client.search_text(arg)
             self.client.print_results(results)
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_audio(self, arg):
         """Búsqueda por audio"""
         if not arg:
-            print("❌ Proporciona una consulta: audio <consulta>")
+            self.client.log_error("❌ Proporciona una consulta: audio <consulta>")
             return
         
         try:
             results = self.client.search_audio(arg)
             self.client.print_results(results)
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_yamnet(self, arg):
         """Búsqueda YAMNet pura con archivo de audio"""
         if not arg:
-            print("❌ Proporciona ruta del archivo de audio: yamnet <archivo_audio>")
+            self.client.log_error("❌ Proporciona ruta del archivo de audio: yamnet <archivo_audio>")
             return
         
         try:
             # Verificar si el archivo existe
             audio_file = Path(arg)
             if not audio_file.exists():
-                print(f"❌ Archivo no encontrado: {arg}")
+                self.client.log_error(f"❌ Archivo no encontrado: {arg}")
                 return
             
             # Usar búsqueda pura por embeddings YAMNet
@@ -657,20 +660,20 @@ Ejemplos:
             if results:
                 self.client.print_results(results)
             else:
-                print("❌ No se encontraron resultados YAMNet (verificar embeddings disponibles)")
+                self.client.log_error("❌ No se encontraron resultados YAMNet (verificar embeddings disponibles)")
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_similar(self, arg):
         """Encontrar similares a un segmento por índice"""
         if not arg:
-            print("❌ Proporciona un índice: similar <índice>")
+            self.client.log_error("❌ Proporciona un índice: similar <índice>")
             return
         
         try:
             idx = int(arg)
             if idx < 0 or idx >= len(self.client.df):
-                print(f"❌ Índice fuera de rango. Use 0-{len(self.client.df)-1}")
+                self.client.log_error(f"❌ Índice fuera de rango. Use 0-{len(self.client.df)-1}")
                 return
             
             # Obtener segmento de referencia
@@ -679,151 +682,151 @@ Ejemplos:
             # Buscar similares usando YAMNet
             results = self.client.hybrid_audio_search.search_by_yamnet_similarity(self.client.df, reference_segment)
             if results:
-                print(f"🔍 Buscando similares a: {reference_segment['source_file']} @ {reference_segment['start_time']:.1f}s")
-                print(f"📝 Texto referencia: {reference_segment['text'][:80]}...")
+                self.client.log(f"🔍 Buscando similares a: {reference_segment['source_file']} @ {reference_segment['start_time']:.1f}s")
+                self.client.log(f"📝 Texto referencia: {reference_segment['text'][:80]}...")
                 self.client.print_results(results)
             else:
-                print("❌ No se encontraron similares (verificar embeddings YAMNet)")
+                self.client.log_error("❌ No se encontraron similares (verificar embeddings YAMNet)")
         except ValueError:
-            print("❌ El índice debe ser un número")
+            self.client.log_error("❌ El índice debe ser un número")
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_hybrid(self, arg):
         """Búsqueda híbrida (texto + audio)"""
         if not arg:
-            print("❌ Proporciona una consulta: hybrid <consulta>")
+            self.client.log_error("❌ Proporciona una consulta: hybrid <consulta>")
             return
         
         try:
             results = self.client.hybrid_audio_search.search_hybrid(self.client.df, arg)
             self.client.print_results(results)
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_combined(self, arg):
         """Búsqueda combinada (método legacy)"""
         if not arg:
-            print("❌ Proporciona una consulta: combined <consulta>")
+            self.client.log_error("❌ Proporciona una consulta: combined <consulta>")
             return
         
         try:
             results = self.client.search_combined(arg)
             self.client.print_results(results)
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_capabilities(self, arg):
         """Muestra capacidades del sistema"""
         try:
             capabilities = self.client.hybrid_audio_search.get_search_capabilities()
-            print("\n🎯 Capacidades del Sistema de Búsqueda:")
-            print("-" * 40)
+            self.client.log("\n🎯 Capacidades del Sistema de Búsqueda:")
+            self.client.log("-" * 40)
             
             status_icon = lambda x: "✅" if x else "❌"
-            print(f"{status_icon(capabilities['keyword_search'])} Búsqueda por palabras clave")
-            print(f"{status_icon(capabilities['yamnet_embeddings'])} Embeddings YAMNet reales")
-            print(f"{status_icon(capabilities['hybrid_search'])} Búsqueda híbrida")
-            print(f"{status_icon(capabilities['vector_index_available'])} Índices vectoriales")
-            print(f"{status_icon(self.client.sentiment_enabled)} Análisis de sentimientos")
-            print(f"📊 Clases de audio disponibles: {capabilities['audio_classes_available']}")
+            self.client.log(f"{status_icon(capabilities['keyword_search'])} Búsqueda por palabras clave")
+            self.client.log(f"{status_icon(capabilities['yamnet_embeddings'])} Embeddings YAMNet reales")
+            self.client.log(f"{status_icon(capabilities['hybrid_search'])} Búsqueda híbrida")
+            self.client.log(f"{status_icon(capabilities['vector_index_available'])} Índices vectoriales")
+            self.client.log(f"{status_icon(self.client.sentiment_enabled)} Análisis de sentimientos")
+            self.client.log(f"📊 Clases de audio disponibles: {capabilities['audio_classes_available']}")
             
             if self.client.sentiment_enabled:
                 sentiments_count = len(self.client.get_available_sentiments())
-                print(f"🎭 Sentimientos disponibles: {sentiments_count}")
+                self.client.log(f"🎭 Sentimientos disponibles: {sentiments_count}")
             
-            print("\n🚀 Comandos disponibles:")
-            print("  • 'search <consulta>' para búsqueda semántica")
-            print("  • 'audio <consulta>' para búsqueda por palabras clave")
+            self.client.log("\n🚀 Comandos disponibles:")
+            self.client.log("  • 'search <consulta>' para búsqueda semántica")
+            self.client.log("  • 'audio <consulta>' para búsqueda por palabras clave")
             
             if capabilities['yamnet_embeddings']:
-                print("  • 'yamnet <archivo>' para búsqueda pura YAMNet con audio")
-                print("  • 'similar <índice>' para encontrar segmentos similares")
-                print("  • 'hybrid <consulta>' para búsqueda híbrida avanzada")
+                self.client.log("  • 'yamnet <archivo>' para búsqueda pura YAMNet con audio")
+                self.client.log("  • 'similar <índice>' para encontrar segmentos similares")
+                self.client.log("  • 'hybrid <consulta>' para búsqueda híbrida avanzada")
             
             if self.client.sentiment_enabled:
-                print("  • 'sentiment <emoción>' para búsqueda por sentimiento")
-                print("  • 'mood <query> [sentimiento]' para búsqueda con filtro emocional")
-                print("  • 'analyze <tema>' para análisis de estado de ánimo")
-                print("  • 'sentiments' para ver emociones disponibles")
+                self.client.log("  • 'sentiment <emoción>' para búsqueda por sentimiento")
+                self.client.log("  • 'mood <query> [sentimiento]' para búsqueda con filtro emocional")
+                self.client.log("  • 'analyze <tema>' para análisis de estado de ánimo")
+                self.client.log("  • 'sentiments' para ver emociones disponibles")
             
             if not capabilities['yamnet_embeddings']:
-                print("\n⚠️  Para habilitar YAMNet, ejecuta el procesamiento completo")
+                self.client.log("\n⚠️  Para habilitar YAMNet, ejecuta el procesamiento completo")
             
             if not self.client.sentiment_enabled:
-                print("\n⚠️  Para habilitar sentimientos, procesa el dataset con análisis emocional")
+                self.client.log("\n⚠️  Para habilitar sentimientos, procesa el dataset con análisis emocional")
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_stats(self, arg):
         """Muestra estadísticas del dataset"""
         try:
             stats = self.client.get_stats()
-            print("\n📊 Estadísticas del Dataset:")
-            print(f"  📄 Total segmentos: {stats['total_segments']:,}")
-            print(f"  📁 Archivos únicos: {stats['unique_files']:,}")
-            print(f"  ⏱️  Duración total: {stats['total_duration']:.1f}s ({stats['total_duration']/3600:.1f}h)")
-            print(f"  📊 Segmento promedio: {stats['avg_segment_duration']:.1f}s")
-            print(f"  📝 Texto promedio: {stats['text_avg_length']:.1f} caracteres")
+            self.client.log("\n📊 Estadísticas del Dataset:")
+            self.client.log(f"  📄 Total segmentos: {stats['total_segments']:,}")
+            self.client.log(f"  📁 Archivos únicos: {stats['unique_files']:,}")
+            self.client.log(f"  ⏱️  Duración total: {stats['total_duration']:.1f}s ({stats['total_duration']/3600:.1f}h)")
+            self.client.log(f"  📊 Segmento promedio: {stats['avg_segment_duration']:.1f}s")
+            self.client.log(f"  📝 Texto promedio: {stats['text_avg_length']:.1f} caracteres")
             
             # Mostrar estadísticas de sentimientos si están disponibles
             if self.client.sentiment_enabled and 'dominant_sentiment' in self.client.df.columns:
                 sentiment_counts = self.client.df['dominant_sentiment'].value_counts()
-                print(f"\n🎭 Distribución de Sentimientos:")
+                self.client.log(f"\n🎭 Distribución de Sentimientos:")
                 for sentiment, count in sentiment_counts.head(5).items():
                     percentage = (count / len(self.client.df) * 100)
                     emoji = {"POSITIVE": "😊", "NEGATIVE": "😢", "NEUTRAL": "😐"}.get(sentiment, "❓")
-                    print(f"  {emoji} {sentiment}: {count:,} ({percentage:.1f}%)")
+                    self.client.log(f"  {emoji} {sentiment}: {count:,} ({percentage:.1f}%)")
                 
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_suggest(self, arg):
         """Sugiere consultas de audio para un texto"""
         if not arg:
-            print("❌ Proporciona un texto: suggest <texto>")
+            self.client.log_error("❌ Proporciona un texto: suggest <texto>")
             return
         
         try:
             suggestions = suggest_audio_queries(arg)
             if suggestions:
-                print(f"\n💡 Sugerencias de audio para '{arg}':")
+                self.client.log(f"\n💡 Sugerencias de audio para '{arg}':")
                 for i, suggestion in enumerate(suggestions[:10], 1):
-                    print(f"  {i:2d}. {suggestion['query']:<20} - {suggestion['name']}")
+                    self.client.log(f"  {i:2d}. {suggestion['query']:<20} - {suggestion['name']}")
                     if suggestion['description']:
-                        print(f"      {suggestion['description']}")
+                        self.client.log(f"      {suggestion['description']}")
             else:
-                print(f"❌ No se encontraron sugerencias para '{arg}'")
+                self.client.log_error(f"❌ No se encontraron sugerencias para '{arg}'")
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_validate(self, arg):
         """Valida una consulta de audio"""
         if not arg:
-            print("❌ Proporciona una consulta: validate <consulta>")
+            self.client.log_error("❌ Proporciona una consulta: validate <consulta>")
             return
         
         try:
             validation = validate_audio_query(arg)
             if validation['valid']:
                 info = validation['info']
-                print(f"✅ '{arg}' es una clase AudioSet válida")
-                print(f"📝 Nombre: {info.get('name', arg)}")
-                print(f"📖 Descripción: {info.get('description', 'N/A')}")
+                self.client.log(f"✅ '{arg}' es una clase AudioSet válida")
+                self.client.log(f"📝 Nombre: {info.get('name', arg)}")
+                self.client.log(f"📖 Descripción: {info.get('description', 'N/A')}")
             else:
-                print(f"❌ '{arg}' no es una clase AudioSet válida")
+                self.client.log_error(f"❌ '{arg}' no es una clase AudioSet válida")
                 
                 if validation.get('similar_classes'):
-                    print("\n🔍 Clases similares:")
+                    self.client.log("\n🔍 Clases similares:")
                     for cls in validation['similar_classes'][:5]:
-                        print(f"  • {cls['class']} - {cls['name']}")
+                        self.client.log(f"  • {cls['class']} - {cls['name']}")
                 
                 if validation.get('semantic_suggestions'):
-                    print("\n💡 Sugerencias semánticas:")
+                    self.client.log("\n💡 Sugerencias semánticas:")
                     for suggestion in validation['semantic_suggestions'][:5]:
-                        print(f"  • {suggestion['query']} - {suggestion['name']}")
+                        self.client.log(f"  • {suggestion['query']} - {suggestion['name']}")
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_audioset(self, arg):
         """Muestra información sobre AudioSet"""
@@ -831,30 +834,30 @@ Ejemplos:
             from audioset_ontology import AUDIOSET_CATEGORIES, get_all_categories
             
             if not arg:
-                print("\n🎵 Categorías de AudioSet:")
+                self.client.log("\n🎵 Categorías de AudioSet:")
                 categories = get_all_categories()
                 for i, category in enumerate(categories, 1):
                     class_count = len(AUDIOSET_CATEGORIES[category])
-                    print(f"  {i:2d}. {category.replace('_', ' ').title():<20} ({class_count} clases)")
-                print(f"\nUsa 'audioset <categoría>' para ver las clases específicas")
+                    self.client.log(f"  {i:2d}. {category.replace('_', ' ').title():<20} ({class_count} clases)")
+                self.client.log(f"\nUsa 'audioset <categoría>' para ver las clases específicas")
             else:
                 category = arg.lower().replace(' ', '_')
                 if category in AUDIOSET_CATEGORIES:
                     classes = AUDIOSET_CATEGORIES[category]
-                    print(f"\n🎵 Clases de audio en '{category.replace('_', ' ').title()}':")
+                    self.client.log(f"\n🎵 Clases de audio en '{category.replace('_', ' ').title()}':")
                     for i, class_name in enumerate(classes, 1):
                         info = AUDIOSET_CLASSES.get(class_name, {})
                         name = info.get('name', class_name)
-                        print(f"  {i:2d}. {class_name:<20} - {name}")
+                        self.client.log(f"  {i:2d}. {class_name:<20} - {name}")
                 else:
-                    print(f"❌ Categoría '{arg}' no encontrada")
-                    print("💡 Categorías disponibles:", ', '.join(get_all_categories()))
+                    self.client.log_error(f"❌ Categoría '{arg}' no encontrada")
+                    self.client.log("💡 Categorías disponibles:", ', '.join(get_all_categories()))
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_quit(self, arg):
         """Salir del cliente"""
-        print("👋 ¡Hasta luego!")
+        self.client.log("👋 ¡Hasta luego!")
         return True
     
     def do_browse(self, arg):
@@ -862,10 +865,11 @@ Ejemplos:
         try:
             limit = int(arg) if arg else 20
             
-            print(f"\n📋 Explorando {limit} segmentos del dataset:")
-            print("=" * 100)
-            print(f"{'Índice':<6} {'Archivo':<20} {'Tiempo':<12} {'Duración':<8} {'Texto':<40}")
-            print("-" * 100)
+            self.client.log(f"\n
+ Explorando {limit} segmentos del dataset:")
+            self.client.log("=" * 100)
+            self.client.log(f"{'Índice':<6} {'Archivo':<20} {'Tiempo':<12} {'Duración':<8} {'Texto':<40}")
+            self.client.log("-" * 100)
             
             for i, (idx, row) in enumerate(self.client.df.head(limit).iterrows()):
                 if i >= limit:
@@ -882,20 +886,21 @@ Ejemplos:
                 if len(texto) > 39:
                     texto = texto[:36] + "..."
                 
-                print(f"{idx:<6} {archivo:<20} {tiempo:<12} {duracion:<8} {texto:<40}")
+                self.client.log(f"{idx:<6} {archivo:<20} {tiempo:<12} {duracion:<8} {texto:<40}")
             
-            print(f"\n💡 Para buscar similares a un segmento: similar <índice>")
-            print(f"   Ejemplo: similar {self.client.df.index[0]}")
+            self.client.log(f"\n
+💡 Para buscar similares a un segmento: similar <índice>")
+            self.client.log(f"   Ejemplo: similar {self.client.df.index[0]}")
             
         except ValueError:
-            print("❌ El número debe ser un entero")
+            self.client.log_error("❌ El número debe ser un entero")
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_find(self, arg):
         """Buscar texto para obtener índices"""
         if not arg:
-            print("❌ Proporciona texto a buscar: find <texto>")
+            self.client.log_error("❌ Proporciona texto a buscar: find <texto>")
             return
         
         try:
@@ -904,13 +909,13 @@ Ejemplos:
             results = self.client.df[mask].head(10)
             
             if len(results) == 0:
-                print(f"❌ No se encontraron segmentos con '{arg}'")
+                self.client.log_error(f"❌ No se encontraron segmentos con '{arg}'")
                 return
             
-            print(f"\n🔍 Encontrados {len(results)} segmentos con '{arg}':")
-            print("=" * 100)
-            print(f"{'Índice':<6} {'Archivo':<20} {'Tiempo':<12} {'Duración':<8} {'Texto':<40}")
-            print("-" * 100)
+            self.client.log(f"\n🔍 Encontrados {len(results)} segmentos con '{arg}':")
+            self.client.log("=" * 100)
+            self.client.log(f"{'Índice':<6} {'Archivo':<20} {'Tiempo':<12} {'Duración':<8} {'Texto':<40}")
+            self.client.log("-" * 100)
             
             for idx, row in results.iterrows():
                 archivo = row['source_file']
@@ -924,65 +929,65 @@ Ejemplos:
                 if len(texto) > 39:
                     texto = texto[:36] + "..."
                 
-                print(f"{idx:<6} {archivo:<20} {tiempo:<12} {duracion:<8} {texto:<40}")
+                self.client.log(f"{idx:<6} {archivo:<20} {tiempo:<12} {duracion:<8} {texto:<40}")
             
-            print(f"\n💡 Usa cualquiera de estos índices con similar:")
-            print(f"   similar {results.index[0]}")
+            self.client.log(f"\n💡 Usa cualquiera de estos índices con similar:")
+            self.client.log(f"   similar {results.index[0]}")
             
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_config(self, arg):
         """Mostrar configuración de búsqueda"""
         try:
             config = self.client.config
-            print("\\n⚙️  Configuración de Búsqueda:")
-            print("=" * 50)
+            self.client.log("\n⚙️  Configuración de Búsqueda:")
+            self.client.log("=" * 50)
             
-            print(f"🎯 Modo de calidad: {config.quality_mode}")
-            print(f"📊 Resultados por defecto: {config.default_results_count}")
-            print(f"📏 Longitud máxima texto: {config.truncate_text_length}")
+            self.client.log(f"🎯 Modo de calidad: {config.quality_mode}")
+            self.client.log(f"📊 Resultados por defecto: {config.default_results_count}")
+            self.client.log(f"📏 Longitud máxima texto: {config.truncate_text_length}")
             
-            print("\\n🔍 Umbrales de Score:")
-            print(f"  📝 Texto: {config.min_text_score:.2f}")
-            print(f"  🔊 Audio: {config.min_audio_score:.2f}")
-            print(f"  🎵 YAMNet: {config.min_yamnet_score:.2f}")
-            print(f"  🔑 Palabras clave: {config.min_keyword_score:.2f}")
-            print(f"  🔄 Híbrida: {config.min_hybrid_score:.2f}")
+            self.client.log("\n🔍 Umbrales de Score:")
+            self.client.log(f"  📝 Texto: {config.min_text_score:.2f}")
+            self.client.log(f"  🔊 Audio: {config.min_audio_score:.2f}")
+            self.client.log(f"  🎵 YAMNet: {config.min_yamnet_score:.2f}")
+            self.client.log(f"  🔑 Palabras clave: {config.min_keyword_score:.2f}")
+            self.client.log(f"  🔄 Híbrida: {config.min_hybrid_score:.2f}")
             
-            print("\\n⚖️  Pesos Híbridos:")
-            print(f"  📝 Texto: {config.hybrid_text_weight:.2f}")
-            print(f"  🔊 Audio: {config.hybrid_audio_weight:.2f}")
+            self.client.log("\n⚖️  Pesos Híbridos:")
+            self.client.log(f"  📝 Texto: {config.hybrid_text_weight:.2f}")
+            self.client.log(f"  🔊 Audio: {config.hybrid_audio_weight:.2f}")
             
-            print("\\n🎛️  Opciones:")
-            print(f"  📊 Detalles de score: {'✅' if config.show_score_details else '❌'}")
-            print(f"  🔍 Desglose métodos: {'✅' if config.show_method_breakdown else '❌'}")
+            self.client.log("\n🎛️  Opciones:")
+            self.client.log(f"  📊 Detalles de score: {'✅' if config.show_score_details else '❌'}")
+            self.client.log(f"  🔍 Desglose métodos: {'✅' if config.show_method_breakdown else '❌'}")
             
-            print("\\n💡 Usar 'threshold <método> <valor>' para cambiar umbrales")
-            print("   Métodos: text, audio, yamnet, keyword, hybrid")
+            self.client.log("\n💡 Usar 'threshold <método> <valor>' para cambiar umbrales")
+            self.client.log("   Métodos: text, audio, yamnet, keyword, hybrid")
             
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_threshold(self, arg):
         """Cambiar umbral de score"""
         if not arg:
-            print("❌ Uso: threshold <método> <valor>")
-            print("   Métodos: text, audio, yamnet, keyword, hybrid")
-            print("   Valor: 0.0 - 1.0")
+            self.client.log_error("❌ Uso: threshold <método> <valor>")
+            self.client.log_error("   Métodos: text, audio, yamnet, keyword, hybrid")
+            self.client.log_error("   Valor: 0.0 - 1.0")
             return
         
         try:
             parts = arg.split()
             if len(parts) != 2:
-                print("❌ Uso: threshold <método> <valor>")
+                self.client.log_error("❌ Uso: threshold <método> <valor>")
                 return
             
             method, value_str = parts
             value = float(value_str)
             
             if not 0.0 <= value <= 1.0:
-                print("❌ El valor debe estar entre 0.0 y 1.0")
+                self.client.log_error("❌ El valor debe estar entre 0.0 y 1.0")
                 return
             
             # Cambiar umbral
@@ -1003,26 +1008,26 @@ Ejemplos:
                 old_value = config.min_hybrid_score
                 config.min_hybrid_score = value
             else:
-                print(f"❌ Método desconocido: {method}")
-                print("   Métodos disponibles: text, audio, yamnet, keyword, hybrid")
+                self.client.log_error(f"❌ Método desconocido: {method}")
+                self.client.log_error("   Métodos disponibles: text, audio, yamnet, keyword, hybrid")
                 return
             
-            print(f"✅ Umbral {method} cambiado: {old_value:.2f} → {value:.2f}")
+            self.client.log(f"✅ Umbral {method} cambiado: {old_value:.2f} → {value:.2f}")
             
             # Mostrar interpretación
             interpretation = config.get_score_interpretation(value, method)
-            print(f"📊 Nuevo umbral considera '{interpretation}' como mínimo")
+            self.client.log(f"📊 Nuevo umbral considera '{interpretation}' como mínimo")
             
         except ValueError:
-            print("❌ El valor debe ser un número válido")
+            self.client.log_error("❌ El valor debe ser un número válido")
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_sentiment(self, arg):
         """Búsqueda por sentimiento"""
         if not arg:
-            print("❌ Proporciona un sentimiento: sentiment <emoción>")
-            print("💡 Ejemplos: feliz, triste, optimista, preocupado, neutral")
+            self.client.log_error("❌ Proporciona un sentimiento: sentiment <emoción>")
+            self.client.log_error("💡 Ejemplos: feliz, triste, optimista, preocupado, neutral")
             return
         
         try:
@@ -1030,20 +1035,20 @@ Ejemplos:
             if results:
                 self.client.print_results(results)
             else:
-                print(f"❌ No se encontraron resultados para sentimiento '{arg}'")
+                self.client.log_error(f"❌ No se encontraron resultados para sentimiento '{arg}'")
                 if self.client.sentiment_enabled:
                     sentiments = self.client.get_available_sentiments()
                     if sentiments:
-                        print(f"💡 Sentimientos disponibles: {', '.join(sentiments[:10])}")
+                        self.client.log_error(f"💡 Sentimientos disponibles: {', '.join(sentiments[:10])}")
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_mood(self, arg):
         """Búsqueda con filtro de sentimiento"""
         if not arg:
-            print("❌ Uso: mood <consulta> [sentimiento]")
-            print("   Ejemplos: mood política optimista")
-            print("             mood economía (sin filtro)")
+            self.client.log_error("❌ Uso: mood <consulta> [sentimiento]")
+            self.client.log_error("   Ejemplos: mood política optimista")
+            self.client.log_error("             mood economía (sin filtro)")
             return
         
         parts = arg.split()
@@ -1054,7 +1059,7 @@ Ejemplos:
             query = parts[0]
             sentiment_filter = parts[1]
         else:
-            print("❌ Formato incorrecto")
+            self.client.log_error("❌ Formato incorrecto")
             return
         
         try:
@@ -1065,48 +1070,48 @@ Ejemplos:
                 search_desc = f"'{query}'"
                 if sentiment_filter:
                     search_desc += f" con sentimiento '{sentiment_filter}'"
-                print(f"❌ No se encontraron resultados para {search_desc}")
+                self.client.log_error(f"❌ No se encontraron resultados para {search_desc}")
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_analyze(self, arg):
         """Analizar estado de ánimo sobre un tema"""
         if not arg:
-            print("❌ Proporciona un tema: analyze <tema>")
-            print("   Ejemplos: analyze política, analyze economía")
+            self.client.log_error("❌ Proporciona un tema: analyze <tema>")
+            self.client.log_error("   Ejemplos: analyze política, analyze economía")
             return
         
         try:
             analysis = self.client.analyze_content_mood(arg)
             
             if 'error' in analysis:
-                print(f"❌ {analysis['error']}")
+                self.client.log_error(f"❌ {analysis['error']}")
                 return
             
             # Mostrar análisis
-            print(f"\n📊 ANÁLISIS DE ESTADO DE ÁNIMO: {analysis['topic']}")
-            print("=" * 50)
-            print(f"{analysis['mood_emoji']} Estado general: {analysis['overall_mood']}")
-            print(f"📁 Total segmentos: {analysis['total_segments']}")
-            print(f"😊 Positivo: {analysis['distribution']['positive']} ({analysis['percentages']['positive']}%)")
-            print(f"😢 Negativo: {analysis['distribution']['negative']} ({analysis['percentages']['negative']}%)")
-            print(f"😐 Neutral: {analysis['distribution']['neutral']} ({analysis['percentages']['neutral']}%)")
+            self.client.log(f"\n📊 ANÁLISIS DE ESTADO DE ÁNIMO: {analysis['topic']}")
+            self.client.log("=" * 50)
+            self.client.log(f"{analysis['mood_emoji']} Estado general: {analysis['overall_mood']}")
+            self.client.log(f"📁 Total segmentos: {analysis['total_segments']}")
+            self.client.log(f"😊 Positivo: {analysis['distribution']['positive']} ({analysis['percentages']['positive']}%) ")
+            self.client.log(f"😢 Negativo: {analysis['distribution']['negative']} ({analysis['percentages']['negative']}%) ")
+            self.client.log(f"😐 Neutral: {analysis['distribution']['neutral']} ({analysis['percentages']['neutral']}%) ")
             
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_sentiments(self, arg):
         """Listar sentimientos disponibles"""
         try:
             if not self.client.sentiment_enabled:
-                print("❌ Sistema de sentimientos no disponible")
-                print("💡 El dataset debe tener análisis de sentimientos procesado")
+                self.client.log_error("❌ Sistema de sentimientos no disponible")
+                self.client.log_error("💡 El dataset debe tener análisis de sentimientos procesado")
                 return
             
             sentiments = self.client.get_available_sentiments()
             
             if not sentiments:
-                print("❌ No hay sentimientos disponibles")
+                self.client.log_error("❌ No hay sentimientos disponibles")
                 return
             
             # Categorizar sentimientos básicos
@@ -1115,34 +1120,34 @@ Ejemplos:
             neutral = [s for s in sentiments if any(n in s.lower() for n in ['neutral', 'calmado', 'tranquilo', 'calm', 'sereno'])]
             other = [s for s in sentiments if s not in positive + negative + neutral]
             
-            print(f"\n🎭 SENTIMIENTOS DISPONIBLES ({len(sentiments)} total)")
-            print("=" * 50)
+            self.client.log(f"\n🎭 SENTIMIENTOS DISPONIBLES ({len(sentiments)} total)")
+            self.client.log("=" * 50)
             
             if positive:
-                print(f"😊 POSITIVOS ({len(positive)}):")
-                print("   " + ", ".join(positive))
-                print()
+                self.client.log(f"😊 POSITIVOS ({len(positive)}):")
+                self.client.log("   " + ", ".join(positive))
+                self.client.log("")
             
             if negative:
-                print(f"😢 NEGATIVOS ({len(negative)}):")
-                print("   " + ", ".join(negative))
-                print()
+                self.client.log(f"😢 NEGATIVOS ({len(negative)}):")
+                self.client.log("   " + ", ".join(negative))
+                self.client.log("")
             
             if neutral:
-                print(f"😐 NEUTRALES ({len(neutral)}):")
-                print("   " + ", ".join(neutral))
-                print()
+                self.client.log(f"😐 NEUTRALES ({len(neutral)}):")
+                self.client.log("   " + ", ".join(neutral))
+                self.client.log("")
             
             if other:
-                print(f"❓ OTROS ({len(other)}):")
-                print("   " + ", ".join(other[:20]))  # Limitar para no saturar
+                self.client.log(f"❓ OTROS ({len(other)}):")
+                self.client.log("   " + ", ".join(other[:20]))  # Limitar para no saturar
                 if len(other) > 20:
-                    print(f"   ... y {len(other) - 20} más")
+                    self.client.log(f"   ... y {len(other) - 20} más")
             
-            print("💡 Usa 'sentiment <emoción>' para buscar por sentimiento")
+            self.client.log("💡 Usa 'sentiment <emoción>' para buscar por sentimiento")
             
         except Exception as e:
-            print(f"❌ Error: {e}")
+            self.client.log_error(f"❌ Error: {e}")
     
     def do_exit(self, arg):
         """Salir del cliente"""
@@ -1169,15 +1174,15 @@ def main():
         
         # Mostrar stats
         stats = client.get_stats()
-        print(f"📊 Dataset cargado: {stats['total_segments']:,} segmentos de {stats['unique_files']:,} archivos")
+        client.log(f"📊 Dataset cargado: {stats['total_segments']:,} segmentos de {stats['unique_files']:,} archivos")
         
         # Cargar dataset real con sentimientos si se solicita
         if args.load_real:
-            print("🎭 Modo de análisis de sentimientos activado")
+            client.log("🎭 Modo de análisis de sentimientos activado")
             if hasattr(client, 'sentiment_enabled') and client.sentiment_enabled:
-                print("✅ Sistema de sentimientos listo")
+                client.log("✅ Sistema de sentimientos listo")
             else:
-                print("⚠️  Dataset sin análisis de sentimientos")
+                client.log("⚠️  Dataset sin análisis de sentimientos")
         
         if args.interactive or not args.query:
             # Modo interactivo
@@ -1195,9 +1200,9 @@ def main():
             client.print_results(results)
     
     except KeyboardInterrupt:
-        print("\n\n👋 Saliendo...")
+        client.log_error("\n\n👋 Saliendo...")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        client.log_error(f"❌ Error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
