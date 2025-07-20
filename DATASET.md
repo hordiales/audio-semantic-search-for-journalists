@@ -36,6 +36,19 @@ Si no existe, crear archivo .env
 
   python simple_dataset_pipeline.py -i data/ -o ./dataset
   
+
+check
+
+para continuar desde donde fallo: 
+	python resume_pipeline.py ./dataset	
+
+
+ Verificación del Dataset
+
+  1. Verificar integridad del dataset:
+
+  python verify_dataset.py ./dataset
+  
   
   ## Procesar por lotes
   python simple_dataset_pipeline.py -i data/ -o ./dataset --batch_size 50
