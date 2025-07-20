@@ -368,3 +368,14 @@ RadioCut es un servicio en línea que permite a los usuarios escuchar radios en 
 Contiene grabaciones de diferentes paises
 * Radiocut AR https://ar.radiocut.fm/
 https://ar.radiocut.fm/about/
+
+# Formatos de audio
+
+El sistema puede procesar archivos de audio en formato OPUS además de los formatos ya soportados (WAV, MP3, FLAC, OGG, M4A,
+  AAC, WMA).
+
+  El formato OPUS es especialmente útil para:
+  - Audio de alta calidad con compresión eficiente
+  - Grabaciones de voz y podcasts
+  - Archivos de audio web modernos
+  - Audio con baja latencia

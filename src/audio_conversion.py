@@ -42,7 +42,7 @@ class AudioConverter:
             if not ffmpeg_path:
                 self.logger.warning("ffmpeg no encontrado. Algunos formatos pueden no funcionar.")
         
-        self.supported_formats = {'.wav', '.mp3', '.flac', '.ogg', '.m4a', '.aac', '.wma'}
+        self.supported_formats = {'.wav', '.mp3', '.flac', '.ogg', '.m4a', '.aac', '.wma', '.opus'}
     
     def convert(self, 
                 input_path: Union[str, Path], 

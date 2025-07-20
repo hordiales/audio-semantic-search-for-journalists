@@ -93,7 +93,7 @@ class SimpleDatasetPipeline:
         if not self.input_dir.exists():
             raise FileNotFoundError(f"Directorio no existe: {self.input_dir}")
         
-        audio_extensions = {'.wav', '.mp3', '.flac', '.ogg', '.m4a', '.aac', '.wma'}
+        audio_extensions = {'.wav', '.mp3', '.flac', '.ogg', '.m4a', '.aac', '.wma', '.opus'}
         audio_files = []
         
         for ext in audio_extensions:
