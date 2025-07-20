@@ -367,7 +367,7 @@ python add_sentiment_to_dataset.py ./dataset --batch-size 64
             print("\n✅ ¡Análisis de sentimientos agregado exitosamente!")
             print(f"📁 Dataset actualizado en: {args.dataset_dir}/final/complete_dataset.pkl")
             print("\n🚀 Ahora puedes usar:")
-            print(f"   python query_client.py {args.dataset_dir} --interactive --load-real")
+            print(f"   python src/query_client.py {args.dataset_dir} --interactive --load-real")
         else:
             print("\n❌ El procesamiento falló. Revisa los logs para más detalles.")
             sys.exit(1)

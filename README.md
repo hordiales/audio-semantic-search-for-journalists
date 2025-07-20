@@ -33,7 +33,7 @@ cd semantic-search-periodismo
 # Ejecuta el instalador rápido (app base)
 ./quick_install.sh
 ```
-
+IMPORTANTE: probado con python=3.11.13
 Más detalles y troubleshootting en [[INSTALL.md]]
 
 

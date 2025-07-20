@@ -1,3 +1,6 @@
+conda create -n semanticsearch
+conda activate UP-semanticsearch-clean
+
 ### Instalación full
 
 ```bash
