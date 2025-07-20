@@ -235,3 +235,45 @@
     --workers 8 \
     --batch-size 8
 
+
+# ANÁLISIS DE SENTIMIENTOS
+
+Se analiza el sentimiento del texto
+  # Intentar usar un modelo en español si está disponible
+  spanish_models = [
+      "pysentimiento/robertuito-sentiment-analysis",
+      "finiteautomata/beto-sentiment-analysis", 
+      "cardiffnlp/twitter-roberta-base-sentiment-latest"
+  ]
+            
+
+ $ python add_sentiment_to_dataset.py dataset
+
+    - 4 columnas de sentimiento:
+      - sentiment_positive
+      - sentiment_negative
+      - sentiment_neutral
+      - dominant_sentiment
+
+  1. Verificar el estado:
+  python check_dataset_sentiment.py ./dataset --sample
+
+  2. Usar el modo interactivo:
+  python query_client.py ./dataset --interactive --load-real
+
+  3. Comandos disponibles en modo interactivo:
+  - sentiment feliz - Buscar por sentimiento específico
+  - mood política optimista - Buscar con filtro emocional
+  - analyze elecciones - Analizar estado de ánimo de un tema
+  - sentiments - Ver todos los sentimientos disponibles
+  - stats - Ver estadísticas incluindo sentimientos
+
+  4. Búsquedas directas:
+  # Búsqueda por sentimiento
+  python cli_sentiment_search.py --load-real --sentiment feliz
+
+  # Búsqueda combinada
+  python cli_sentiment_search.py --load-real --query "economía" --filter optimista
+
+  # Análisis de mood
+  python cli_sentiment_search.py --load-real --analyze política

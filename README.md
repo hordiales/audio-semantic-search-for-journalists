@@ -68,6 +68,8 @@ TODO: add diagrama de arquitectura
         - Cálculo de embeddings audio
         - Análisis de sentimiento
 
+Detalle de como construirlo en [[DATASET.md]]
+
 Dataset de referencia [Europarl-ST](https://www.mllp.upv.es/europarl-st/) is a multilingual Spoken Language Translation corpus containing paired audio-text samples for SLT from and into 9 European languages, for a total of 72 different translation directions. This corpus has been compiled using the debates held in the European Parliament in the period between 2008 and 2012.
 Nota: Este dataset ya contiene las transcripciones (evita el paso de speech2text)
 
