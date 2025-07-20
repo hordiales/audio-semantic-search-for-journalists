@@ -98,6 +98,8 @@ Sistema híbrido de búsqueda de audio que combina:
 Revisar módulo config_loader.py
 y archivo .env para variables de entorno
 
+dataset/search_config.json 
+
 
 ## Config de consulta
 
@@ -127,6 +129,6 @@ Modo interactivo por línea de comando:
     Audioset
 - [Streamlit](https://streamlit.io/)
 
-## 📝 Licencia
+## Licencia
 
 Este proyecto está bajo la licencia GPLv3. Ver `LICENSE` para más detalles.
