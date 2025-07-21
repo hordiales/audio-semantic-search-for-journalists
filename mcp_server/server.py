@@ -239,6 +239,14 @@ class AudioSearchMCPServer:
                     }
                 ),
                 Tool(
+                    name="check_status",
+                    description="Check if the MCP server is ready and fully initialized",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                ),
+                Tool(
                     name="play_audio_segment",
                     description="Play an audio segment from the dataset using the system's audio player",
                     inputSchema={
@@ -264,6 +272,25 @@ class AudioSearchMCPServer:
                         },
                         "required": ["source_file", "start_time", "end_time"]
                     }
+                ),
+                Tool(
+                    name="process_youtube_url",
+                    description="Download audio from YouTube URL and add it to the dataset pipeline",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "youtube_url": {
+                                "type": "string",
+                                "description": "YouTube URL to download and process (e.g., https://www.youtube.com/watch?v=VIDEO_ID)"
+                            },
+                            "title": {
+                                "type": "string",
+                                "description": "Optional custom title for the downloaded audio (if not provided, will use video title)",
+                                "default": ""
+                            }
+                        },
+                        "required": ["youtube_url"]
+                    }
                 )
             ]
         
@@ -272,10 +299,17 @@ class AudioSearchMCPServer:
             """Handle tool calls"""
             
             if not self.client:
-                return [types.TextContent(
-                    type="text",
-                    text="❌ Error: Audio search client not initialized. Please ensure the dataset is available."
-                )]
+                # Check if we're still initializing
+                if hasattr(self, 'dataset_dir'):
+                    return [types.TextContent(
+                        type="text",
+                        text="⏳ El MCP server está inicializándose... Por favor, espera unos segundos e intenta de nuevo.\n\n🔄 Cargando modelos de IA y dataset de audio..."
+                    )]
+                else:
+                    return [types.TextContent(
+                        type="text",
+                        text="❌ Error: Audio search client not initialized. Please ensure the dataset is available."
+                    )]
             
             try:
                 if name == "semantic_search":
@@ -302,8 +336,12 @@ class AudioSearchMCPServer:
                     return await self._handle_list_sentiments(arguments)
                 elif name == "get_capabilities":
                     return await self._handle_get_capabilities(arguments)
+                elif name == "check_status":
+                    return await self._handle_check_status(arguments)
                 elif name == "play_audio_segment":
                     return await self._handle_play_audio_segment(arguments)
+                elif name == "process_youtube_url":
+                    return await self._handle_process_youtube_url(arguments)
                 else:
                     return [types.TextContent(
                         type="text",
@@ -719,10 +757,48 @@ class AudioSearchMCPServer:
             "hybrid_search", "mood_search", "browse_dataset",
             "dataset_stats", "find_text", "get_similar", 
             "analyze_sentiment", "list_sentiments", "get_capabilities",
-            "play_audio_segment"
+            "check_status", "play_audio_segment", "process_youtube_url"
         ]
         for tool in tools:
             response += f"  • {tool}\n"
+        
+        return [types.TextContent(type="text", text=response)]
+    
+    async def _handle_check_status(self, args: dict) -> list[types.TextContent]:
+        """Handle status check"""
+        if not self.client:
+            if hasattr(self, 'dataset_dir'):
+                response = "⏳ **Estado del MCP Server: INICIALIZÁNDOSE**\n\n"
+                response += "🔄 El servidor está cargando los siguientes componentes:\n"
+                response += "  • 🧠 Modelos de embeddings de texto (Sentence Transformers)\n"
+                response += "  • 🎵 Modelo de audio YAMNet (TensorFlow)\n"
+                response += "  • 📊 Dataset de audio (301 segmentos)\n"
+                response += "  • 🔍 Índices vectoriales FAISS\n\n"
+                response += "⏱️ **Tiempo estimado:** 30-60 segundos\n"
+                response += "💡 **Consejo:** Ejecuta este comando de nuevo en unos segundos para verificar el estado."
+            else:
+                response = "❌ **Estado del MCP Server: ERROR**\n\n"
+                response += "El servidor no se ha inicializado correctamente.\n"
+                response += "Por favor, verifica que el dataset esté disponible."
+        else:
+            df = self.client.df
+            response = "✅ **Estado del MCP Server: LISTO**\n\n"
+            response += "🎉 Todos los componentes están cargados y funcionando:\n"
+            response += f"  • 📊 Dataset: {len(df)} segmentos cargados\n"
+            response += f"  • 📁 Archivos: {df['source_file'].nunique()} archivos únicos\n"
+            response += "  • 🧠 Embeddings de texto: ✅ Listos\n"
+            
+            if self.client.hybrid_search_enabled:
+                response += "  • 🎵 Embeddings de audio: ✅ Listos\n"
+            else:
+                response += "  • 🎵 Embeddings de audio: ❌ No disponibles\n"
+            
+            if self.client.sentiment_enabled:
+                response += "  • 🎭 Análisis de sentimientos: ✅ Listo\n"
+            else:
+                response += "  • 🎭 Análisis de sentimientos: ❌ No disponible\n"
+            
+            response += "\n🚀 **El servidor está listo para recibir consultas de búsqueda.**"
         
         return [types.TextContent(type="text", text=response)]
     
@@ -896,6 +972,150 @@ class AudioSearchMCPServer:
                      f"Tiempo: {start_time:.1f}s - {end_time:.1f}s"
             )]
     
+    async def _handle_process_youtube_url(self, args: dict) -> list[types.TextContent]:
+        """Handle YouTube URL processing"""
+        youtube_url = args["youtube_url"]
+        custom_title = args.get("title", "")
+        
+        try:
+            # Change to the project root directory
+            project_root = self.dataset_dir.parent if self.dataset_dir else Path("../")
+            original_cwd = os.getcwd()
+            
+            response = f"🎬 **Procesando video de YouTube**\n"
+            response += f"🔗 **URL:** {youtube_url}\n\n"
+            
+            # Step 1: Clean dataset
+            response += "🧹 **Paso 1:** Limpiando dataset anterior...\n"
+            clean_process = await asyncio.create_subprocess_exec(
+                "./clean_dataset.sh",
+                cwd=str(project_root),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            clean_stdout, clean_stderr = await clean_process.communicate()
+            
+            if clean_process.returncode != 0:
+                return [types.TextContent(
+                    type="text",
+                    text=f"❌ Error limpiando dataset: {clean_stderr.decode()}"
+                )]
+            
+            response += "✅ Dataset limpiado\n\n"
+            
+            # Step 2: Download audio with yt-dlp
+            response += "⬇️ **Paso 2:** Descargando audio de YouTube...\n"
+            
+            # Build yt-dlp command
+            data_dir = project_root / "data"
+            data_dir.mkdir(exist_ok=True)
+            
+            # Build filename from custom title or use yt-dlp default
+            if custom_title:
+                # Sanitize title for filename
+                safe_title = "".join(c for c in custom_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                safe_title = safe_title.replace(' ', '_')
+                output_template = f"{safe_title}.%(ext)s"
+            else:
+                output_template = "%(title)s.%(id)s.%(ext)s"
+            
+            ytdlp_command = [
+                "yt-dlp",
+                "-x",  # Extract audio only
+                "--audio-format", "opus",  # Prefer opus format
+                "--audio-quality", "0",    # Best quality
+                "-o", str(data_dir / output_template),
+                youtube_url
+            ]
+            
+            ytdlp_process = await asyncio.create_subprocess_exec(
+                *ytdlp_command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            ytdlp_stdout, ytdlp_stderr = await ytdlp_process.communicate()
+            
+            if ytdlp_process.returncode != 0:
+                return [types.TextContent(
+                    type="text",
+                    text=f"❌ Error descargando audio de YouTube:\n{ytdlp_stderr.decode()}\n\nComando: {' '.join(ytdlp_command)}"
+                )]
+            
+            # Get the downloaded filename
+            download_output = ytdlp_stdout.decode() + ytdlp_stderr.decode()
+            response += f"✅ Audio descargado exitosamente\n"
+            response += f"📁 Ubicación: data/\n\n"
+            
+            # Step 3: Build corpus dataset
+            response += "🏗️ **Paso 3:** Procesando audio y construyendo dataset...\n"
+            
+            build_process = await asyncio.create_subprocess_exec(
+                "./build_corpus_dataset.sh",
+                cwd=str(project_root),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            build_stdout, build_stderr = await build_process.communicate()
+            
+            if build_process.returncode != 0:
+                return [types.TextContent(
+                    type="text",
+                    text=f"❌ Error construyendo dataset:\n{build_stderr.decode()}\n\nStdout:\n{build_stdout.decode()}"
+                )]
+            
+            # Parse the build output for summary
+            build_output = build_stdout.decode()
+            response += "✅ Dataset construido exitosamente\n\n"
+            
+            # Step 4: Reload the dataset in MCP server
+            response += "🔄 **Paso 4:** Recargando dataset en MCP server...\n"
+            
+            try:
+                # Reinitialize the client with the new dataset
+                await asyncio.get_event_loop().run_in_executor(
+                    None, self.client._load_dataset
+                )
+                response += "✅ Dataset recargado en MCP server\n\n"
+                
+                # Get new dataset stats
+                df = self.client.df
+                response += "📊 **Resumen del nuevo dataset:**\n"
+                response += f"  📈 Total de segmentos: {len(df)}\n"
+                response += f"  📁 Archivos únicos: {df['source_file'].nunique()}\n"
+                
+                # Duration stats
+                total_duration = (df['end_time'] - df['start_time']).sum()
+                response += f"  ⏱️ Duración total: {total_duration:.1f} segundos ({total_duration/60:.1f} minutos)\n"
+                
+                # New files added
+                new_files = df['source_file'].unique()
+                response += f"  📄 Archivos procesados:\n"
+                for file in new_files:
+                    file_segments = len(df[df['source_file'] == file])
+                    response += f"    • {file}: {file_segments} segmentos\n"
+                
+                # Sample of transcribed content
+                response += f"\n📝 **Muestra del contenido transcrito:**\n"
+                sample_texts = df['text'].head(3)
+                for i, text in enumerate(sample_texts, 1):
+                    preview = text[:100] + "..." if len(text) > 100 else text
+                    response += f"  {i}. {preview}\n"
+                
+                response += f"\n🎉 **¡Proceso completado exitosamente!**\n"
+                response += f"El contenido de YouTube ha sido procesado y está listo para búsquedas."
+                
+            except Exception as e:
+                response += f"❌ Error recargando dataset: {str(e)}\n"
+                response += f"El audio fue procesado pero necesitas reiniciar el MCP server manualmente."
+            
+            return [types.TextContent(type="text", text=response)]
+            
+        except Exception as e:
+            return [types.TextContent(
+                type="text",
+                text=f"❌ Error procesando YouTube URL:\n{str(e)}\n\nURL: {youtube_url}"
+            )]
+    
     async def initialize_client(self, dataset_dir: str):
         """Initialize the audio search client"""
         try:
@@ -916,14 +1136,15 @@ class AudioSearchMCPServer:
     def run(self, dataset_dir: str = "../dataset"):
         """Run the MCP server"""
         async def main():
-            # Initialize the client
-            if not await self.initialize_client(dataset_dir):
-                self.logger.error("❌ Failed to start MCP server")
-                return
+            # Store dataset directory for lazy initialization
+            self.dataset_dir = Path(dataset_dir)
             
-            # Run the server
+            # Run the server immediately without waiting for client initialization
             from mcp.server.stdio import stdio_server
             async with stdio_server() as (read_stream, write_stream):
+                # Start client initialization in background
+                asyncio.create_task(self._lazy_initialize_client())
+                
                 await self.server.run(
                     read_stream,
                     write_stream,
@@ -938,6 +1159,22 @@ class AudioSearchMCPServer:
                 )
         
         asyncio.run(main())
+    
+    async def _lazy_initialize_client(self):
+        """Initialize the client in the background"""
+        try:
+            if not self.client:
+                self.client = AudioDatasetClient(str(self.dataset_dir), logger=self.logger)
+                await asyncio.get_event_loop().run_in_executor(
+                    None, self.client._load_dataset
+                )
+                # Only print status if running in terminal
+                if hasattr(sys, 'stdout') and sys.stdout.isatty():
+                    self.logger.info(f"✅ MCP Server initialized with dataset from: {self.dataset_dir}")
+        except Exception as e:
+            # Always log errors to stderr
+            self.logger.error(f"❌ Failed to initialize MCP server: {e}")
+            self.client = None
 
 if __name__ == "__main__":
     import argparse

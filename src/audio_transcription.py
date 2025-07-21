@@ -1,4 +1,3 @@
-import whisper
 import librosa
 import numpy as np
 import pandas as pd
@@ -9,6 +8,12 @@ import soundfile as sf
 from pydub import AudioSegment
 from pydub.silence import split_on_silence, detect_silence
 
+try:
+    import whisper
+    import torch
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
 
 import logging
 import sys
