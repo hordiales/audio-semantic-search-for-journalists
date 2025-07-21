@@ -12,6 +12,9 @@ from typing import List, Dict, Tuple
 import json
 from datetime import datetime
 import cmd
+import subprocess
+import shutil
+import platform
 
 # Importar componentes del sistema
 from text_embeddings import TextEmbeddingGenerator
@@ -511,7 +514,12 @@ class AudioDatasetClient:
         
         for result in results:
             score = result['score']
-            self.log(f"\n🏆 Rank {result['rank']} - Score: {score:.3f}")
+            # Get the original DataFrame index for playback
+            original_index = self.df[(self.df['source_file'] == result['source_file']) &
+                                     (self.df['start_time'] == result['start_time']) &
+                                     (self.df['end_time'] == result['end_time'])].index[0]
+            
+            self.log(f"\n🏆 Rank {result['rank']} - Score: {score:.3f} (Index: {original_index})")
             
             # Mostrar interpretación del score si está configurado
             if self.config.show_score_details:
@@ -567,6 +575,9 @@ class AudioDatasetClient:
             if show_details:
                 self.log(f"🔗 Contexto: {result['source_file']} @ {result['start_time']:.1f}s")
 
+import subprocess
+import shutil
+
 class InteractiveClient(cmd.Cmd):
     """Cliente interactivo de consola"""
     
@@ -592,6 +603,7 @@ Comandos disponibles:
   threshold <método> <valor> - Cambiar umbral de score
   capabilities             - Mostrar capacidades del sistema
   stats                    - Estadísticas del dataset
+  play <índice>            - Reproducir segmento de audio por índice
   help                     - Ayuda
   quit                     - Salir
 
@@ -610,6 +622,7 @@ Ejemplos:
   threshold text 0.6
   suggest política
   validate applause
+  play 123
 """
     
     prompt = "🔍 > "
@@ -617,6 +630,132 @@ Ejemplos:
     def __init__(self, client: AudioDatasetClient):
         super().__init__()
         self.client = client
+
+    def _get_audio_player_command(self):
+        """Get the appropriate audio player command for the current OS"""
+        system = platform.system()
+        
+        if system == "Darwin":  # macOS
+            if shutil.which("ffplay"):
+                return "ffplay"
+            elif shutil.which("afplay"):
+                return "afplay"
+            else:
+                return None
+        elif system == "Windows":
+            if shutil.which("ffplay"):
+                return "ffplay"
+            elif shutil.which("wmplayer"):
+                return "wmplayer"
+            else:
+                return None
+        elif system == "Linux":
+            for player in ["ffplay", "cvlc", "aplay", "paplay", "mplayer"]:
+                if shutil.which(player):
+                    return player
+            return None
+        else:
+            return None
+
+    def _build_audio_command(self, player, audio_file, start_time, end_time):
+        """Build the command to play audio segment based on the player"""
+        duration = end_time - start_time
+        
+        if player == "ffplay":
+            return [
+                "ffplay", 
+                "-ss", str(start_time),
+                "-t", str(duration),
+                "-autoexit",
+                "-nodisp",  # No video display
+                audio_file
+            ]
+        elif player == "afplay":
+            # afplay doesn't support time ranges directly, so we'll play the whole file
+            return ["afplay", audio_file]
+        elif player == "wmplayer":
+            return ["wmplayer", audio_file]
+        elif player == "cvlc":
+            return [
+                "cvlc", 
+                "--play-and-exit",
+                "--start-time", str(start_time),
+                "--stop-time", str(end_time),
+                audio_file
+            ]
+        elif player in ["aplay", "paplay"]:
+            return [player, audio_file]
+        elif player == "mplayer":
+            return [
+                "mplayer",
+                "-ss", str(start_time),
+                "-endpos", str(duration),
+                audio_file
+            ]
+        else:
+            return None
+
+    def _find_audio_file_path(self, source_file_name):
+        """Find the absolute path of the audio file within the dataset structure"""
+        possible_paths = [
+            self.client.dataset_dir / "converted" / source_file_name,
+            self.client.dataset_dir / "audio" / source_file_name,
+            self.client.dataset_dir.parent / "data" / source_file_name,
+            self.client.dataset_dir.parent / "temp_audio" / source_file_name,
+        ]
+        
+        for base_path in possible_paths:
+            if base_path.exists():
+                return base_path
+            
+            # Try different extensions
+            for ext in [".wav", ".mp3", ".opus", ".m4a", ".flac"]:
+                alt_path = base_path.with_suffix(ext)
+                if alt_path.exists():
+                    return alt_path
+        return None
+
+    def do_play(self, arg):
+        """Reproducir un segmento de audio por su índice en el dataset"""
+        try:
+            idx = int(arg)
+            if idx < 0 or idx >= len(self.client.df):
+                self.client.log_error(f"❌ Índice fuera de rango. Use 0-{len(self.client.df)-1}")
+                return
+            
+            segment = self.client.df.iloc[idx]
+            source_file = segment['source_file']
+            start_time = segment['start_time']
+            end_time = segment['end_time']
+            
+            audio_file_path = self._find_audio_file_path(Path(source_file).name)
+            
+            if not audio_file_path:
+                self.client.log_error(f"❌ Archivo de audio no encontrado para el segmento {idx}: {source_file}")
+                return
+            
+            player = self._get_audio_player_command()
+            if not player:
+                self.client.log_error("❌ No se encontró un reproductor de audio compatible (ffplay, afplay, wmplayer, cvlc, aplay, paplay, mplayer).")
+                return
+            
+            command = self._build_audio_command(player, str(audio_file_path), start_time, end_time)
+            if not command:
+                self.client.log_error(f"❌ No se pudo construir el comando de reproducción para {player}.")
+                return
+            
+            self.client.log(f"🎵 Reproduciendo segmento {idx}: {audio_file_path.name} ({start_time:.1f}s - {end_time:.1f}s)")
+            subprocess.run(command, check=True)
+            self.client.log("✅ Reproducción finalizada.")
+            
+        except ValueError:
+            self.client.log_error("❌ El índice debe ser un número entero.")
+        except FileNotFoundError:
+            self.client.log_error("❌ El reproductor de audio no fue encontrado. Asegúrate de que esté instalado y en tu PATH.")
+        except subprocess.CalledProcessError as e:
+            self.client.log_error(f"❌ Error al ejecutar el reproductor de audio: {e}")
+        except Exception as e:
+            self.client.log_error(f"❌ Error inesperado al reproducir audio: {e}")
     
     def do_search(self, arg):
         """Búsqueda por texto"""
