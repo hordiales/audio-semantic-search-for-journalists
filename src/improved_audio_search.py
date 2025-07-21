@@ -25,20 +25,22 @@ class ImprovedAudioSearch:
             'applause': [
                 'aplauso', 'aplausos', 'palmada', 'palmadas', 'ovación', 
                 'ovaciones', 'aplaude', 'aplaudir', 'standing ovation',
-                'ovaciona', 'ovacionan', 'palmas'
+                'ovaciona', 'ovacionan', 'palmas', 'applause', 'clapping', 'claps'
             ],
             
             # Risas
             'laughter': [
                 'risa', 'risas', 'reír', 'reírse', 'carcajada', 'carcajadas',
-                'risotada', 'riendo', 'ríe', 'reímos', 'sonrisa', 'hilaridad'
+                'risotada', 'riendo', 'ríe', 'reímos', 'sonrisa', 'hilaridad',
+                'laughter', 'laugh', 'laughs', 'laughing'
             ],
             
             # Multitudes
             'crowd': [
                 'multitud', 'multitudes', 'gente', 'público', 'audiencia',
                 'masa', 'masas', 'muchedumbre', 'gentío', 'concurrencia',
-                'asistentes', 'seguidores', 'manifestantes', 'concentración'
+                'asistentes', 'seguidores', 'manifestantes', 'concentración',
+                'crowd', 'crowds', 'people', 'audience', 'public'
             ],
             
             # Gritos y vociferaciones
@@ -72,14 +74,14 @@ class ImprovedAudioSearch:
             'music': [
                 'música', 'musical', 'canción', 'canciones', 'melodía',
                 'himno', 'himnos', 'banda', 'orquesta', 'instrumento',
-                'tocar', 'interpretar', 'sonido musical'
+                'tocar', 'interpretar', 'sonido musical', 'music', 'song', 'songs'
             ],
             
             # Discurso y habla
             'speech': [
                 'discurso', 'discursos', 'habla', 'hablar', 'dice', 'dijo',
                 'pronuncia', 'declara', 'manifiesta', 'expresa', 'comenta',
-                'intervención', 'alocución', 'arenga'
+                'intervención', 'alocución', 'arenga', 'speech', 'speaking', 'talk', 'talks'
             ],
             
             # Conversación
@@ -203,7 +205,7 @@ class ImprovedAudioSearch:
     
     def search_audio_by_text(self, df: pd.DataFrame, query: str, k: int = 10) -> List[Dict]:
         """
-        Busca audio basado en texto usando mapeo semántico + palabras clave
+        Busca audio basado en texto usando mapeo semántico + palabras clave + YAMNet detection
         
         Args:
             df: DataFrame con transcripciones
@@ -231,14 +233,23 @@ class ImprovedAudioSearch:
                 class_score = 0.6
             
             if class_score > 0:
-                results = self.search_by_keywords(df, audio_class, k * 2)
+                # Buscar por palabras clave en transcripciones
+                keyword_results = self.search_by_keywords(df, audio_class, k * 2)
+                
+                # Buscar por detección YAMNet si está disponible
+                yamnet_results = self._search_by_yamnet_detection(df, audio_class, k * 2)
+                
+                # Combinar resultados
+                combined_results = self._combine_keyword_and_yamnet_results(
+                    keyword_results, yamnet_results, audio_class
+                )
                 
                 # Ajustar scores por relevancia de clase
-                for result in results:
+                for result in combined_results:
                     result['score'] *= class_score
                     result['class_relevance'] = class_score
                 
-                all_results.extend(results)
+                all_results.extend(combined_results)
         
         # Ordenar todos los resultados
         all_results.sort(key=lambda x: x['score'], reverse=True)
@@ -266,6 +277,128 @@ class ImprovedAudioSearch:
     def get_keywords_for_class(self, audio_class: str) -> List[str]:
         """Obtiene las palabras clave para una clase de audio"""
         return self.audio_keywords_mapping.get(audio_class, [])
+    
+    def _search_by_yamnet_detection(self, df: pd.DataFrame, audio_class: str, k: int = 10) -> List[Dict]:
+        """
+        Busca segmentos usando detección YAMNet (columnas has_* y *_confidence)
+        
+        Args:
+            df: DataFrame con datos
+            audio_class: Clase de audio a buscar
+            k: Número de resultados
+            
+        Returns:
+            Lista de resultados basados en detección YAMNet
+        """
+        results = []
+        
+        # Mapear clase a columnas YAMNet
+        yamnet_column_map = {
+            'music': ('has_music', 'music_confidence'),
+            'laughter': ('has_laughter', 'laughter_confidence'),
+            'applause': ('has_applause', 'applause_confidence'),
+            'crowd': ('has_crowd', None),  # Sin columna de confianza específica
+            'cheering': ('has_cheering', None),
+            # Agregar más mapeos según las columnas disponibles
+        }
+        
+        if audio_class not in yamnet_column_map:
+            return results
+        
+        has_column, confidence_column = yamnet_column_map[audio_class]
+        
+        # Verificar si las columnas existen en el DataFrame
+        if has_column not in df.columns:
+            return results
+        
+        # Obtener segmentos detectados
+        detected_segments = df[df[has_column] == True].copy()
+        
+        if len(detected_segments) == 0:
+            return results
+        
+        # Si hay columna de confianza, usar esa para ordenar
+        if confidence_column and confidence_column in df.columns:
+            detected_segments = detected_segments.sort_values(confidence_column, ascending=False)
+            score_column = confidence_column
+        else:
+            # Si no hay confianza, usar score fijo
+            detected_segments['yamnet_score'] = 1.0
+            score_column = 'yamnet_score'
+        
+        # Formatear resultados
+        for i, (idx, row) in enumerate(detected_segments.head(k).iterrows()):
+            confidence_score = row[score_column] if score_column in row else 1.0
+            
+            result = {
+                'rank': i + 1,
+                'score': float(confidence_score),
+                'text': row['text'],
+                'source_file': row['source_file'],
+                'start_time': row['start_time'],
+                'end_time': row['end_time'],
+                'duration': row['duration'],
+                'matched_keywords': [],  # No hay keywords, es detección YAMNet
+                'audio_class': audio_class,
+                'detection_method': 'yamnet',
+                'yamnet_confidence': float(confidence_score)
+            }
+            results.append(result)
+        
+        return results
+    
+    def _combine_keyword_and_yamnet_results(self, keyword_results: List[Dict], 
+                                          yamnet_results: List[Dict], 
+                                          audio_class: str) -> List[Dict]:
+        """
+        Combina resultados de búsqueda por palabras clave y detección YAMNet
+        
+        Args:
+            keyword_results: Resultados de búsqueda por palabras clave
+            yamnet_results: Resultados de detección YAMNet
+            audio_class: Clase de audio
+            
+        Returns:
+            Lista combinada de resultados únicos
+        """
+        combined = {}
+        
+        # Agregar resultados de palabras clave
+        for result in keyword_results:
+            key = (result['source_file'], result['start_time'])
+            combined[key] = result.copy()
+            combined[key]['detection_methods'] = ['keywords']
+        
+        # Agregar o combinar resultados YAMNet
+        for result in yamnet_results:
+            key = (result['source_file'], result['start_time'])
+            
+            if key in combined:
+                # Combinar scores (promedio ponderado)
+                existing = combined[key]
+                keyword_score = existing['score']
+                yamnet_score = result['score']
+                
+                # Peso mayor para YAMNet ya que es detección directa
+                combined_score = (keyword_score * 0.3) + (yamnet_score * 0.7)
+                
+                combined[key]['score'] = combined_score
+                combined[key]['detection_methods'].append('yamnet')
+                combined[key]['yamnet_confidence'] = result['yamnet_confidence']
+            else:
+                # Agregar resultado YAMNet puro
+                combined[key] = result.copy()
+                combined[key]['detection_methods'] = ['yamnet']
+        
+        # Convertir a lista y ordenar
+        result_list = list(combined.values())
+        result_list.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Reasignar ranks
+        for i, result in enumerate(result_list):
+            result['rank'] = i + 1
+        
+        return result_list
 
 # Función de conveniencia
 def create_improved_audio_search():

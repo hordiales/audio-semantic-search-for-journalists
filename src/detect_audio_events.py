@@ -103,12 +103,14 @@ class AudioEventDetector:
             }
         }
     
-    def detect_events_in_audio(self, audio_path: str) -> Dict:
+    def detect_events_in_audio(self, audio_path: str, start_time: float = None, end_time: float = None) -> Dict:
         """
         Detecta eventos específicos en un archivo de audio
         
         Args:
             audio_path: Ruta al archivo de audio
+            start_time: Tiempo de inicio del segmento (segundos)
+            end_time: Tiempo de fin del segmento (segundos)
             
         Returns:
             Dict con eventos detectados y metadatos
@@ -118,6 +120,13 @@ class AudioEventDetector:
             
             # Cargar audio
             audio, sr = librosa.load(audio_path, sr=16000, mono=True)
+            
+            # Extraer segmento específico si se proporcionan tiempos
+            if start_time is not None and end_time is not None:
+                start_sample = int(start_time * sr)
+                end_sample = int(end_time * sr)
+                audio = audio[start_sample:end_sample]
+            
             audio = librosa.util.normalize(audio).astype(np.float32)
             
             # Procesar con YAMNet
@@ -164,13 +173,23 @@ class AudioEventDetector:
         """Analiza scores de un frame específico"""
         events_in_frame = {}
         
-        # Umbral dinámico basado en la distribución de scores
-        threshold = np.mean(scores) + 2 * np.std(scores)
-        threshold = max(threshold, 0.1)  # Mínimo 0.1
+        # Umbral fijo más conservador para eventos específicos
+        # Usar diferentes umbrales según la importancia del evento
+        thresholds = {
+            'laughter': 0.3,
+            'applause': 0.4,  
+            'music': 0.2,
+            'singing': 0.25,
+            'crowd': 0.3,
+            'speech': 0.4,
+            'cheering': 0.35,
+            'booing': 0.35
+        }
         
         for event_name, event_info in self.events_of_interest.items():
             max_score = 0
             detected_classes = []
+            threshold = thresholds.get(event_name, 0.25)  # Default threshold
             
             # Si tenemos nombres de clases, buscar por keywords
             if self.class_names:
@@ -325,8 +344,13 @@ class DatasetEventProcessor:
                     audio_file = row['source_file']
                     if not pd.isna(audio_file) and Path(audio_file).exists():
                         
-                        # Detectar eventos
-                        events_result = self.detector.detect_events_in_audio(audio_file)
+                        # Obtener tiempos del segmento
+                        start_time = row.get('start_time', None)
+                        end_time = row.get('end_time', None)
+                        
+                        # Detectar eventos en el segmento específico
+                        events_result = self.detector.detect_events_in_audio(
+                            audio_file, start_time, end_time)
                         
                         if events_result['processing_success']:
                             # Agregar información detallada de eventos
