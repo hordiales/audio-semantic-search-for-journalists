@@ -62,12 +62,12 @@ class AudioEventDetector:
         # Eventos de interés para periodismo
         self.events_of_interest = {
             'laughter': {
-                'keywords': ['laughter', 'laugh', 'chuckle', 'giggle'],
+                'keywords': ['laughter', 'laugh', 'chuckle', 'giggle', 'snicker', 'belly laugh', 'chortle'],
                 'description': 'Risas y carcajadas',
                 'importance': 'high'
             },
             'applause': {
-                'keywords': ['applause', 'clapping', 'clap'],
+                'keywords': ['applause', 'clapping', 'clap', 'hand clapping', 'ovation', 'clap your hands'],
                 'description': 'Aplausos y ovaciones',
                 'importance': 'high'
             },
@@ -82,7 +82,7 @@ class AudioEventDetector:
                 'importance': 'medium'
             },
             'crowd': {
-                'keywords': ['crowd', 'audience', 'people', 'chatter', 'hubbub'],
+                'keywords': ['crowd', 'audience', 'people', 'chatter', 'hubbub', 'crowd noise', 'background noise', 'murmur', 'babble'],
                 'description': 'Sonidos de multitud',
                 'importance': 'high'
             },
@@ -92,7 +92,7 @@ class AudioEventDetector:
                 'importance': 'low'  # Menos importante porque ya se transcribe
             },
             'cheering': {
-                'keywords': ['cheer', 'shouting', 'yelling', 'celebration'],
+                'keywords': ['cheer', 'shouting', 'yelling', 'celebration', 'cheering crowd', 'hooray', 'hurrah', 'chant'],
                 'description': 'Vítores y celebraciones',
                 'importance': 'high'
             },
@@ -173,17 +173,18 @@ class AudioEventDetector:
         """Analiza scores de un frame específico"""
         events_in_frame = {}
         
-        # Umbral fijo más conservador para eventos específicos
-        # Usar diferentes umbrales según la importancia del evento
+        # Umbrales ajustados para programas de radio y contenido mediático
+        # Los eventos de audiencia (aplausos, gritos) tienen menores umbrales
+        # ya que en radio suelen tener menor calidad/volumen que la música de fondo
         thresholds = {
-            'laughter': 0.3,
-            'applause': 0.4,  
-            'music': 0.2,
-            'singing': 0.25,
-            'crowd': 0.3,
-            'speech': 0.4,
-            'cheering': 0.35,
-            'booing': 0.35
+            'laughter': 0.15,    # Reducido: risas en radio suelen ser más suaves
+            'applause': 0.20,    # Muy reducido: era el más alto (0.4), ahora igual que música
+            'music': 0.2,        # Mantener: funciona bien
+            'singing': 0.25,     # Mantener: funciona bien
+            'crowd': 0.18,       # Reducido: ruido de multitud suele ser de fondo
+            'speech': 0.4,       # Mantener: debe ser bien detectado
+            'cheering': 0.20,    # Reducido: vítores suelen mezclarse con otros sonidos
+            'booing': 0.25       # Ligero ajuste: abucheos suelen ser más claros
         }
         
         for event_name, event_info in self.events_of_interest.items():

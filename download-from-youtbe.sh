@@ -1,3 +1,4 @@
+mkdir data
 cd data
 
 URL="$1"
