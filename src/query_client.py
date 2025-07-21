@@ -71,17 +71,28 @@ class AudioDatasetClient:
         self.log(f"🔍 Ruta absoluta: {dataset_file.absolute()}")
         self.log(f"🔍 Dataset dir existe: {self.dataset_dir.exists()}")
         self.log(f"🔍 Final dir existe: {(self.dataset_dir / 'final').exists()}")
+        
         if not dataset_file.exists():
-            raise FileNotFoundError(f"Dataset no encontrado: {dataset_file}")
+            self.log("⚠️  Dataset no encontrado - iniciando en modo vacío")
+            self.log(f"📁 Buscado en: {dataset_file}")
+            self.log("💡 Usa 'process_youtube_url' para crear tu primer dataset")
+            
+            # Crear un dataset vacío para permitir que el servidor inicie
+            self.df = pd.DataFrame(columns=[
+                'text', 'start_time', 'end_time', 'duration', 'source_file'
+            ])
+            self.log("✅ MCP Server iniciado en modo vacío - listo para procesar contenido")
+        else:
+            self.df = pd.read_pickle(dataset_file)
+            self.log(f"✅ Dataset cargado: {len(self.df):,} segmentos")
         
-        self.df = pd.read_pickle(dataset_file)
-        self.log(f"✅ Dataset cargado: {len(self.df):,} segmentos")
-        
-        # Cargar manifiesto
+        # Cargar manifiesto (solo si existe el dataset)
         manifest_file = self.dataset_dir / "final" / "dataset_manifest.json"
-        if manifest_file.exists():
+        if manifest_file.exists() and len(self.df) > 0:
             with open(manifest_file, 'r', encoding='utf-8') as f:
                 self.manifest = json.load(f)
+        else:
+            self.manifest = None
         
         # Inicializar embedders
         if self.manifest and 'config' in self.manifest:
@@ -94,15 +105,19 @@ class AudioDatasetClient:
         self.text_embedder = TextEmbeddingGenerator(model_name=text_model)
         self.audio_embedder = get_audio_embedding_generator()
         
-        # Cargar índices vectoriales
+        # Cargar índices vectoriales (solo si hay datos)
         indices_dir = self.dataset_dir / "indices"
-        if indices_dir.exists():
+        if indices_dir.exists() and len(self.df) > 0:
             self.log(f"🔍 Cargando índices vectoriales...")
             self.index_manager = VectorIndexManager(embedding_dim=self.text_embedder.embedding_dim)
             self.index_manager.load_indices(str(indices_dir))
             self.log(f"✅ Índices cargados")
+        elif len(self.df) == 0:
+            self.log(f"⚠️  Dataset vacío - índices no necesarios")
+            self.index_manager = None
         else:
             self.log(f"⚠️  No se encontraron índices vectoriales")
+            self.index_manager = None
         
         # Inicializar sistemas de búsqueda de audio
         self.improved_audio_search = ImprovedAudioSearch()
@@ -124,6 +139,11 @@ class AudioDatasetClient:
             Lista de resultados
         """
         self.log(f"🔍 Buscando: '{query}'")
+        
+        # Verificar si hay datos para buscar
+        if len(self.df) == 0:
+            self.log("⚠️  No hay datos para buscar. Usa 'process_youtube_url' para agregar contenido.")
+            return []
         
         # Generar embedding de la consulta
         query_embedding = self.text_embedder.generate_query_embedding(query)
@@ -200,6 +220,11 @@ class AudioDatasetClient:
             Lista de resultados basados en palabras clave reales
         """
         self.log(f"🔊 Buscando audio para: '{query_text}' (búsqueda por palabras clave)")
+        
+        # Verificar si hay datos para buscar
+        if len(self.df) == 0:
+            self.log("⚠️  No hay datos para buscar. Usa 'process_youtube_url' para agregar contenido.")
+            return []
         
         # Usar el sistema de búsqueda mejorado
         results = self.improved_audio_search.search_audio_by_text(self.df, query_text, k)
@@ -334,6 +359,10 @@ class AudioDatasetClient:
     
     def search_by_sentiment(self, sentiment: str, k: int = 5) -> List[Dict]:
         """Busca contenido por sentimiento/estado de ánimo"""
+        if len(self.df) == 0:
+            self.log("⚠️  No hay datos para buscar. Usa 'process_youtube_url' para agregar contenido.")
+            return []
+            
         if not self.sentiment_enabled:
             self.log_error("❌ Sistema de sentimientos no disponible")
             return []
@@ -417,6 +446,9 @@ class AudioDatasetClient:
     
     def analyze_content_mood(self, topic: str) -> Dict:
         """Analiza el estado de ánimo general del contenido sobre un tema"""
+        if len(self.df) == 0:
+            return {'error': 'No hay datos para analizar. Usa "process_youtube_url" para agregar contenido.'}
+        
         if not self.sentiment_enabled:
             self.log_error("❌ Sistema de sentimientos no disponible")
             return {}
@@ -491,6 +523,19 @@ class AudioDatasetClient:
     
     def get_stats(self) -> Dict:
         """Obtiene estadísticas del dataset"""
+        if len(self.df) == 0:
+            return {
+                'total_segments': 0,
+                'unique_files': 0,
+                'total_duration': 0.0,
+                'avg_segment_duration': 0.0,
+                'text_avg_length': 0.0,
+                'date_range': {
+                    'min': 0.0,
+                    'max': 0.0
+                }
+            }
+        
         return {
             'total_segments': len(self.df),
             'unique_files': self.df['source_file'].nunique(),
