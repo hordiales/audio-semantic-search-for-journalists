@@ -39,9 +39,15 @@ class RealYAMNetProcessor:
         try:
             import tensorflow as tf
             import tensorflow_hub as hub
+            import pandas as pd
             
             logger.info("🔄 Cargando modelo YAMNet desde TensorFlow Hub...")
             self.model = hub.load('https://tfhub.dev/google/yamnet/1')
+            
+            # Cargar los nombres de las clases desde el archivo CSV
+            class_map_path = self.model.class_map_path().numpy().decode('utf-8')
+            self.class_names = pd.read_csv(class_map_path)['display_name'].tolist()
+            
             logger.info("✅ Modelo YAMNet cargado exitosamente")
             
         except ImportError as e:
@@ -146,35 +152,45 @@ class RealYAMNetProcessor:
         """
         events = {}
         
-        # Mapeo aproximado de índices de AudioSet para eventos importantes
-        # Nota: Estos índices son aproximados, en una implementación real
-        # necesitarías el mapeo exacto de labels de YAMNet
-        event_mapping = {
-            'laughter': [0, 1, 2],  # Aproximación para risas
-            'music': [10, 11, 12, 13, 14],  # Aproximación para música
-            'applause': [20, 21],  # Aproximación para aplausos
-            'speech': [30, 31, 32],  # Aproximación para habla
-            'crowd': [40, 41],  # Aproximación para multitudes
-            'singing': [50, 51],  # Aproximación para canto
+        # Direct mapping from desired event names to YAMNet class names
+        # These should be exact matches or very close to YAMNet's actual class_names
+        yamnet_event_mapping = {
+            'laughter': ['Laughter', 'Giggle', 'Chuckle'],
+            'applause': ['Applause', 'Clapping'],
+            'music': ['Music'],
+            'crowd': ['Crowd', 'Human crowd'],
+            'cheering': ['Cheering', 'Yell', 'Shout'],
+            'speech': ['Speech', 'Human speech', 'Spoken words'],
+            'silence': ['Silence', 'Quiet'],
+            'noise': ['Noise', 'Ambient noise', 'Background noise']
         }
         
-        threshold = 0.1  # Umbral mínimo de confianza
+        threshold = 0.1  # Umbral mínimo de confianza para detectar un evento
         
-        for event, indices in event_mapping.items():
-            # Tomar el máximo score de los índices relacionados
-            event_scores = [scores[i] for i in indices if i < len(scores)]
-            if event_scores:
-                max_score = max(event_scores)
-                if max_score > threshold:
-                    events[event] = {
-                        'confidence': float(max_score),
-                        'detected': True
-                    }
-                else:
-                    events[event] = {
-                        'confidence': float(max_score),
-                        'detected': False
-                    }
+        for event_name, yamnet_classes in yamnet_event_mapping.items():
+            max_event_score = 0.0
+            
+            for yamnet_class_name in yamnet_classes:
+                try:
+                    # Find the exact index of the YAMNet class name
+                    class_index = np.where(self.class_names == yamnet_class_name)[0][0]
+                    if class_index < len(scores):
+                        max_event_score = max(max_event_score, scores[class_index])
+                except IndexError:
+                    # YAMNet class name not found in the loaded model's class_names
+                    logger.debug(f"YAMNet class '{yamnet_class_name}' not found in model's class names.")
+                    continue
+            
+            if max_event_score > threshold:
+                events[event_name] = {
+                    'confidence': float(max_event_score),
+                    'detected': True
+                }
+            else:
+                events[event_name] = {
+                    'confidence': float(max_event_score),
+                    'detected': False
+                }
         
         return events
 
@@ -453,13 +469,13 @@ def main():
     
     args = parser.parse_args()
     
-    print("🎵 Procesador de Audio Real (YAMNet) para Dataset")
-    print("=" * 50)
-    print(f"📁 Dataset: {args.dataset_dir}")
-    print(f"📊 Batch size: {args.batch_size}")
-    print(f"🔄 Overwrite: {args.overwrite}")
-    print(f"💾 Backup: {not args.no_backup}")
-    print()
+    logger.info("🎵 Procesador de Audio Real (YAMNet) para Dataset")
+    logger.info("=" * 50)
+    logger.info(f"📁 Dataset: {args.dataset_dir}")
+    logger.info(f"📊 Batch size: {args.batch_size}")
+    logger.info(f"🔄 Overwrite: {args.overwrite}")
+    logger.info(f"💾 Backup: {not args.no_backup}")
+    logger.info("")
     
     try:
         # Crear procesador
@@ -475,21 +491,21 @@ def main():
         )
         
         if success:
-            print("✅ ¡Análisis de audio real agregado exitosamente!")
-            print(f"📁 Dataset actualizado en: {args.dataset_dir}/final/complete_dataset.pkl")
-            print()
-            print("🚀 Ahora puedes usar:")
-            print("   python src/query_client.py ./dataset --interactive --load-real")
+            logger.info("✅ ¡Análisis de audio real agregado exitosamente!")
+            logger.info(f"📁 Dataset actualizado en: {args.dataset_dir}/final/complete_dataset.pkl")
+            logger.info("")
+            logger.info("🚀 Ahora puedes usar:")
+            logger.info("   python src/query_client.py ./dataset --interactive --load-real")
             return 0
         else:
-            print("❌ Error en el procesamiento del dataset")
+            logger.error("❌ Error en el procesamiento del dataset")
             return 1
             
     except KeyboardInterrupt:
-        print("\n⚠️  Procesamiento interrumpido por el usuario")
+        logger.warning("\n⚠️  Procesamiento interrumpido por el usuario")
         return 1
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error(f"❌ Error: {e}")
         return 1
 
 

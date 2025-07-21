@@ -6,6 +6,10 @@ import pickle
 import os
 import warnings
 warnings.filterwarnings('ignore')
+import logging
+import sys
+
+logger = logging.getLogger(__name__)
 
 # TensorFlow imports requeridos
 import tensorflow as tf
@@ -34,17 +38,11 @@ class AudioEmbeddingGenerator:
         Carga el modelo YAMNet desde TensorFlow Hub
         """
         try:
-            import sys
-            import os
-            # Only print if not in MCP mode
-            if os.environ.get('MCP_MODE') != '1':
-                print("Cargando modelo YAMNet...", file=sys.stderr)
+            logger.info("Cargando modelo YAMNet...")
             self.model = hub.load(self.model_url)
-            if os.environ.get('MCP_MODE') != '1':
-                print("Modelo YAMNet cargado exitosamente", file=sys.stderr)
+            logger.info("Modelo YAMNet cargado exitosamente")
         except Exception as e:
-            import sys
-            print(f"Error cargando YAMNet: {e}", file=sys.stderr)
+            logger.error(f"Error cargando YAMNet: {e}")
             raise RuntimeError(f"No se pudo cargar YAMNet: {e}")
     
     def preprocess_audio(self, audio_path: str, target_sr: int = 16000) -> np.ndarray:
@@ -95,8 +93,7 @@ class AudioEmbeddingGenerator:
             return embedding.numpy()
             
         except Exception as e:
-            import sys
-            print(f"Error generando embedding para {audio_path}: {e}", file=sys.stderr)
+            logger.error(f"Error generando embedding para {audio_path}: {e}")
             # Error en procesamiento de audio
             raise RuntimeError(f"Error procesando audio: {e}")
     
@@ -113,10 +110,8 @@ class AudioEmbeddingGenerator:
         embeddings = []
         
         for i, audio_path in enumerate(audio_paths):
-            import sys
-            import os
             if os.environ.get('MCP_MODE') != '1':
-                print(f"Procesando audio {i+1}/{len(audio_paths)}: {audio_path}", file=sys.stderr)
+                logger.info(f"Procesando audio {i+1}/{len(audio_paths)}: {audio_path}")
             embedding = self.generate_embedding(audio_path)
             embeddings.append(embedding)
         
@@ -161,20 +156,16 @@ class AudioEmbeddingGenerator:
                 valid_indices.append(idx)
                 
             except Exception as e:
-                import sys
-                print(f"Error procesando segmento {idx}: {e}", file=sys.stderr)
+                logger.error(f"Error procesando segmento {idx}: {e}")
                 continue
         
         if not audio_paths:
-            import sys
-            print("No se pudieron procesar segmentos de audio", file=sys.stderr)
+            logger.error("No se pudieron procesar segmentos de audio")
             return df
         
         # Generar embeddings
-        import sys
-        import os
         if os.environ.get('MCP_MODE') != '1':
-            print(f"Generando embeddings de audio para {len(audio_paths)} segmentos...", file=sys.stderr)
+            logger.info(f"Generando embeddings de audio para {len(audio_paths)} segmentos...")
         embeddings = self.generate_embeddings_batch(audio_paths)
         
         # Añadir embeddings al DataFrame
@@ -288,7 +279,6 @@ if __name__ == "__main__":
     
     # Generar embeddings reales
     # df_with_embeddings = embedder.process_transcription_dataframe(df)
-    # print(f"DataFrame con embeddings: {df_with_embeddings.columns.tolist()}")
+    # logger.info(f"DataFrame con embeddings: {df_with_embeddings.columns.tolist()}")
     
-    import sys
-    print("Módulo de embeddings de audio listo.", file=sys.stderr)
+    logger.info("Módulo de embeddings de audio listo.")

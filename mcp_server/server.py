@@ -39,6 +39,10 @@ class AudioSearchMCPServer:
         self.dataset_dir = None
         self.logger = logging.getLogger(__name__)
         
+        # Background processing state
+        self.background_tasks = {}
+        self.processing_status = {}
+        
         # Register handlers
         self._register_handlers()
     
@@ -275,7 +279,7 @@ class AudioSearchMCPServer:
                 ),
                 Tool(
                     name="process_youtube_url",
-                    description="Download audio from YouTube URL and add it to the dataset pipeline",
+                    description="Download audio from YouTube URL and add it to the dataset pipeline (starts background processing)",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -290,6 +294,20 @@ class AudioSearchMCPServer:
                             }
                         },
                         "required": ["youtube_url"]
+                    }
+                ),
+                Tool(
+                    name="check_youtube_processing",
+                    description="Check the status of YouTube video processing",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "task_id": {
+                                "type": "string",
+                                "description": "Task ID returned from process_youtube_url",
+                                "default": "latest"
+                            }
+                        }
                     }
                 )
             ]
@@ -342,6 +360,8 @@ class AudioSearchMCPServer:
                     return await self._handle_play_audio_segment(arguments)
                 elif name == "process_youtube_url":
                     return await self._handle_process_youtube_url(arguments)
+                elif name == "check_youtube_processing":
+                    return await self._handle_check_youtube_processing(arguments)
                 else:
                     return [types.TextContent(
                         type="text",
@@ -757,7 +777,8 @@ class AudioSearchMCPServer:
             "hybrid_search", "mood_search", "browse_dataset",
             "dataset_stats", "find_text", "get_similar", 
             "analyze_sentiment", "list_sentiments", "get_capabilities",
-            "check_status", "play_audio_segment", "process_youtube_url"
+            "check_status", "play_audio_segment", "process_youtube_url",
+            "check_youtube_processing"
         ]
         for tool in tools:
             response += f"  • {tool}\n"
@@ -973,22 +994,114 @@ class AudioSearchMCPServer:
             )]
     
     async def _handle_process_youtube_url(self, args: dict) -> list[types.TextContent]:
-        """Handle YouTube URL processing"""
+        """Handle YouTube URL processing - starts background task"""
         youtube_url = args["youtube_url"]
         custom_title = args.get("title", "")
         
         try:
-            # Change to the project root directory
+            # Quick info check first
+            info_response = await self._get_youtube_info(youtube_url)
+            if info_response.startswith("❌"):
+                return [types.TextContent(type="text", text=info_response)]
+            
+            # Generate unique task ID
+            import time
+            task_id = f"youtube_{int(time.time())}"
+            
+            # Store initial status
+            self.processing_status[task_id] = {
+                "status": "starting",
+                "step": "Inicializando procesamiento",
+                "progress": 0,
+                "youtube_url": youtube_url,
+                "custom_title": custom_title,
+                "start_time": time.time(),
+                "error": None,
+                "result": None
+            }
+            
+            # Start background task
+            task = asyncio.create_task(self._process_youtube_background(task_id, youtube_url, custom_title))
+            self.background_tasks[task_id] = task
+            
+            # Return immediate response
+            response = f"🚀 **YouTube Processing Iniciado**\n\n"
+            response += f"🔗 **URL:** {youtube_url}\n"
+            response += info_response + "\n"
+            response += f"🆔 **Task ID:** `{task_id}`\n\n"
+            response += "⚡ **El procesamiento ha comenzado en segundo plano.**\n\n"
+            response += "📊 **Para verificar el progreso:**\n"
+            response += f"• Usa la herramienta `check_youtube_processing` con task_id: `{task_id}`\n"
+            response += f"• O simplemente usa `check_youtube_processing` para ver el progreso del último video\n\n"
+            response += "⏱️ **Esto evita timeouts y permite procesar videos largos.**\n"
+            response += "💡 **Te notificaremos cuando esté listo para búsquedas.**"
+            
+            return [types.TextContent(type="text", text=response)]
+            
+        except Exception as e:
+            return [types.TextContent(
+                type="text",
+                text=f"❌ Error iniciando procesamiento de YouTube:\n{str(e)}\n\nURL: {youtube_url}"
+            )]
+    
+    async def _get_youtube_info(self, youtube_url: str) -> str:
+        """Get YouTube video info quickly to estimate processing time"""
+        try:
+            # Quick info check with yt-dlp
+            info_process = await asyncio.create_subprocess_exec(
+                "yt-dlp",
+                "--print", "%(duration)s,%(title)s,%(filesize_approx)s",
+                youtube_url,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await info_process.communicate()
+            
+            if info_process.returncode != 0:
+                return "❌ Error obteniendo información del video de YouTube"
+            
+            info = stdout.decode().strip().split(',')
+            if len(info) >= 2:
+                duration = float(info[0]) if info[0] != 'NA' else 0
+                title = info[1] if len(info) > 1 else "Video"
+                filesize = int(info[2]) if len(info) > 2 and info[2] != 'NA' else 0
+                
+                # Estimate processing time (roughly 2x duration for transcription + embeddings)
+                estimated_time = max(120, duration * 2)  # minimum 2 minutes
+                
+                response = f"📹 **Título:** {title}\n"
+                response += f"⏱️ **Duración:** {duration/60:.1f} minutos\n"
+                if filesize > 0:
+                    response += f"📦 **Tamaño aprox:** {filesize/(1024*1024):.1f} MB\n"
+                response += f"🕐 **Tiempo estimado de procesamiento:** {estimated_time/60:.1f} minutos\n"
+                
+                if duration > 600:  # 10 minutes
+                    response += f"\n⚠️ **ADVERTENCIA:** Este video es largo ({duration/60:.1f} min).\n"
+                    response += f"El procesamiento puede tomar **{estimated_time/60:.1f} minutos** y podría exceder el timeout.\n"
+                    response += f"💡 **Recomendación:** Usa videos más cortos (< 10 min) para evitar timeouts.\n"
+                
+                return response
+            else:
+                return "ℹ️ **Video detectado** - procesando información..."
+                
+        except Exception as e:
+            return f"⚠️ No se pudo obtener información del video: {str(e)}"
+    
+    async def _process_youtube_background(self, task_id: str, youtube_url: str, custom_title: str):
+        """Background YouTube processing task"""
+        try:
             project_root = self.dataset_dir.parent if self.dataset_dir else Path("../")
-            original_cwd = os.getcwd()
             
-            response = f"🎬 **Procesando video de YouTube**\n"
-            response += f"🔗 **URL:** {youtube_url}\n\n"
+            # Update status: Step 1 - Clean dataset
+            self.processing_status[task_id].update({
+                "status": "running",
+                "step": "🧹 Limpiando dataset anterior",
+                "progress": 10
+            })
             
-            # Step 1: Clean dataset
-            response += "🧹 **Paso 1:** Limpiando dataset anterior...\n"
             clean_process = await asyncio.create_subprocess_exec(
                 "./clean_dataset.sh",
+                "--force",  # Force parameter to skip confirmation
                 cwd=str(project_root),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
@@ -996,23 +1109,22 @@ class AudioSearchMCPServer:
             clean_stdout, clean_stderr = await clean_process.communicate()
             
             if clean_process.returncode != 0:
-                return [types.TextContent(
-                    type="text",
-                    text=f"❌ Error limpiando dataset: {clean_stderr.decode()}"
-                )]
+                self.processing_status[task_id].update({
+                    "status": "error",
+                    "error": f"Error limpiando dataset: {clean_stderr.decode()}"
+                })
+                return
             
-            response += "✅ Dataset limpiado\n\n"
+            # Update status: Step 2 - Download
+            self.processing_status[task_id].update({
+                "step": "⬇️ Descargando audio de YouTube",
+                "progress": 30
+            })
             
-            # Step 2: Download audio with yt-dlp
-            response += "⬇️ **Paso 2:** Descargando audio de YouTube...\n"
-            
-            # Build yt-dlp command
             data_dir = project_root / "data"
             data_dir.mkdir(exist_ok=True)
             
-            # Build filename from custom title or use yt-dlp default
             if custom_title:
-                # Sanitize title for filename
                 safe_title = "".join(c for c in custom_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
                 safe_title = safe_title.replace(' ', '_')
                 output_template = f"{safe_title}.%(ext)s"
@@ -1020,12 +1132,8 @@ class AudioSearchMCPServer:
                 output_template = "%(title)s.%(id)s.%(ext)s"
             
             ytdlp_command = [
-                "yt-dlp",
-                "-x",  # Extract audio only
-                "--audio-format", "opus",  # Prefer opus format
-                "--audio-quality", "0",    # Best quality
-                "-o", str(data_dir / output_template),
-                youtube_url
+                "yt-dlp", "-x", "--audio-format", "opus", "--audio-quality", "0",
+                "-o", str(data_dir / output_template), youtube_url
             ]
             
             ytdlp_process = await asyncio.create_subprocess_exec(
@@ -1036,18 +1144,17 @@ class AudioSearchMCPServer:
             ytdlp_stdout, ytdlp_stderr = await ytdlp_process.communicate()
             
             if ytdlp_process.returncode != 0:
-                return [types.TextContent(
-                    type="text",
-                    text=f"❌ Error descargando audio de YouTube:\n{ytdlp_stderr.decode()}\n\nComando: {' '.join(ytdlp_command)}"
-                )]
+                self.processing_status[task_id].update({
+                    "status": "error",
+                    "error": f"Error descargando: {ytdlp_stderr.decode()}"
+                })
+                return
             
-            # Get the downloaded filename
-            download_output = ytdlp_stdout.decode() + ytdlp_stderr.decode()
-            response += f"✅ Audio descargado exitosamente\n"
-            response += f"📁 Ubicación: data/\n\n"
-            
-            # Step 3: Build corpus dataset
-            response += "🏗️ **Paso 3:** Procesando audio y construyendo dataset...\n"
+            # Update status: Step 3 - Process audio
+            self.processing_status[task_id].update({
+                "step": "🏗️ Procesando audio (transcripción y embeddings)",
+                "progress": 50
+            })
             
             build_process = await asyncio.create_subprocess_exec(
                 "./build_corpus_dataset.sh",
@@ -1058,63 +1165,117 @@ class AudioSearchMCPServer:
             build_stdout, build_stderr = await build_process.communicate()
             
             if build_process.returncode != 0:
-                return [types.TextContent(
-                    type="text",
-                    text=f"❌ Error construyendo dataset:\n{build_stderr.decode()}\n\nStdout:\n{build_stdout.decode()}"
-                )]
+                self.processing_status[task_id].update({
+                    "status": "error",
+                    "error": f"Error procesando: {build_stderr.decode()}"
+                })
+                return
             
-            # Parse the build output for summary
-            build_output = build_stdout.decode()
-            response += "✅ Dataset construido exitosamente\n\n"
+            # Update status: Step 4 - Reload dataset
+            self.processing_status[task_id].update({
+                "step": "🔄 Recargando dataset en MCP server",
+                "progress": 90
+            })
             
-            # Step 4: Reload the dataset in MCP server
-            response += "🔄 **Paso 4:** Recargando dataset en MCP server...\n"
-            
-            try:
-                # Reinitialize the client with the new dataset
+            if self.client:
                 await asyncio.get_event_loop().run_in_executor(
                     None, self.client._load_dataset
                 )
-                response += "✅ Dataset recargado en MCP server\n\n"
                 
-                # Get new dataset stats
                 df = self.client.df
-                response += "📊 **Resumen del nuevo dataset:**\n"
-                response += f"  📈 Total de segmentos: {len(df)}\n"
-                response += f"  📁 Archivos únicos: {df['source_file'].nunique()}\n"
+                result_summary = {
+                    "total_segments": len(df),
+                    "unique_files": df['source_file'].nunique(),
+                    "total_duration": (df['end_time'] - df['start_time']).sum(),
+                    "files": list(df['source_file'].unique()),
+                    "sample_texts": df['text'].head(3).tolist()
+                }
                 
-                # Duration stats
-                total_duration = (df['end_time'] - df['start_time']).sum()
-                response += f"  ⏱️ Duración total: {total_duration:.1f} segundos ({total_duration/60:.1f} minutos)\n"
+                self.processing_status[task_id].update({
+                    "status": "completed",
+                    "step": "✅ Procesamiento completado",
+                    "progress": 100,
+                    "result": result_summary
+                })
+            else:
+                self.processing_status[task_id].update({
+                    "status": "completed_partial",
+                    "step": "✅ Audio procesado (reinicia MCP server para cargar)",
+                    "progress": 100,
+                    "error": "MCP server necesita reinicio manual"
+                })
                 
-                # New files added
-                new_files = df['source_file'].unique()
-                response += f"  📄 Archivos procesados:\n"
-                for file in new_files:
-                    file_segments = len(df[df['source_file'] == file])
-                    response += f"    • {file}: {file_segments} segmentos\n"
-                
-                # Sample of transcribed content
-                response += f"\n📝 **Muestra del contenido transcrito:**\n"
-                sample_texts = df['text'].head(3)
-                for i, text in enumerate(sample_texts, 1):
-                    preview = text[:100] + "..." if len(text) > 100 else text
-                    response += f"  {i}. {preview}\n"
-                
-                response += f"\n🎉 **¡Proceso completado exitosamente!**\n"
-                response += f"El contenido de YouTube ha sido procesado y está listo para búsquedas."
-                
-            except Exception as e:
-                response += f"❌ Error recargando dataset: {str(e)}\n"
-                response += f"El audio fue procesado pero necesitas reiniciar el MCP server manualmente."
-            
-            return [types.TextContent(type="text", text=response)]
-            
         except Exception as e:
+            self.processing_status[task_id].update({
+                "status": "error",
+                "error": f"Error inesperado: {str(e)}"
+            })
+    
+    async def _handle_check_youtube_processing(self, args: dict) -> list[types.TextContent]:
+        """Check YouTube processing status"""
+        import time
+        task_id = args.get("task_id", "latest")
+        
+        # Get latest task if requested
+        if task_id == "latest":
+            if not self.processing_status:
+                return [types.TextContent(
+                    type="text",
+                    text="❌ No hay tareas de YouTube en procesamiento."
+                )]
+            task_id = max(self.processing_status.keys())
+        
+        if task_id not in self.processing_status:
             return [types.TextContent(
                 type="text",
-                text=f"❌ Error procesando YouTube URL:\n{str(e)}\n\nURL: {youtube_url}"
+                text=f"❌ Task ID '{task_id}' no encontrado.\n\nTareas disponibles: {list(self.processing_status.keys())}"
             )]
+        
+        status = self.processing_status[task_id]
+        
+        response = f"📊 **Estado del Procesamiento de YouTube**\n\n"
+        response += f"🆔 **Task ID:** {task_id}\n"
+        response += f"🔗 **URL:** {status['youtube_url']}\n"
+        response += f"📈 **Progreso:** {status['progress']}%\n"
+        response += f"🔄 **Estado:** {status['status'].upper()}\n"
+        response += f"⚙️ **Paso actual:** {status['step']}\n"
+        
+        elapsed = time.time() - status['start_time']
+        response += f"⏱️ **Tiempo transcurrido:** {elapsed/60:.1f} minutos\n\n"
+        
+        if status['status'] == 'completed':
+            result = status['result']
+            response += "🎉 **¡PROCESAMIENTO COMPLETADO!**\n\n"
+            response += "📊 **Resumen del dataset:**\n"
+            response += f"  📈 Total de segmentos: {result['total_segments']}\n"
+            response += f"  📁 Archivos únicos: {result['unique_files']}\n"
+            response += f"  ⏱️ Duración total: {result['total_duration']/60:.1f} minutos\n\n"
+            response += "📄 **Archivos procesados:**\n"
+            for file in result['files']:
+                response += f"  • {file}\n"
+            response += "\n📝 **Muestra del contenido:**\n"
+            for i, text in enumerate(result['sample_texts'], 1):
+                preview = text[:80] + "..." if len(text) > 80 else text
+                response += f"  {i}. {preview}\n"
+            response += "\n✅ **El contenido está listo para búsquedas.**"
+            
+        elif status['status'] == 'error':
+            response += f"❌ **ERROR EN PROCESAMIENTO:**\n{status['error']}\n\n"
+            response += "💡 **Posibles soluciones:**\n"
+            response += "• Verifica que la URL de YouTube sea válida\n"
+            response += "• Asegúrate de que yt-dlp esté instalado\n"
+            response += "• Intenta con un video más corto\n"
+            
+        elif status['status'] == 'completed_partial':
+            response += f"⚠️ **PROCESAMIENTO PARCIAL:**\n{status.get('error', '')}\n\n"
+            response += "💡 **Para completar:** Reinicia el MCP server para cargar el nuevo dataset."
+            
+        else:
+            progress_bar = "█" * (status['progress'] // 10) + "░" * (10 - status['progress'] // 10)
+            response += f"⏳ **EN PROGRESO** [{progress_bar}]\n\n"
+            response += "💡 **Consejo:** Vuelve a verificar en unos minutos."
+        
+        return [types.TextContent(type="text", text=response)]
     
     async def initialize_client(self, dataset_dir: str):
         """Initialize the audio search client"""
