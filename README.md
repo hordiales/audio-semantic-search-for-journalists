@@ -1,38 +1,36 @@
 # Búsqueda Semántica en Audios con fines Periodísticos
 
-Conjunto de aplicaciones para realizar búsqueda semántica de contenido de audio hablado con enfoque en aplicaciones periodísticas. 
+Conjunto de aplicaciones para realizar búsqueda semántica multimodal (texto y audio) de contenido de audio hablado con enfoque en aplicaciones periodísticas. Permite la búsqueda analizando el texto y el análisis de sentimiento del mismo, pero también asi buscar en el audio por eventos de la ontología AudioSet (aplausos, gritos, música de fondo, etc)
 
 ## Características
 
 - **Embeddings semánticos** de texto con sentence-transformers
 - **Embeddings acústicos** con YAMNet según ontología de AudioSet
 - **Indexación vectorial** con FAISS
-- [IN-PROGRESS] **Transcripción automática** con OpenAI Whisper
-
-- [IN-PROGRESS] **Búsqueda multimodal** combinando texto y audio
-- [IN-PROGRESS] **Interfaz web** con Streamlit
+- **Transcripción automática** con OpenAI Whisper
+- **MCP server** para consultar desde LLMs
 - [IN-PROGRESS] **Construcción del dataset orquestada** con Dagster
+- [IN-PROGRESS] **Interfaz web** con Streamlit
 - [IN-PROGRESS] **API Rest** con FastAPI para funcionar como servicio para otras aplicaciones
-- [IN-PROGRESS] **MCP server** para consultar desde LLMs
 
 ## Instalación
 
 Recomendación: crear entorno virtual con conda, venv, poetry, etc
 
 ```bash
-conda create -n AUDIOSEMANTIC
-conda activate AUDIOSEMANTIC
+    conda create -n AUDIOSEMANTIC
+    conda activate AUDIOSEMANTIC
 ```
 
-``
 ```bash
-# Clona el repositorio
-git clone <url-del-repositorio>
-cd semantic-search-periodismo
+    # Clona el repositorio
+    git clone <url-del-repositorio>
+    cd semantic-search-periodismo
 
-# Ejecuta el instalador rápido (app base)
-./quick_install.sh
+    # Ejecuta el instalador rápido (app base)
+    ./quick_install.sh
 ```
+
 IMPORTANTE: probado con python=3.11.13
 Más detalles y troubleshootting en [[INSTALL.md]]
 
@@ -61,6 +59,19 @@ TODO: add diagrama de arquitectura
 
 ## Uso
 
+De ser necesario ajustar eventos en detect_audio_events.py
+```python
+        thresholds = {
+            'laughter': 0.2,    # Reducido: risas en radio suelen ser más suaves
+            'applause': 0.20,    # Muy reducido: era el más alto (0.4), ahora igual que música
+            'music': 0.2,        # Mantener: funciona bien
+            'singing': 0.25,     # Mantener: funciona bien
+            'crowd': 0.18,       # Reducido: ruido de multitud suele ser de fondo
+            'speech': 0.4,       # Mantener: debe ser bien detectado
+            'cheering': 0.3,    # Reducido: vítores suelen mezclarse con otros sonidos
+            'booing': 0.25       # Ligero ajuste: abucheos suelen ser más claros
+        }
+```
 ### Crear dataset/corpus
 
     Ubicar archivos de audio (mp3, ogg, wav, etc) en ./data

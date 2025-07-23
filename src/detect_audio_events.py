@@ -177,13 +177,13 @@ class AudioEventDetector:
         # Los eventos de audiencia (aplausos, gritos) tienen menores umbrales
         # ya que en radio suelen tener menor calidad/volumen que la música de fondo
         thresholds = {
-            'laughter': 0.15,    # Reducido: risas en radio suelen ser más suaves
+            'laughter': 0.2,    # Reducido: risas en radio suelen ser más suaves
             'applause': 0.20,    # Muy reducido: era el más alto (0.4), ahora igual que música
             'music': 0.2,        # Mantener: funciona bien
             'singing': 0.25,     # Mantener: funciona bien
             'crowd': 0.18,       # Reducido: ruido de multitud suele ser de fondo
             'speech': 0.4,       # Mantener: debe ser bien detectado
-            'cheering': 0.20,    # Reducido: vítores suelen mezclarse con otros sonidos
+            'cheering': 0.3,    # Reducido: vítores suelen mezclarse con otros sonidos
             'booing': 0.25       # Ligero ajuste: abucheos suelen ser más claros
         }
         
