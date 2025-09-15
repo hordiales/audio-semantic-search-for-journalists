@@ -1,7 +1,7 @@
 import librosa
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import os
 from pathlib import Path
 import soundfile as sf
@@ -17,6 +17,7 @@ except ImportError:
 
 import logging
 import sys
+from .models_config import get_models_config, WhisperConfig
 
 # Configuración de logging
 handler = logging.StreamHandler(sys.stderr)
@@ -25,22 +26,46 @@ logging.basicConfig(level=logging.INFO, handlers=[handler])
 
 
 class AudioTranscriber:
-    """Transcripción de audio usando Whisper"""
+    """Transcripción de audio usando Whisper con configuración centralizada"""
     
-    def __init__(self, model_name: str = "base"):
+    def __init__(self, model_name: Optional[str] = None, config: Optional[WhisperConfig] = None):
         """
         Inicializa el transcriptor
         
         Args:
-            model_name: Nombre del modelo Whisper (tiny, base, small, medium, large)
+            model_name: Nombre del modelo Whisper (tiny, base, small, medium, large) - opcional
+            config: Configuración específica de Whisper - usa configuración global si None
         """
         if not WHISPER_AVAILABLE:
             raise RuntimeError("Whisper no está disponible. Instala con: pip install openai-whisper")
         
+        # Cargar configuración
+        if config is None:
+            models_config = get_models_config()
+            self.config = models_config.whisper_config
+            # Usar el modelo configurado globalmente si no se especifica uno
+            if model_name is None:
+                model_name = models_config.get_whisper_model_name()
+        else:
+            self.config = config
+            if model_name is None:
+                model_name = config.model_name
+        
         self.model_name = model_name
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = self._get_device()
         self.model = whisper.load_model(model_name, device=self.device)
         logging.info(f"Modelo Whisper '{model_name}' cargado en {self.device}")
+    
+    def _get_device(self) -> str:
+        """Determina el device a usar basado en la configuración"""
+        if self.config.device == "auto":
+            if torch.cuda.is_available():
+                return "cuda"
+            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                return "mps"  # Apple Silicon
+            else:
+                return "cpu"
+        return self.config.device
         
     def load_audio(self, file_path: str) -> np.ndarray:
         """
@@ -191,15 +216,28 @@ class AudioTranscriber:
         
         for segment in segments:
             try:
-                # Transcribir el segmento
-                result = self.model.transcribe(segment['temp_path'])
+                # Transcribir el segmento usando configuración
+                transcribe_options = {
+                    'language': self.config.language,
+                    'temperature': self.config.temperature,
+                    'no_speech_threshold': self.config.no_speech_threshold,
+                    'logprob_threshold': self.config.logprob_threshold,
+                    'compression_ratio_threshold': self.config.compression_ratio_threshold
+                }
+                
+                # Filtrar opciones None
+                transcribe_options = {k: v for k, v in transcribe_options.items() if v is not None}
+                
+                result = self.model.transcribe(segment['temp_path'], **transcribe_options)
                 
                 # Añadir información de transcripción
                 segment_with_text = segment.copy()
                 segment_with_text.update({
                     'text': result['text'].strip(),
                     'language': result['language'],
-                    'confidence': getattr(result, 'confidence', None)
+                    'confidence': getattr(result, 'confidence', None),
+                    'whisper_model': self.model_name,
+                    'whisper_config': transcribe_options
                 })
                 
                 transcribed_segments.append(segment_with_text)

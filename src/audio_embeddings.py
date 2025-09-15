@@ -15,20 +15,29 @@ logger = logging.getLogger(__name__)
 import tensorflow as tf
 import tensorflow_hub as hub
 
+from .models_config import get_models_config, YAMNetConfig, AudioEmbeddingModel
+
 
 class AudioEmbeddingGenerator:
     """
     Clase para generar embeddings de audio usando YAMNet de TensorFlow Hub
     """
     
-    def __init__(self, model_url: str = "https://tfhub.dev/google/yamnet/1"):
+    def __init__(self, config: Optional[YAMNetConfig] = None):
         """
         Inicializa el generador de embeddings de audio
         
         Args:
-            model_url: URL del modelo YAMNet en TensorFlow Hub
+            config: Configuración específica de YAMNet - usa configuración global si None
         """
-        self.model_url = model_url
+        # Cargar configuración
+        if config is None:
+            models_config = get_models_config()
+            self.config = models_config.yamnet_config
+        else:
+            self.config = config
+            
+        self.model_url = self.config.model_url
         self.model = None
         self.embedding_dim = 1024  # YAMNet produce embeddings de 1024 dimensiones
         self._load_model()
@@ -45,17 +54,21 @@ class AudioEmbeddingGenerator:
             logger.error(f"Error cargando YAMNet: {e}")
             raise RuntimeError(f"No se pudo cargar YAMNet: {e}")
     
-    def preprocess_audio(self, audio_path: str, target_sr: int = 16000) -> np.ndarray:
+    def preprocess_audio(self, audio_path: str, target_sr: Optional[int] = None) -> np.ndarray:
         """
         Preprocesa un archivo de audio para YAMNet
         
         Args:
             audio_path: Ruta al archivo de audio
-            target_sr: Frecuencia de muestreo objetivo
+            target_sr: Frecuencia de muestreo objetivo (usa configuración si None)
             
         Returns:
             Audio preprocesado como array numpy
         """
+        # Usar frecuencia de muestreo de la configuración si no se especifica
+        if target_sr is None:
+            target_sr = self.config.sample_rate
+        
         # Cargar audio
         audio, sr = librosa.load(audio_path, sr=target_sr, mono=True)
         
@@ -251,12 +264,31 @@ class AudioEmbeddingGenerator:
 # Función para obtener el generador de embeddings
 def get_audio_embedding_generator():
     """
-    Retorna el generador de embeddings YAMNet
+    Retorna el generador de embeddings configurado (YAMNet o CLAP según configuración)
     
     Returns:
         Instancia del generador de embeddings
     """
-    return AudioEmbeddingGenerator()
+    models_config = get_models_config()
+    
+    # Verificar si se debe usar CLAP
+    if models_config.default_audio_embedding == AudioEmbeddingModel.CLAP_LAION:
+        try:
+            from .clap_audio_embeddings import get_clap_embedding_generator
+            return get_clap_embedding_generator()
+        except ImportError:
+            logger.warning("⚠️  CLAP no disponible, usando YAMNet como fallback")
+            return AudioEmbeddingGenerator()
+    elif models_config.default_audio_embedding == AudioEmbeddingModel.CLAP_MUSIC:
+        try:
+            from .clap_audio_embeddings import get_clap_embedding_generator
+            return get_clap_embedding_generator()
+        except ImportError:
+            logger.warning("⚠️  CLAP no disponible, usando YAMNet como fallback")
+            return AudioEmbeddingGenerator()
+    else:
+        # Usar YAMNet por defecto
+        return AudioEmbeddingGenerator()
 
 
 # Ejemplo de uso
