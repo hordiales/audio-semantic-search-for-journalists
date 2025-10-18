@@ -1,0 +1,20 @@
+{
+  "yamnet": {
+    "name": "yamnet",
+    "embedding_dim": 1024,
+    "model_type": "AudioEmbeddingGenerator",
+    "supports_text_queries": false,
+    "supports_audio_queries": true,
+    "initialization_time": 1.4244437217712402,
+    "device": "cpu"
+  },
+  "speechdpr": {
+    "name": "speechdpr",
+    "embedding_dim": 768,
+    "model_type": "SpeechDPRAudioEmbeddingGenerator",
+    "supports_text_queries": true,
+    "supports_audio_queries": true,
+    "initialization_time": 10.978301048278809,
+    "device": "mps"
+  }
+}

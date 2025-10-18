@@ -1,0 +1,48 @@
+{
+  "yamnet": {
+    "model_name": "yamnet",
+    "bert_score_precision": 0.670855700969696,
+    "bert_score_recall": 0.6959121227264404,
+    "bert_score_f1": 0.6828652620315552,
+    "precision_at_k": {
+      "1": 0.0,
+      "3": 0.0,
+      "5": 0.0,
+      "10": 0.0
+    },
+    "recall_at_k": {
+      "1": 0.0,
+      "3": 0.0,
+      "5": 0.0,
+      "10": 0.0
+    },
+    "map_score": 0.0,
+    "ndcg_score": 0.0,
+    "embedding_generation_time": 1.4244437217712402,
+    "query_time": 0.0003849983215332031,
+    "memory_usage": 0.0,
+    "semantic_consistency": 0.0,
+    "cross_modal_alignment": 0.0,
+    "total_queries": 5,
+    "successful_queries": 5,
+    "error_rate": 0.0
+  },
+  "speechdpr": {
+    "model_name": "speechdpr",
+    "bert_score_precision": 0.0,
+    "bert_score_recall": 0.0,
+    "bert_score_f1": 0.0,
+    "precision_at_k": {},
+    "recall_at_k": {},
+    "map_score": 0.0,
+    "ndcg_score": 0.0,
+    "embedding_generation_time": 10.978301048278809,
+    "query_time": 0.0,
+    "memory_usage": 0.0,
+    "semantic_consistency": 0.0,
+    "cross_modal_alignment": 0.0,
+    "total_queries": 5,
+    "successful_queries": 0,
+    "error_rate": 1.0
+  }
+}

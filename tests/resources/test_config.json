@@ -1,0 +1,16 @@
+{
+  "active_database": "memory",
+  "embedding_dimension": 512,
+  "similarity_metric": "cosine",
+  "faiss_config": {},
+  "chromadb_config": {},
+  "supabase_config": {},
+  "fallback_database": "memory",
+  "auto_fallback": true,
+  "batch_size": 50,
+  "search_timeout": 10.0,
+  "connection_pool_size": 10,
+  "data_directory": "data/vector_db",
+  "backup_enabled": false,
+  "backup_interval_hours": 24
+}

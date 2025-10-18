@@ -1,0 +1,64 @@
+{
+  "dataset_info": {
+    "total_segments": 20,
+    "total_duration_minutes": 21.200491848041317,
+    "category_distribution": {
+      "social": 7,
+      "tecnología": 5,
+      "economía": 4,
+      "política": 3,
+      "internacional": 1
+    },
+    "subcategory_distribution": {
+      "derechos_humanos": 2,
+      "educación": 2,
+      "partidos": 2,
+      "inteligencia_artificial": 2,
+      "startups": 1,
+      "mercados": 1,
+      "empresas": 1,
+      "parlamento": 1,
+      "salud": 1,
+      "comercio": 1,
+      "cultura": 1,
+      "manifestaciones": 1,
+      "cooperación": 1,
+      "digitalización": 1,
+      "ciberseguridad": 1,
+      "banco_central": 1
+    },
+    "unique_speakers": 13,
+    "avg_confidence": 0.8451010196796475,
+    "languages": [
+      "es"
+    ]
+  },
+  "queries_info": {
+    "total_queries": 5,
+    "query_types": {
+      "category_match": 3,
+      "keyword_match": 1,
+      "exact_match": 1
+    },
+    "difficulty_distribution": {
+      "easy": 4,
+      "hard": 1
+    },
+    "category_coverage": [
+      "política",
+      "economía",
+      "social"
+    ]
+  },
+  "generation_info": {
+    "timestamp": "2025-09-15T23:01:21.154734",
+    "generator_version": "1.0",
+    "categories": [
+      "política",
+      "economía",
+      "social",
+      "tecnología",
+      "internacional"
+    ]
+  }
+}

@@ -1,0 +1,111 @@
+[
+  {
+    "id": "query_000",
+    "text": "noticias de social",
+    "type": "category_match",
+    "category": "social",
+    "expected_ids": [
+      "test_0002",
+      "test_0005",
+      "test_0007",
+      "test_0011",
+      "test_0012",
+      "test_0013",
+      "test_0016"
+    ],
+    "expected_keywords": [
+      "cultura"
+    ],
+    "difficulty": "easy",
+    "semantic_tags": [
+      "neutral",
+      "social"
+    ]
+  },
+  {
+    "id": "query_001",
+    "text": "segmentos sobre MERVAL",
+    "type": "keyword_match",
+    "category": "economía",
+    "expected_ids": [
+      "test_0003"
+    ],
+    "expected_keywords": [
+      "MERVAL",
+      "empresas"
+    ],
+    "difficulty": "hard",
+    "semantic_tags": [
+      "neutral",
+      "economía"
+    ]
+  },
+  {
+    "id": "query_002",
+    "text": "En palacio_presidencial, presidente presentó los r...",
+    "type": "exact_match",
+    "category": "política",
+    "expected_ids": [
+      "test_0004"
+    ],
+    "expected_keywords": [
+      "presidente",
+      "palacio presidencial",
+      "programa",
+      "parlamento"
+    ],
+    "difficulty": "easy",
+    "semantic_tags": [
+      "gobierno",
+      "liderazgo",
+      "autoridad"
+    ]
+  },
+  {
+    "id": "query_003",
+    "text": "noticias de social",
+    "type": "category_match",
+    "category": "social",
+    "expected_ids": [
+      "test_0002",
+      "test_0005",
+      "test_0007",
+      "test_0011",
+      "test_0012",
+      "test_0013",
+      "test_0016"
+    ],
+    "expected_keywords": [
+      "movimiento social",
+      "derechos humanos"
+    ],
+    "difficulty": "easy",
+    "semantic_tags": [
+      "neutral",
+      "social"
+    ]
+  },
+  {
+    "id": "query_004",
+    "text": "noticias de social",
+    "type": "category_match",
+    "category": "social",
+    "expected_ids": [
+      "test_0002",
+      "test_0005",
+      "test_0007",
+      "test_0011",
+      "test_0012",
+      "test_0013",
+      "test_0016"
+    ],
+    "expected_keywords": [
+      "cultura"
+    ],
+    "difficulty": "easy",
+    "semantic_tags": [
+      "neutral",
+      "social"
+    ]
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "file": "La sesión especial de la Cámara de DIPUTADOS de ARGENTINA termina en ESCÁNDALO [JrfSEX1bqv8].wav",
+    "yamnet": {
+      "success": true,
+      "dimension": 1024,
+      "processing_time_ms": 10580,
+      "error_message": ""
+    },
+    "clap": {
+      "success": false,
+      "dimension": 0,
+      "processing_time_ms": 0,
+      "error_message": "CLAP no disponible"
+    }
+  },
+  {
+    "file": "Un panelista de Fantino tuvo un brote violento al aire y dejó el estudio a las putead@s： ＂Váyanse..＂ [XpcKTA_nkoA].wav",
+    "yamnet": {
+      "success": true,
+      "dimension": 1024,
+      "processing_time_ms": 571,
+      "error_message": ""
+    },
+    "clap": {
+      "success": false,
+      "dimension": 0,
+      "processing_time_ms": 0,
+      "error_message": "CLAP no disponible"
+    }
+  }
+]

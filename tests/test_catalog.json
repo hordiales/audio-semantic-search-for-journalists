@@ -1,0 +1,118 @@
+{
+  "unit": [
+    {
+      "module": "tests.unit.test_framework_components",
+      "description": "Component-level smoke checks without heavy models"
+    }
+  ],
+  "functional": [
+    {
+      "module": "tests.functional.test_audio_embeddings_simple",
+      "description": "Single-file audio embedding sanity run"
+    },
+    {
+      "module": "tests.functional.test_music_search_fix",
+      "description": "Validates music keyword mapping and search results"
+    },
+    {
+      "module": "tests.functional.test_fixed_detection",
+      "description": "Spot-checks YAMNet event detection on sample segments"
+    },
+    {
+      "module": "tests.functional.test_yamnet_raw_output",
+      "description": "Explores raw YAMNet class predictions for dataset snippets"
+    },
+    {
+      "module": "tests.functional.test_simple_benchmark",
+      "description": "Runs lightweight benchmark pipeline without heavy models"
+    },
+    {
+      "module": "tests.functional.test_all_models",
+      "description": "Exercises every available embedding model against local audio"
+    }
+  ],
+  "integration": [
+    {
+      "module": "tests.integration.test_models_config",
+      "description": "Verifies model configuration loader and generators"
+    },
+    {
+      "module": "tests.integration.test_supabase_integration",
+      "description": "Checks Supabase vector configuration and SQL helpers"
+    },
+    {
+      "module": "tests.integration.test_vector_databases",
+      "description": "Synthetic benchmark across in-memory/faiss/chroma drivers"
+    },
+    {
+      "module": "tests.integration.test_benchmark_quick",
+      "description": "Quick end-to-end embedding benchmark smoke"
+    },
+    {
+      "module": "tests.integration.test_semantic_heatmap_integration",
+      "description": "Generates semantic heatmaps via evaluation framework"
+    },
+    {
+      "module": "tests.integration.test_speechdpr_implementation",
+      "description": "Exercises SpeechDPR configuration and embedding generation"
+    },
+    {
+      "module": "tests.integration.test_clap_direct",
+      "description": "Runs CLAP audio embedding pipeline smoke test"
+    },
+    {
+      "module": "tests.integration.test_clap_full_download",
+      "description": "Ensures CLAP model download and caching pipeline works"
+    },
+    {
+      "module": "tests.integration.mcp.test_server",
+      "description": "Starts MCP server and performs semantic search"
+    },
+    {
+      "module": "tests.integration.mcp.test_audio_player",
+      "description": "Detects available OS-level audio player commands"
+    },
+    {
+      "module": "tests.integration.mcp.test_audio_playback",
+      "description": "Plays sample audio segments through MCP server"
+    },
+    {
+      "module": "tests.integration.mcp.test_audio_playback_real",
+      "description": "Replays regression scenario for audio playback bug"
+    },
+    {
+      "module": "tests.integration.mcp.test_path_fix",
+      "description": "Confirms dataset path normalization for MCP server"
+    }
+  ],
+  "legacy": [
+    {
+      "module": "tests.legacy.bugfix.test_timestamp_fix",
+      "description": "Historic timestamp fix regression check"
+    },
+    {
+      "module": "tests.legacy.tmp.test_api_complete",
+      "description": "Prototype FastAPI + MCP integration battery"
+    },
+    {
+      "module": "tests.legacy.tmp.test_indices_fix",
+      "description": "Index synchronization exploratory script"
+    },
+    {
+      "module": "tests.legacy.tmp.test_integration_simple",
+      "description": "Early semantic search integration helper"
+    },
+    {
+      "module": "tests.legacy.tmp.test_mcp_dataset",
+      "description": "Dataset preparation checks for MCP"
+    },
+    {
+      "module": "tests.legacy.tmp.test_mcp_startup",
+      "description": "Legacy MCP server startup scenario"
+    },
+    {
+      "module": "tests.legacy.tmp.test_sentiment_search",
+      "description": "Sentiment-enabled search exploratory suite"
+    }
+  ]
+}
