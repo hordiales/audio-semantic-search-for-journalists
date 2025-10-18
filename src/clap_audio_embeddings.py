@@ -14,6 +14,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 from .models_config import get_models_config, CLAPConfig
+from .audio_embeddings import BaseAudioEmbedding
 
 logger = logging.getLogger(__name__)
 
@@ -28,36 +29,39 @@ except ImportError:
     logger.warning("⚠️  LAION CLAP no disponible. Instala con: pip install laion-clap")
 
 
-class CLAPAudioEmbeddingGenerator:
+class CLAPEmbedding(BaseAudioEmbedding):
     """
-    Generador de embeddings de audio usando CLAP (Contrastive Language-Audio Pre-training)
-    
+    Implementación de embeddings de audio usando CLAP (Contrastive Language-Audio Pre-training)
+
     CLAP es superior a YAMNet para búsqueda semántica porque:
     - Los embeddings están alineados con representaciones de texto
     - Permite búsqueda directa con consultas en lenguaje natural
     - Mejor comprensión del contenido semántico del audio
     """
-    
+
     def __init__(self, config: Optional[CLAPConfig] = None):
         """
         Inicializa el generador de embeddings CLAP
-        
+
         Args:
             config: Configuración específica de CLAP, usa por defecto si None
         """
         if not CLAP_AVAILABLE:
             raise RuntimeError("LAION CLAP no está disponible. Instala con: pip install laion-clap")
-        
+
+        super().__init__()
+
         # Cargar configuración
         if config is None:
             models_config = get_models_config()
-            self.config = models_config.clap_config
+            self.config = models_config.clap_config if models_config else CLAPConfig()
         else:
             self.config = config
-        
-        self.model = None
+
         self.device = self._get_device()
+        self.model_name = "CLAP"
         self.embedding_dim = 512  # CLAP produce embeddings de 512 dimensiones
+        self.sample_rate = 48000  # CLAP usa 48kHz
         self._load_model()
     
     def _get_device(self) -> str:
@@ -355,17 +359,21 @@ class CLAPAudioEmbeddingGenerator:
         return similarities
 
 
-def get_clap_embedding_generator(config: Optional[CLAPConfig] = None) -> CLAPAudioEmbeddingGenerator:
+# Alias para compatibilidad con código existente
+CLAPAudioEmbeddingGenerator = CLAPEmbedding
+
+
+def get_clap_embedding_generator(config: Optional[CLAPConfig] = None) -> CLAPEmbedding:
     """
     Factory function para obtener una instancia del generador CLAP
-    
+
     Args:
         config: Configuración específica de CLAP
-        
+
     Returns:
         Instancia del generador de embeddings CLAP
     """
-    return CLAPAudioEmbeddingGenerator(config)
+    return CLAPEmbedding(config)
 
 
 # Función de compatibilidad para reemplazar YAMNet

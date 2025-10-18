@@ -5,6 +5,7 @@ activate-conda-env.sh
 tmp/*
 TODO.md
 BUGS-SOLVED/*
+.supabase
 
 # tools files, and binary data
 *.lock
