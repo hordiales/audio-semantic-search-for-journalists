@@ -336,9 +336,9 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
     Factory function que retorna el generador de embeddings configurado
 
     Soporta múltiples modelos:
-    - YAMNet (por defecto)
-    - CLAP (LAION o Music)
-    - SpeechDPR (futuro)
+    - YAMNet: Embeddings generales de audio (1024 dim, 16kHz)
+    - CLAP: Embeddings alineados audio-texto (512 dim, 48kHz)
+    - SpeechDPR: Dense passage retrieval para audio (768 dim, 16kHz)
 
     Returns:
         Instancia de BaseAudioEmbedding con el modelo configurado
@@ -362,10 +362,18 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
                     logger.warning(f"⚠️  CLAP no disponible, usando YAMNet como fallback")
                     return YAMNetEmbedding()
 
-        # SpeechDPR (futuro)
+        # SpeechDPR
         elif model_type == AudioEmbeddingModel.SPEECHDPR:
-            logger.warning("⚠️  SpeechDPR no implementado aún, usando YAMNet como fallback")
-            return YAMNetEmbedding()
+            try:
+                from .speechdpr_audio_embeddings import SpeechDPREmbedding
+                return SpeechDPREmbedding()
+            except ImportError:
+                try:
+                    from speechdpr_audio_embeddings import SpeechDPREmbedding
+                    return SpeechDPREmbedding()
+                except ImportError:
+                    logger.warning("⚠️  SpeechDPR no disponible, usando YAMNet como fallback")
+                    return YAMNetEmbedding()
 
     # Usar YAMNet por defecto
     return YAMNetEmbedding()
