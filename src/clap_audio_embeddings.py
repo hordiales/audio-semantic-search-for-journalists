@@ -7,7 +7,7 @@ lo que es ideal para búsqueda semántica de audio con consultas en lenguaje nat
 import numpy as np
 import pandas as pd
 import librosa
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union, Any
 import os
 import logging
 import warnings
@@ -27,6 +27,38 @@ try:
 except ImportError:
     CLAP_AVAILABLE = False
     logger.warning("⚠️  LAION CLAP no disponible. Instala con: pip install laion-clap")
+
+
+def _build_checkpoint_args(config: CLAPConfig) -> Dict[str, Any]:
+    """
+    Resuelve los argumentos de checkpoint respetando model_name y cache_dir.
+    Prioridad:
+    1) Si model_name es ruta de archivo existente, usar ckpt_path.
+    2) Si model_name coincide con conocidos, usar model_id correspondiente.
+    3) Caso contrario, solo aplicar download_root si existe.
+    """
+    args: Dict[str, Any] = {}
+    if config.cache_dir:
+        os.makedirs(config.cache_dir, exist_ok=True)
+        args["download_root"] = config.cache_dir
+
+    model_map = {
+        "laion/clap-htsat-unfused": 1,
+        "clap-htsat-unfused": 1,
+        "laion/clap-htsat-fused": 2,
+        "clap-htsat-fused": 2,
+    }
+
+    if config.model_name:
+        if os.path.isfile(config.model_name):
+            args["ckpt_path"] = config.model_name
+            return args
+
+        mapped_id = model_map.get(config.model_name)
+        if mapped_id is not None:
+            args["model_id"] = mapped_id
+
+    return args
 
 
 class CLAPEmbedding(BaseAudioEmbedding):
@@ -87,13 +119,17 @@ class CLAPEmbedding(BaseAudioEmbedding):
                 amodel=self.config.amodel,
                 tmodel=self.config.tmodel
             )
-            
-            # Cargar checkpoint pre-entrenado
-            if self.config.cache_dir:
-                os.makedirs(self.config.cache_dir, exist_ok=True)
-            
-            self.model.load_ckpt(model_id=1)  # Modelo pre-entrenado estándar
-            
+
+            ckpt_args = _build_checkpoint_args(self.config)
+            if ckpt_args:
+                self.model.load_ckpt(**ckpt_args)
+            else:
+                self.model.load_ckpt()
+
+            # Asegurar modo inferencia
+            if hasattr(self.model, "eval"):
+                self.model.eval()
+
             logger.info(f"✅ Modelo CLAP cargado en {self.device}")
             
         except Exception as e:
@@ -140,20 +176,17 @@ class CLAPEmbedding(BaseAudioEmbedding):
             audio = self.preprocess_audio(audio_path)
             
             # Generar embedding con CLAP
-            # CLAP espera audio como tensor
             audio_tensor = torch.from_numpy(audio).unsqueeze(0).to(self.device)
             
-            with torch.no_grad():
+            with torch.inference_mode():
                 audio_embed = self.model.get_audio_embedding_from_data(
                     x=audio_tensor, 
                     use_tensor=True
                 )
             
-            # Convertir a numpy y normalizar
-            embedding = audio_embed.cpu().numpy().flatten()
-            
-            # Normalizar el embedding para similitud coseno
-            embedding = embedding / np.linalg.norm(embedding)
+            embedding = audio_embed.cpu().numpy().flatten().astype(np.float32)
+            norm = np.linalg.norm(embedding) + 1e-10
+            embedding = embedding / norm
             
             return embedding
             
@@ -289,13 +322,12 @@ class CLAPEmbedding(BaseAudioEmbedding):
             raise RuntimeError("Modelo CLAP no está cargado")
         
         try:
-            # Generar embedding de texto
-            with torch.no_grad():
+            with torch.inference_mode():
                 text_embed = self.model.get_text_embedding([text])
             
-            # Convertir a numpy y normalizar
-            embedding = text_embed.cpu().numpy().flatten()
-            embedding = embedding / np.linalg.norm(embedding)
+            embedding = text_embed.cpu().numpy().flatten().astype(np.float32)
+            norm = np.linalg.norm(embedding) + 1e-10
+            embedding = embedding / norm
             
             return embedding
             

@@ -17,7 +17,11 @@ except ImportError:
 
 import logging
 import sys
-from .models_config import get_models_config, WhisperConfig
+
+try:
+    from .models_config import get_models_config, WhisperConfig
+except ImportError:
+    from models_config import get_models_config, WhisperConfig
 
 # Configuración de logging
 handler = logging.StreamHandler(sys.stderr)
