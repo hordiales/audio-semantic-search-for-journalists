@@ -7,17 +7,17 @@ echo "🚀 Full Install - Sistema de Búsqueda Semántica"
 echo "==============================================="
 
 # Check if we're in the right directory
-if [ ! -f "requirements.txt" ]; then
+if [ ! -f "requirements-minimal.txt" ]; then
     echo "❌ Error: Execute this script from the project directory"
     exit 1
 fi
 
 # Check Python version compatibility
-python_version=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+python_version=$(python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 echo "🐍 Python version: $python_version"
 
 # Check if Python version is compatible with TensorFlow
-if python3 -c "import sys; major, minor = sys.version_info[:2]; exit(0 if (major == 3 and 9 <= minor <= 12) else 1)" 2>/dev/null; then
+if python -c "import sys; major, minor = sys.version_info[:2]; exit(0 if (major == 3 and 9 <= minor <= 12) else 1)" 2>/dev/null; then
     echo "✅ Python version is compatible with TensorFlow"
     TENSORFLOW_COMPATIBLE=true
 else
@@ -29,20 +29,20 @@ fi
 
 # Upgrade pip
 echo "📦 Upgrading pip..."
-python3 -m pip install --upgrade pip
+python -m pip install --upgrade pip
 
 # Install core requirements first
 echo "📦 Installing core requirements..."
-python3 -m pip install -r requirements.txt
+python -m pip install -r requirements-minimal.txt
 
 # Check if TensorFlow is already installed
 echo "🔍 Checking TensorFlow installation..."
-if python3 -c "import tensorflow as tf; print(f'TensorFlow {tf.__version__} already installed')" 2>/dev/null; then
+if python -c "import tensorflow as tf; print(f'TensorFlow {tf.__version__} already installed')" 2>/dev/null; then
     echo "✅ TensorFlow is already installed"
     TENSORFLOW_INSTALLED=true
 elif [ "$TENSORFLOW_COMPATIBLE" = true ]; then
     echo "📦 Installing TensorFlow and TensorFlow Hub..."
-    if python3 -m pip install tensorflow tensorflow-hub; then
+    if python -m pip install tensorflow tensorflow-hub; then
         echo "✅ TensorFlow installed successfully"
         TENSORFLOW_INSTALLED=true
     else
@@ -56,24 +56,25 @@ fi
 
 # Test basic functionality
 echo "🧪 Testing installation..."
-python3 -c "
+TF_CPP_MIN_LOG_LEVEL=3 python -c "
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 import whisper
 import sentence_transformers
-import streamlit
 print('✅ Core libraries imported successfully')
 
-# Test Whisper
+# Test Whisper (only import, not loading model to avoid download)
 try:
-    model = whisper.load_model('tiny')
-    print('✅ Whisper model loaded')
+    # Just verify it can be imported
+    print('✅ Whisper available')
 except Exception as e:
     print(f'⚠️  Whisper test failed: {e}')
 
-# Test sentence-transformers
+# Test sentence-transformers (only import, not loading model to avoid download)
 try:
     from sentence_transformers import SentenceTransformer
-    embedder = SentenceTransformer('all-MiniLM-L6-v2')
-    print('✅ Sentence transformer loaded')
+    print('✅ Sentence Transformers available')
 except Exception as e:
     print(f'⚠️  Sentence transformer test failed: {e}')
 "
@@ -81,7 +82,10 @@ except Exception as e:
 # Test TensorFlow if installed
 if [ "$TENSORFLOW_INSTALLED" = true ]; then
     echo "🧪 Testing TensorFlow installation..."
-    python3 -c "
+    TF_CPP_MIN_LOG_LEVEL=3 python -c "
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 try:
     import tensorflow as tf
     import tensorflow_hub as hub

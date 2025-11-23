@@ -16,7 +16,7 @@ soundfile>=0.12.0
 pydub>=0.25.0
 
 # Web interface
-streamlit>=1.28.0
+#streamlit>=1.28.0
 
 # Basic visualization
 matplotlib>=3.7.0
