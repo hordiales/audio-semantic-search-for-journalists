@@ -1,197 +1,194 @@
 # Búsqueda Semántica en Audios con fines Periodísticos
 
-Conjunto de aplicaciones para realizar búsqueda semántica multimodal (texto y audio) de contenido de audio hablado con enfoque en aplicaciones periodísticas. Permite la búsqueda analizando el texto y el análisis de sentimiento del mismo, pero también asi buscar en el audio por eventos de la ontología AudioSet (aplausos, gritos, música de fondo, etc)
+Sistema completo para realizar búsqueda semántica multimodal (texto y audio) de contenido de audio hablado con enfoque en aplicaciones periodísticas. Permite la búsqueda analizando el texto y el análisis de sentimiento del mismo, pero también buscar en el audio por eventos de la ontología AudioSet (aplausos, gritos, música de fondo, etc).
 
-## Características
+## 🎯 Características
 
 - **Embeddings semánticos** de texto con sentence-transformers
 - **Embeddings acústicos** con YAMNet según ontología de AudioSet
-- **Indexación vectorial** con FAISS
+- **Múltiples modelos de audio**: YAMNet, CLAP, SpeechDPR
+- **Indexación vectorial** con FAISS, Supabase, ChromaDB
 - **Transcripción automática** con OpenAI Whisper
+- **Análisis de sentimiento** integrado
 - **MCP server** para consultar desde LLMs
-- [IN-PROGRESS] **Construcción del dataset orquestada** con Dagster
-- **API Rest** con FastAPI para funcionar como servicio para otras aplicaciones
+- **API REST** con FastAPI para funcionar como servicio
+- **CLI** para búsqueda interactiva
 
-## Instalación
+## 🚀 Inicio Rápido
 
 ### Prerequisitos
 
-- **Python 3.11.13** (usando pyenv)
-- **Poetry** para gestión de dependencias
+- **Python 3.11.13** (requerido exactamente) - usar pyenv
+- **Poetry** para gestión de dependencias (recomendado)
 - **ffmpeg** para procesamiento de audio
 
-### Instalación con Poetry (Recomendado)
+### Instalación Rápida
 
 ```bash
 # 1. Instalar pyenv (si no lo tienes)
 # macOS: brew install pyenv
-# Linux: https://github.com/pyenv/pyenv#installation
+# Linux: curl https://pyenv.run | bash
 
-# 2. Instalar Python 3.11.13 con pyenv
+# 2. Instalar Python 3.11.13
 pyenv install 3.11.13
 pyenv local 3.11.13
 
-# 3. Instalar Poetry (si no lo tienes)
+# 3. Instalar Poetry
 curl -sSL https://install.python-poetry.org | python3 -
 
-# 4. Clonar el repositorio
+# 4. Clonar e instalar
 git clone <url-del-repositorio>
 cd audio-semantic-search-for-journalists
-
-# 5. Instalar dependencias con Poetry
 poetry install
-
-# 6. Activar el entorno virtual
 poetry shell
 
-# 7. (Opcional) Instalar extras para YAMNet
+# 5. (Opcional) Instalar extras para YAMNet
 poetry install --extras yamnet
 ```
 
-### Instalación Alternativa (pip)
+Para más detalles, ver [doc/INSTALLATION.md](doc/INSTALLATION.md).
 
-Si prefieres usar pip en lugar de Poetry:
+**⚠️ IMPORTANTE**: Este proyecto requiere exactamente Python 3.11.13. Ver [doc/REQUIREMENTS_PYTHON.md](doc/REQUIREMENTS_PYTHON.md) para más información.
+
+## 📖 Documentación
+
+### Guías Principales
+
+- **[Instalación](doc/INSTALLATION.md)** - Guía completa de instalación
+- **[Inicio Rápido](doc/QUICK_START.md)** - Empezar en 5 minutos
+- **[Arquitectura](doc/ARCHITECTURE_long.md)** - Diseño del sistema
+- **[Dataset](doc/DATASET.md)** - Crear y procesar datasets
+- **[Troubleshooting](doc/TROUBLESHOOTING.md)** - Solución de problemas
+
+### Interfaces y APIs
+
+- **[API REST](doc/API_README.md)** - Documentación de la API FastAPI
+- **[MCP Server](doc/MCP_SETUP.md)** - Integración con LLMs
+- **[Aplicaciones](doc/README_APPS.md)** - Guía de todas las interfaces
+
+### Documentación Técnica
+
+- **[Embeddings de Audio](doc/AUDIO_EMBEDDINGS_ARCHITECTURE.md)** - Arquitectura de embeddings
+- **[Estrategia de Chunking](doc/ESTRATEGIA_CHUNKING.md)** - Segmentación de audio
+- **[Evaluación de Modelos](doc/EMBEDDING_EVALUATION_SYSTEM.md)** - Framework de evaluación
+
+## 💻 Uso
+
+### CLI Interactivo
 
 ```bash
-# 1. Configurar Python con pyenv
-pyenv install 3.11.13
-pyenv local 3.11.13
-
-# 2. Crear entorno virtual
-python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-
-# 3. Instalar dependencias
-pip install -r requirements.txt
-
-# 4. (Opcional) Instalar TensorFlow para YAMNet
-pip install tensorflow tensorflow-hub
+poetry run python src/query_client.py ./dataset --interactive
 ```
 
-### Instalación de ffmpeg
+### API REST
 
-**macOS:**
 ```bash
-brew install ffmpeg
+# Iniciar servidor
+poetry run python -m uvicorn api.main:app --reload
+
+# Acceder a documentación
+open http://localhost:8000/docs
 ```
 
-**Ubuntu/Debian:**
-```bash
-sudo apt-get update
-sudo apt-get install ffmpeg
-```
+### Uso Programático
 
-**Windows:**
-Descargar desde [ffmpeg.org](https://ffmpeg.org/download.html) y añadir al PATH.
-
-IMPORTANTE: probado con python=3.11.13  
-Más detalles y troubleshooting en [[INSTALL.md]]
-
-
-
-## 📁 Estructura del proyecto
-
-```
-semantic-search-periodismo/
-├── requirements.txt           # Dependencias del proyecto
-├── audio_transcription.py     # Módulo de transcripción con Whisper
-├── text_embeddings.py         # Generación de embeddings de texto
-├── audio_embeddings.py        # Generación de embeddings de audio
-├── vector_indexing.py         # Indexación vectorial con FAISS
-├── semantic_search.py         # Motor de búsqueda principal
-├── example_usage.py           # Ejemplos de uso
-└── README.md                  # Este archivo
-```
-
-TODO: add diagrama de arquitectura
-
-# Audioset ontology
-
-
-
-## Uso
-
-De ser necesario ajustar eventos en detect_audio_events.py
 ```python
-        thresholds = {
-            'laughter': 0.2,    # Reducido: risas en radio suelen ser más suaves
-            'applause': 0.20,    # Muy reducido: era el más alto (0.4), ahora igual que música
-            'music': 0.2,        # Mantener: funciona bien
-            'singing': 0.25,     # Mantener: funciona bien
-            'crowd': 0.18,       # Reducido: ruido de multitud suele ser de fondo
-            'speech': 0.4,       # Mantener: debe ser bien detectado
-            'cheering': 0.3,    # Reducido: vítores suelen mezclarse con otros sonidos
-            'booing': 0.25       # Ligero ajuste: abucheos suelen ser más claros
-        }
+from src.semantic_search import SemanticSearchEngine
+
+engine = SemanticSearchEngine()
+results = engine.search("economía y inflación")
 ```
-### Crear dataset/corpus
 
-    Ubicar archivos de audio (mp3, ogg, wav, etc) en ./data
+Ver [doc/QUICK_START.md](doc/QUICK_START.md) para más ejemplos.
 
-    Ejecutar pipeline:
-        - Conversión a wav
-        - SpeechToText tool
-        - Cálculo de embeddings texto
-        - Cálculo de embeddings audio
-        - Análisis de sentimiento
+## 📁 Estructura del Proyecto
 
-Detalle de como construirlo en [[DATASET.md]]
+```
+audio-semantic-search-for-journalists/
+├── src/                    # Código fuente principal
+│   ├── audio_transcription.py
+│   ├── text_embeddings.py
+│   ├── audio_embeddings.py
+│   ├── semantic_search.py
+│   └── ...
+├── doc/                    # Documentación
+├── tests/                  # Tests
+├── mcp_server/            # Servidor MCP
+├── services/              # Servicios (GCP, etc.)
+├── pyproject.toml         # Configuración Poetry
+└── README.md              # Este archivo
+```
 
-Dataset de referencia [Europarl-ST](https://www.mllp.upv.es/europarl-st/) is a multilingual Spoken Language Translation corpus containing paired audio-text samples for SLT from and into 9 European languages, for a total of 72 different translation directions. This corpus has been compiled using the debates held in the European Parliament in the period between 2008 and 2012.
-Nota: Este dataset ya contiene las transcripciones (evita el paso de speech2text)
+## 🔧 Configuración
 
+### Variables de Entorno
 
+Crear archivo `.env` en la raíz:
 
-    En ./dataset quedará la siguiente estructura
+```bash
+# APIs opcionales
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 
-# Consulta (query) por línea de comando
+# Configuración de modelos
+DEFAULT_WHISPER_MODEL=base
+DEFAULT_AUDIO_EMBEDDING_MODEL=yamnet
+USE_MOCK_AUDIO=false
+```
 
-    $ python src/query_client.py ./dataset --interactive
+Ver `src/config_loader.py` para todas las opciones.
 
-"""
-Sistema híbrido de búsqueda de audio que combina:
-1. Búsqueda por palabras clave (siempre funciona)
-2. Búsqueda con embeddings YAMNet reales (si están disponibles)
-"""
+## 🧪 Testing
 
+```bash
+# Ejecutar todos los tests
+poetry run pytest
 
-# Configuración
+# Test específico
+poetry run pytest tests/functional/test_audio_segment_extraction.py
+```
 
-## Config entorno
-Revisar módulo config_loader.py
-y archivo .env para variables de entorno
+## 📊 Modelos Soportados
 
-dataset/search_config.json 
+### Embeddings de Audio
+- **YAMNet**: Clasificación general de audio (1024 dim)
+- **CLAP**: Búsqueda multimodal audio-texto (512 dim)
+- **SpeechDPR**: Dense Passage Retrieval para speech (768 dim)
 
+### Embeddings de Texto
+- **Sentence Transformers**: all-MiniLM-L6-v2, all-mpnet-base-v2
 
-## Config de consulta
+### Transcripción
+- **OpenAI Whisper**: tiny, base, small, medium, large
 
-"""
-Configuración de parámetros de búsqueda y filtros de score
-"""
+## 🤝 Contribuir
 
-### Umbrales de score
-    min_text_score: float = 0.3
-    min_audio_score: float = 0.3
-    min_hybrid_score: float = 0.3
-    min_keyword_score: float = 0.3
-    min_yamnet_score: float = 0.5
+1. Fork el repositorio
+2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
 
+## 📄 Licencia
 
-### Consulta
+Este proyecto está bajo la licencia GPLv3. Ver `LICENSE` para más detalles.
 
-Modo interactivo por línea de comando: 
-    $ python query_client.py ./dataset --interactive --load-real
-
-# Referencias
+## 🔗 Referencias
 
 - [OpenAI Whisper](https://github.com/openai/whisper)
 - [Sentence Transformers](https://github.com/UKPLab/sentence-transformers)
 - [FAISS](https://github.com/facebookresearch/faiss)
 - [YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet)
-    Audioset
 - [FastAPI](https://fastapi.tiangolo.com/)
 
-## Licencia
+## 📞 Soporte
 
-Este proyecto está bajo la licencia GPLv3. Ver `LICENSE` para más detalles.
+- **Documentación**: Ver `doc/` para guías detalladas
+- **Problemas**: Ver [doc/TROUBLESHOOTING.md](doc/TROUBLESHOOTING.md)
+- **Issues**: Abrir un issue en el repositorio
+
+---
+
+**Versión**: 1.0.0  
+**Python**: 3.11.13 (requerido exactamente)  
+**Última actualización**: Enero 2025
