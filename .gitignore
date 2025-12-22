@@ -1,6 +1,11 @@
+# tmp
+#*.md
+docs/archive/*.md
+
 #custom files
 data/*
 dataset/*
+results/*
 activate-conda-env.sh
 tmp/*
 TODO.md

@@ -7,7 +7,7 @@ echo "🚀 Full Install - Sistema de Búsqueda Semántica"
 echo "==============================================="
 
 # Check if we're in the right directory
-if [ ! -f "requirements-minimal.txt" ]; then
+if [ ! -f "requirements.txt" ]; then
     echo "❌ Error: Execute this script from the project directory"
     exit 1
 fi
@@ -33,7 +33,7 @@ python -m pip install --upgrade pip
 
 # Install core requirements first
 echo "📦 Installing core requirements..."
-python -m pip install -r requirements-minimal.txt
+python -m pip install -r requirements.txt
 
 # Check if TensorFlow is already installed
 echo "🔍 Checking TensorFlow installation..."
@@ -100,9 +100,9 @@ echo ""
 echo "🎉 Installation completed!"
 echo ""
 echo "📚 Next steps:"
-echo "1. Run the web app: streamlit run streamlit_app.py"
-echo "2. Or try the command line: ./run_cmd_line.sh"
-echo "3. Or try examples: python example_usage.py"
+echo "1. Try the command line: python src/query_client.py ./dataset --interactive"
+echo "2. Or try examples: python tests/example_usage.py"
+echo "3. Or start the API server: See doc/API_README.md"
 echo ""
 
 if [ "$TENSORFLOW_INSTALLED" = true ]; then

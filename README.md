@@ -39,8 +39,8 @@ curl -sSL https://install.python-poetry.org | python3 -
 # 4. Clonar e instalar
 git clone <url-del-repositorio>
 cd audio-semantic-search-for-journalists
-poetry install
-poetry shell
+poetry install  # ⚠️ El venv se crea AUTOMÁTICAMENTE aquí
+poetry shell    # Opcional: activar venv (o usar 'poetry run' sin activar)
 
 # 5. (Opcional) Instalar extras para YAMNet
 poetry install --extras yamnet
@@ -83,12 +83,16 @@ poetry run python src/query_client.py ./dataset --interactive
 ### API REST
 
 ```bash
-# Iniciar servidor
-poetry run python -m uvicorn api.main:app --reload
+# Opción 1: API principal (services/app/main.py)
+cd services
+poetry run python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 
-# Acceder a documentación
-open http://localhost:8000/docs
+# Acceder a documentación Swagger
+open http://localhost:8080/docs
+# O ReDoc: http://localhost:8080/redoc
 ```
+
+Ver [doc/API_FASTAPI.md](doc/API_FASTAPI.md) para más detalles y opciones.
 
 ### Uso Programático
 

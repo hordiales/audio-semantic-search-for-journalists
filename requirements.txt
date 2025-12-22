@@ -28,7 +28,7 @@ tensorflow-hub>=0.14.0
 
 # Web API
 plotly>=5.15.0
-fastapi>=0.104.0
+fastapi>=0.115.0
 uvicorn[standard]>=0.24.0
 # Nota: python-multipart y httpx deben ser compatibles con mcp
 # mcp requiere: python-multipart >=0.0.9 O httpx >=0.27
