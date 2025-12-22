@@ -10,29 +10,82 @@ Conjunto de aplicaciones para realizar búsqueda semántica multimodal (texto y 
 - **Transcripción automática** con OpenAI Whisper
 - **MCP server** para consultar desde LLMs
 - [IN-PROGRESS] **Construcción del dataset orquestada** con Dagster
-- [IN-PROGRESS] **Interfaz web** con Streamlit
-- [IN-PROGRESS] **API Rest** con FastAPI para funcionar como servicio para otras aplicaciones
+- **API Rest** con FastAPI para funcionar como servicio para otras aplicaciones
 
 ## Instalación
 
-Recomendación: crear entorno virtual con conda, venv, poetry, etc
+### Prerequisitos
+
+- **Python 3.11.13** (usando pyenv)
+- **Poetry** para gestión de dependencias
+- **ffmpeg** para procesamiento de audio
+
+### Instalación con Poetry (Recomendado)
 
 ```bash
-    conda create -n AUDIOSEMANTIC
-    conda activate AUDIOSEMANTIC
+# 1. Instalar pyenv (si no lo tienes)
+# macOS: brew install pyenv
+# Linux: https://github.com/pyenv/pyenv#installation
+
+# 2. Instalar Python 3.11.13 con pyenv
+pyenv install 3.11.13
+pyenv local 3.11.13
+
+# 3. Instalar Poetry (si no lo tienes)
+curl -sSL https://install.python-poetry.org | python3 -
+
+# 4. Clonar el repositorio
+git clone <url-del-repositorio>
+cd audio-semantic-search-for-journalists
+
+# 5. Instalar dependencias con Poetry
+poetry install
+
+# 6. Activar el entorno virtual
+poetry shell
+
+# 7. (Opcional) Instalar extras para YAMNet
+poetry install --extras yamnet
 ```
+
+### Instalación Alternativa (pip)
+
+Si prefieres usar pip en lugar de Poetry:
 
 ```bash
-    # Clona el repositorio
-    git clone <url-del-repositorio>
-    cd semantic-search-periodismo
+# 1. Configurar Python con pyenv
+pyenv install 3.11.13
+pyenv local 3.11.13
 
-    # Ejecuta el instalador rápido (app base)
-    ./quick_install.sh
+# 2. Crear entorno virtual
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+
+# 3. Instalar dependencias
+pip install -r requirements.txt
+
+# 4. (Opcional) Instalar TensorFlow para YAMNet
+pip install tensorflow tensorflow-hub
 ```
 
-IMPORTANTE: probado con python=3.11.13
-Más detalles y troubleshootting en [[INSTALL.md]]
+### Instalación de ffmpeg
+
+**macOS:**
+```bash
+brew install ffmpeg
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get update
+sudo apt-get install ffmpeg
+```
+
+**Windows:**
+Descargar desde [ffmpeg.org](https://ffmpeg.org/download.html) y añadir al PATH.
+
+IMPORTANTE: probado con python=3.11.13  
+Más detalles y troubleshooting en [[INSTALL.md]]
 
 
 
@@ -46,7 +99,6 @@ semantic-search-periodismo/
 ├── audio_embeddings.py        # Generación de embeddings de audio
 ├── vector_indexing.py         # Indexación vectorial con FAISS
 ├── semantic_search.py         # Motor de búsqueda principal
-├── streamlit_app.py           # Interfaz web
 ├── example_usage.py           # Ejemplos de uso
 └── README.md                  # Este archivo
 ```
@@ -94,7 +146,7 @@ Nota: Este dataset ya contiene las transcripciones (evita el paso de speech2text
 
 # Consulta (query) por línea de comando
 
-    $ python query_client.py ./dataset --interactive
+    $ python src/query_client.py ./dataset --interactive
 
 """
 Sistema híbrido de búsqueda de audio que combina:
@@ -138,7 +190,7 @@ Modo interactivo por línea de comando:
 - [FAISS](https://github.com/facebookresearch/faiss)
 - [YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet)
     Audioset
-- [Streamlit](https://streamlit.io/)
+- [FastAPI](https://fastapi.tiangolo.com/)
 
 ## Licencia
 
