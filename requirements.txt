@@ -1,4 +1,5 @@
-numpy==2.1.3
+# Nota: numpy debe ser <2.0.0 por compatibilidad con laion-clap
+numpy>=1.23.5,<2.0.0
 
 # Core ML libraries
 openai-whisper>=20231117
@@ -25,15 +26,16 @@ ffmpeg-python>=0.2.0
 tensorflow>=2.17.0
 tensorflow-hub>=0.14.0
 
-# Web interface
-#streamlit>=1.28.0
+# Web API
 plotly>=5.15.0
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
-python-multipart>=0.0.6
+# Nota: python-multipart y httpx deben ser compatibles con mcp
+# mcp requiere: python-multipart >=0.0.9 O httpx >=0.27
+python-multipart>=0.0.9
 slowapi>=0.1.9
 mcp>=1.0.0
-httpx>=0.25.0
+httpx>=0.27
 aiofiles>=23.0.0
 psutil>=5.9.0
 

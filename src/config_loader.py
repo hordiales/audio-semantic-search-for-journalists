@@ -44,9 +44,6 @@ class SystemConfig:
     # Base de datos
     database_path: str = ":memory:"
     
-    # Streamlit
-    streamlit_port: int = 8501
-    streamlit_theme: str = "light"
     
     # Configuración avanzada
     api_timeout: int = 30
@@ -157,9 +154,6 @@ class ConfigLoader:
             # Base de datos
             database_path=os.getenv("DATABASE_PATH", ":memory:"),
             
-            # Streamlit
-            streamlit_port=self._parse_int(os.getenv("STREAMLIT_PORT", "8501")),
-            streamlit_theme=os.getenv("STREAMLIT_THEME", "light"),
             
             # Configuración avanzada
             api_timeout=self._parse_int(os.getenv("API_TIMEOUT", "30")),

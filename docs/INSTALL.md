@@ -57,14 +57,19 @@ git clone <url-del-repositorio>
 cd audio-semantic-search-for-journalists
 
 # 2. Instalar dependencias con Poetry
+# ⚠️ IMPORTANTE: Poetry crea el venv AUTOMÁTICAMENTE aquí
+# El venv se crea en ~/.cache/pypoetry/virtualenvs/
 poetry install
 
-# 3. Activar el entorno virtual
+# 3. Activar el entorno virtual (opcional)
+# Puedes usar 'poetry run' sin activar, o activar con:
 poetry shell
 
 # 4. (Opcional) Instalar extras para YAMNet (requiere TensorFlow)
 poetry install --extras yamnet
 ```
+
+**Nota**: El entorno virtual se crea automáticamente cuando ejecutas `poetry install` por primera vez. Ver [CUANDO_SE_CREA_VENV.md](CUANDO_SE_CREA_VENV.md) para más detalles.
 
 ### Verificar Instalación
 
@@ -103,10 +108,12 @@ poetry show --tree
    python --version  # Debe mostrar 3.11.13
    ```
 
-2. **Crear entorno virtual**
+2. **Crear entorno virtual (MANUAL)**
    ```bash
+   # ⚠️ IMPORTANTE: Debes crear el venv MANUALMENTE antes de instalar
    python -m venv venv
    source venv/bin/activate  # En Windows: venv\Scripts\activate
+   # El prompt ahora muestra (venv)
    ```
 
 ### Instalación
