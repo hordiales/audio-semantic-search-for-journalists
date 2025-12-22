@@ -9,6 +9,7 @@ torch>=2.0.0
 torchaudio>=2.0.0
 librosa>=0.10.0
 pandas>=1.5.0
+laion-clap>=1.1.7
 
 # extra external AI
 google-generativeai
@@ -18,6 +19,7 @@ transformers>=4.20.0
 # Audio processing
 soundfile>=0.12.0
 pydub>=0.25.0
+ffmpeg-python>=0.2.0
 
 # TensorFlow (optional for YAMNet)
 tensorflow>=2.17.0
