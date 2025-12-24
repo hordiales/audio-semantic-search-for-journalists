@@ -138,7 +138,17 @@ ANTHROPIC_API_KEY=sk-ant-...
 DEFAULT_WHISPER_MODEL=base
 DEFAULT_AUDIO_EMBEDDING_MODEL=yamnet
 USE_MOCK_AUDIO=false
+
+# Nivel de logging (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+# Por defecto: DEBUG (para desarrollo)
+# Para producción, cambiar a INFO
+LOG_LEVEL=INFO
 ```
+
+**Nota sobre LOG_LEVEL**:
+- El valor por defecto es `DEBUG` para facilitar el desarrollo
+- Para producción o cuando no necesites logs detallados, configura `LOG_LEVEL=INFO` en tu archivo `.env`
+- Esto afecta a todos los scripts del proyecto, incluyendo `scripts/fix_ruff_errors.py`
 
 Ver `src/config_loader.py` para todas las opciones.
 
@@ -193,6 +203,6 @@ Este proyecto está bajo la licencia GPLv3. Ver `LICENSE` para más detalles.
 
 ---
 
-**Versión**: 1.0.0  
-**Python**: 3.11.13 (requerido exactamente)  
+**Versión**: 1.0.0
+**Python**: 3.11.13 (requerido exactamente)
 **Última actualización**: Enero 2025
