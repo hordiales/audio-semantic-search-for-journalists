@@ -115,6 +115,15 @@ audio-semantic-search-for-journalists/
 │   ├── audio_embeddings.py
 │   ├── semantic_search.py
 │   └── ...
+├── benchmarks/             # Scripts de benchmarks y comparación
+├── tools/                  # Herramientas y utilidades
+│   ├── database/           # Scripts de bases de datos
+│   └── setup/              # Scripts de configuración
+├── examples/               # Ejemplos y demos
+│   └── demos/              # Scripts de demostración
+├── scripts/                # Scripts de utilidad general
+│   ├── sql/                # Scripts SQL
+│   └── shell/              # Scripts shell
 ├── doc/                    # Documentación
 ├── tests/                  # Tests
 ├── mcp_server/            # Servidor MCP
