@@ -3,18 +3,18 @@ Sistema de configuración para bases de datos vectoriales.
 Permite configurar y cambiar entre FAISS, ChromaDB y Supabase fácilmente.
 """
 
-import os
+from dataclasses import dataclass, field
+from enum import Enum
 import json
 import logging
+import os
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
-from dataclasses import dataclass, asdict, field
-from enum import Enum
+from typing import Any
 
 try:
-    from .vector_database_interface import VectorDBType, VectorDBConfig
+    from .vector_database_interface import VectorDBConfig, VectorDBType
 except ImportError:
-    from vector_database_interface import VectorDBType, VectorDBConfig
+    from vector_database_interface import VectorDBConfig, VectorDBType
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +35,9 @@ class VectorDatabaseSettings:
     similarity_metric: str = "cosine"
 
     # Configuraciones específicas por DB
-    faiss_config: Dict[str, Any] = field(default_factory=dict)
-    chromadb_config: Dict[str, Any] = field(default_factory=dict)
-    supabase_config: Dict[str, Any] = field(default_factory=dict)
+    faiss_config: dict[str, Any] = field(default_factory=dict)
+    chromadb_config: dict[str, Any] = field(default_factory=dict)
+    supabase_config: dict[str, Any] = field(default_factory=dict)
 
     # Configuración de fallback
     fallback_database: VectorDBType = VectorDBType.MEMORY
@@ -56,7 +56,7 @@ class VectorDatabaseSettings:
 class VectorDatabaseConfigurator:
     """Gestiona la configuración de bases de datos vectoriales"""
 
-    def __init__(self, config_file: Optional[str] = None):
+    def __init__(self, config_file: str | None = None):
         self.config_file = config_file or "vector_db_config.json"
         self.settings = VectorDatabaseSettings()
         self._load_config()
@@ -66,14 +66,14 @@ class VectorDatabaseConfigurator:
         try:
             config_path = Path(self.config_file)
             if config_path.exists():
-                with open(config_path, 'r', encoding='utf-8') as f:
+                with open(config_path, encoding='utf-8') as f:
                     config_data = json.load(f)
 
                 # Actualizar configuración
                 self._update_settings_from_dict(config_data)
                 logger.info(f"📋 Configuración cargada desde: {config_path}")
             else:
-                logger.info(f"📋 Archivo de configuración no encontrado, usando valores por defecto")
+                logger.info("📋 Archivo de configuración no encontrado, usando valores por defecto")
                 self._load_from_environment()
         except Exception as e:
             logger.error(f"❌ Error cargando configuración: {e}")
@@ -156,7 +156,7 @@ class VectorDatabaseConfigurator:
 
         self.settings.supabase_config.update(supabase_config)
 
-    def _update_settings_from_dict(self, config_data: Dict[str, Any]):
+    def _update_settings_from_dict(self, config_data: dict[str, Any]):
         """Actualiza configuración desde diccionario"""
         try:
             # Configuración principal
@@ -222,7 +222,7 @@ class VectorDatabaseConfigurator:
             logger.error(f"❌ Error guardando configuración: {e}")
             return False
 
-    def get_vector_db_config(self, db_type: Optional[VectorDBType] = None) -> VectorDBConfig:
+    def get_vector_db_config(self, db_type: VectorDBType | None = None) -> VectorDBConfig:
         """Genera configuración VectorDBConfig para la base de datos especificada"""
         if db_type is None:
             db_type = self.settings.active_database
@@ -326,7 +326,7 @@ class VectorDatabaseConfigurator:
             'collection_name': 'demo_audio_embeddings'
         })
 
-    def validate_configuration(self) -> Dict[str, bool]:
+    def validate_configuration(self) -> dict[str, bool]:
         """Valida la configuración actual"""
         validation_results = {}
 
@@ -373,7 +373,7 @@ class VectorDatabaseConfigurator:
         except:
             return False
 
-    def get_status_report(self) -> Dict[str, Any]:
+    def get_status_report(self) -> dict[str, Any]:
         """Genera reporte de estado de la configuración"""
         validation_results = self.validate_configuration()
 
@@ -399,9 +399,9 @@ class VectorDatabaseConfigurator:
         logger.info(f"🔄 Base de datos cambiada: {old_db.value} → {new_db_type.value}")
 
 # Instancia global del configurador
-_global_configurator: Optional[VectorDatabaseConfigurator] = None
+_global_configurator: VectorDatabaseConfigurator | None = None
 
-def get_configurator(config_file: Optional[str] = None) -> VectorDatabaseConfigurator:
+def get_configurator(config_file: str | None = None) -> VectorDatabaseConfigurator:
     """Obtiene la instancia global del configurador"""
     global _global_configurator
 

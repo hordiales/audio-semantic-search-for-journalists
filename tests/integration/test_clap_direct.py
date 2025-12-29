@@ -4,10 +4,9 @@ Test directo de CLAP con timeout
 """
 
 import os
-import sys
-import time
-import signal
 from pathlib import Path
+import signal
+import time
 
 # Configurar warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -62,7 +61,7 @@ def test_clap_with_timeout():
 
         embed_time = time.time() - embed_start
 
-        print(f"✅ Embedding generado:")
+        print("✅ Embedding generado:")
         print(f"   📏 Dimensión: {len(embedding_np)}")
         print(f"   ⏱️  Tiempo: {embed_time:.1f}s")
         print(f"   📊 Preview: {embedding_np[:5]}")
@@ -76,7 +75,7 @@ def test_clap_with_timeout():
 
         text_time = time.time() - text_start
 
-        print(f"✅ Embedding de texto generado:")
+        print("✅ Embedding de texto generado:")
         print(f"   📏 Dimensión: {len(text_embedding_np)}")
         print(f"   ⏱️  Tiempo: {text_time:.1f}s")
 

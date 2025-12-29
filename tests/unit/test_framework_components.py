@@ -4,10 +4,9 @@ Test de componentes individuales del framework sin cargar modelos pesados.
 Verifica que cada componente funcione independientemente.
 """
 
-import sys
-import os
 import logging
 from pathlib import Path
+import sys
 
 CURRENT_FILE = Path(__file__).resolve()
 TESTS_ROOT = CURRENT_FILE
@@ -16,7 +15,7 @@ while TESTS_ROOT.name != "tests" and TESTS_ROOT.parent != TESTS_ROOT:
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-from tests.common.path_utils import artifacts_dir, ensure_sys_path, SRC_ROOT
+from tests.common.path_utils import SRC_ROOT, artifacts_dir, ensure_sys_path
 
 COMPONENTS_ARTIFACTS = artifacts_dir("components")
 
@@ -33,7 +32,6 @@ def test_imports():
     # Test import de generador de datos
     try:
         ensure_sys_path([SRC_ROOT])
-        from test_data_generator import SyntheticTestDataGenerator
         results['test_data_generator'] = True
         print("✅ test_data_generator importado")
     except Exception as e:
@@ -42,7 +40,6 @@ def test_imports():
 
     # Test import de visualization dashboard
     try:
-        from visualization_dashboard import EmbeddingVisualizationDashboard
         results['visualization_dashboard'] = True
         print("✅ visualization_dashboard importado")
     except Exception as e:
@@ -51,7 +48,6 @@ def test_imports():
 
     # Test import de embedding evaluation framework
     try:
-        from embedding_evaluation_framework import EmbeddingBenchmark, TestCase, EvaluationMetrics
         results['embedding_evaluation_framework'] = True
         print("✅ embedding_evaluation_framework importado")
     except Exception as e:
@@ -60,7 +56,6 @@ def test_imports():
 
     # Test import de models config
     try:
-        from models_config import get_models_config, AudioEmbeddingModel
         results['models_config'] = True
         print("✅ models_config importado")
     except Exception as e:
@@ -69,7 +64,6 @@ def test_imports():
 
     # Test import de audio embeddings (sin cargar modelos)
     try:
-        from audio_embeddings import AudioEmbeddingGenerator
         results['audio_embeddings'] = True
         print("✅ audio_embeddings importado")
     except Exception as e:
@@ -178,7 +172,6 @@ def test_visualization_creation():
 
     try:
         import matplotlib.pyplot as plt
-        import numpy as np
 
         # Datos sintéticos para prueba
         models = ['Model A', 'Model B', 'Model C']
@@ -209,7 +202,10 @@ def test_config_loading():
 
     try:
         ensure_sys_path([SRC_ROOT])
-        from models_config import get_models_config, AudioEmbeddingModel, ModelsConfigLoader
+        from models_config import (
+            AudioEmbeddingModel,
+            ModelsConfigLoader,
+        )
 
         # Test enum
         assert AudioEmbeddingModel.YAMNET.value == "yamnet"
@@ -237,7 +233,11 @@ def test_framework_structure():
 
     try:
         ensure_sys_path([SRC_ROOT])
-        from embedding_evaluation_framework import EmbeddingBenchmark, TestCase, EvaluationMetrics
+        from embedding_evaluation_framework import (
+            EmbeddingBenchmark,
+            EvaluationMetrics,
+            TestCase,
+        )
 
         # Test creación de TestCase
         test_case = TestCase(

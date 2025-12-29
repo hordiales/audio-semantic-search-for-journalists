@@ -3,11 +3,9 @@
 Verifica si el sistema puede ejecutar YAMNet real
 """
 
-import sys
-import subprocess
 import importlib
-
 import logging
+import sys
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', stream=sys.stderr)
@@ -16,20 +14,19 @@ def check_python_version():
     """Verifica la versión de Python"""
     version = sys.version_info
     logging.info(f"🐍 Python: {version.major}.{version.minor}.{version.micro}")
-    
+
     if version.major == 3 and 8 <= version.minor <= 11:
         logging.info("✅ Versión de Python compatible con TensorFlow")
         return True
-    else:
-        logging.error("❌ Versión de Python no compatible (necesita 3.8-3.11)")
-        return False
+    logging.error("❌ Versión de Python no compatible (necesita 3.8-3.11)")
+    return False
 
 def check_tensorflow():
     """Verifica TensorFlow"""
     try:
         import tensorflow as tf
         logging.info(f"✅ TensorFlow: {tf.__version__}")
-        
+
         # Verificar GPU
         gpus = tf.config.list_physical_devices('GPU')
         if gpus:
@@ -38,7 +35,7 @@ def check_tensorflow():
                 logging.info(f"   GPU {i}: {gpu.name}")
         else:
             logging.info("💻 Solo CPU disponible (más lento)")
-        
+
         return True
     except ImportError:
         logging.error("❌ TensorFlow no instalado")
@@ -48,7 +45,7 @@ def check_tensorflow_hub():
     """Verifica TensorFlow Hub"""
     try:
         import tensorflow_hub as hub
-        logging.info(f"✅ TensorFlow Hub disponible")
+        logging.info("✅ TensorFlow Hub disponible")
         return True
     except ImportError:
         logging.error("❌ TensorFlow Hub no instalado")
@@ -61,7 +58,7 @@ def check_audio_libraries():
         'soundfile': 'Lectura/escritura de archivos de audio',
         'resampy': 'Remuestreo de audio (opcional)',
     }
-    
+
     all_available = True
     for lib, description in libraries.items():
         try:
@@ -70,7 +67,7 @@ def check_audio_libraries():
         except ImportError:
             logging.error(f"❌ {lib}: {description} - NO INSTALADO")
             all_available = False
-    
+
     return all_available
 
 def check_disk_space():
@@ -79,13 +76,12 @@ def check_disk_space():
     total, used, free = shutil.disk_usage('/')
     free_gb = free // (1024**3)
     logging.info(f"💾 Espacio libre: {free_gb} GB")
-    
+
     if free_gb >= 2:
         logging.info("✅ Suficiente espacio para modelo YAMNet (~500MB)")
         return True
-    else:
-        logging.error("❌ Poco espacio en disco")
-        return False
+    logging.error("❌ Poco espacio en disco")
+    return False
 
 def check_internet():
     """Verifica conexión a internet"""
@@ -100,15 +96,15 @@ def check_internet():
 
 def estimate_processing_time():
     """Estima tiempo de procesamiento"""
-    logging.info(f"\n⏱️  Estimación de Tiempos (31,954 segmentos):")
-    logging.info(f"  💻 Solo CPU: ~8-12 horas")
-    logging.info(f"  🚀 Con GPU: ~2-4 horas")
-    logging.info(f"  📊 Dependiente de duración promedio de segmentos")
+    logging.info("\n⏱️  Estimación de Tiempos (31,954 segmentos):")
+    logging.info("  💻 Solo CPU: ~8-12 horas")
+    logging.info("  🚀 Con GPU: ~2-4 horas")
+    logging.info("  📊 Dependiente de duración promedio de segmentos")
 
 def print_installation_instructions():
     """Imprime instrucciones de instalación"""
-    logging.info(f"\n🔧 Instrucciones de Instalación:")
-    logging.info(f"""
+    logging.info("\n🔧 Instrucciones de Instalación:")
+    logging.info("""
 # Instalar TensorFlow (CPU)
 pip install tensorflow
 
@@ -129,9 +125,9 @@ python -c "import tensorflow_hub as hub; print('TF Hub OK')"
 def main():
     logging.info("🔍 Verificación de Requisitos para YAMNet Real")
     logging.info("=" * 50)
-    
+
     all_good = True
-    
+
     # Verificaciones
     all_good &= check_python_version()
     all_good &= check_tensorflow()
@@ -139,17 +135,17 @@ def main():
     all_good &= check_audio_libraries()
     all_good &= check_disk_space()
     all_good &= check_internet()
-    
+
     estimate_processing_time()
-    
-    logging.info(f"\n📊 RESUMEN:")
+
+    logging.info("\n📊 RESUMEN:")
     if all_good:
         logging.info("✅ Sistema listo para YAMNet real")
         logging.info("🚀 Puedes proceder con la generación de embeddings reales")
     else:
         logging.error("❌ Faltan requisitos para YAMNet real")
         print_installation_instructions()
-    
+
     return all_good
 
 

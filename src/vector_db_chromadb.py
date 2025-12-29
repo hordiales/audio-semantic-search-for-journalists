@@ -3,17 +3,27 @@ Implementación de base de datos vectorial usando ChromaDB
 Ideal para prototipado y desarrollo de aplicaciones de búsqueda semántica.
 """
 
-import numpy as np
-from typing import List, Dict, Any, Optional
 import logging
 from pathlib import Path
 import time
-import uuid
+from typing import Any
+
+import numpy as np
 
 try:
-    from .vector_database_interface import VectorDatabaseInterface, VectorDBConfig, VectorDocument, SearchResult
+    from .vector_database_interface import (
+        SearchResult,
+        VectorDatabaseInterface,
+        VectorDBConfig,
+        VectorDocument,
+    )
 except ImportError:
-    from vector_database_interface import VectorDatabaseInterface, VectorDBConfig, VectorDocument, SearchResult
+    from vector_database_interface import (
+        SearchResult,
+        VectorDatabaseInterface,
+        VectorDBConfig,
+        VectorDocument,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +50,7 @@ class ChromaVectorDatabase(VectorDatabaseInterface):
     def initialize(self) -> bool:
         """Inicializa ChromaDB"""
         try:
-            logger.info(f"🍊 Inicializando ChromaDB...")
+            logger.info("🍊 Inicializando ChromaDB...")
 
             # Configurar cliente
             if self.config.chromadb_path:
@@ -95,15 +105,14 @@ class ChromaVectorDatabase(VectorDatabaseInterface):
         """Mapea la métrica de similitud a función de distancia de ChromaDB"""
         if self.config.similarity_metric == "cosine":
             return "cosine"
-        elif self.config.similarity_metric == "euclidean":
+        if self.config.similarity_metric == "euclidean":
             return "l2"
-        elif self.config.similarity_metric == "dot_product":
+        if self.config.similarity_metric == "dot_product":
             return "ip"  # inner product
-        else:
-            logger.warning(f"⚠️  Métrica no reconocida: {self.config.similarity_metric}, usando cosine")
-            return "cosine"
+        logger.warning(f"⚠️  Métrica no reconocida: {self.config.similarity_metric}, usando cosine")
+        return "cosine"
 
-    def add_documents(self, documents: List[VectorDocument]) -> bool:
+    def add_documents(self, documents: list[VectorDocument]) -> bool:
         """Añade documentos a ChromaDB"""
         if not self.is_initialized:
             logger.error("❌ ChromaDB no está inicializado")
@@ -166,7 +175,7 @@ class ChromaVectorDatabase(VectorDatabaseInterface):
             return False
 
     def search(self, query_embedding: np.ndarray, k: int = 10,
-               filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
+               filters: dict[str, Any] | None = None) -> list[SearchResult]:
         """Busca documentos similares usando ChromaDB"""
         if not self.is_initialized:
             return []
@@ -239,7 +248,7 @@ class ChromaVectorDatabase(VectorDatabaseInterface):
             logger.error(f"❌ Error en búsqueda ChromaDB: {e}")
             return []
 
-    def _build_where_clause(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_where_clause(self, filters: dict[str, Any]) -> dict[str, Any]:
         """Construye cláusula WHERE para ChromaDB"""
         where_clause = {}
 
@@ -271,7 +280,7 @@ class ChromaVectorDatabase(VectorDatabaseInterface):
             logger.error(f"❌ Error eliminando documento {document_id}: {e}")
             return False
 
-    def get_document(self, document_id: str) -> Optional[VectorDocument]:
+    def get_document(self, document_id: str) -> VectorDocument | None:
         """Obtiene un documento por ID"""
         if not self.is_initialized:
             return None
@@ -339,7 +348,7 @@ class ChromaVectorDatabase(VectorDatabaseInterface):
             logger.error(f"❌ Error actualizando documento {document.id}: {e}")
             return False
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Obtiene estadísticas de ChromaDB"""
         stats = {
             "db_type": "chromadb",
@@ -373,18 +382,16 @@ class ChromaVectorDatabase(VectorDatabaseInterface):
         if self.config.chromadb_path:
             logger.info(f"💾 ChromaDB usa persistencia automática en: {self.config.chromadb_path}")
             return True
-        else:
-            logger.warning("⚠️  ChromaDB en memoria, no se puede guardar")
-            return False
+        logger.warning("⚠️  ChromaDB en memoria, no se puede guardar")
+        return False
 
     def load_index(self, path: str) -> bool:
         """ChromaDB carga automáticamente desde el directorio persistente"""
         if self.config.chromadb_path and Path(self.config.chromadb_path).exists():
             logger.info(f"📂 ChromaDB carga automáticamente desde: {self.config.chromadb_path}")
             return True
-        else:
-            logger.warning(f"⚠️  Directorio no encontrado: {path}")
-            return False
+        logger.warning(f"⚠️  Directorio no encontrado: {path}")
+        return False
 
     def clear(self) -> bool:
         """Limpia la colección ChromaDB"""
@@ -410,7 +417,7 @@ class ChromaVectorDatabase(VectorDatabaseInterface):
             logger.error(f"❌ Error limpiando ChromaDB: {e}")
             return False
 
-    def get_all_documents(self, limit: Optional[int] = None) -> List[VectorDocument]:
+    def get_all_documents(self, limit: int | None = None) -> list[VectorDocument]:
         """Obtiene todos los documentos de la colección"""
         if not self.is_initialized:
             return []
@@ -450,7 +457,7 @@ class ChromaVectorDatabase(VectorDatabaseInterface):
             logger.error(f"❌ Error obteniendo todos los documentos: {e}")
             return []
 
-    def get_collections(self) -> List[str]:
+    def get_collections(self) -> list[str]:
         """Obtiene lista de colecciones disponibles"""
         if not self.is_initialized:
             return []

@@ -3,17 +3,28 @@ Implementación de base de datos vectorial usando FAISS
 Optimizada para búsquedas rápidas de similitud en embeddings de audio.
 """
 
-import numpy as np
-from typing import List, Dict, Any, Optional
 import logging
-import pickle
 from pathlib import Path
+import pickle
 import time
+from typing import Any
+
+import numpy as np
 
 try:
-    from .vector_database_interface import VectorDatabaseInterface, VectorDBConfig, VectorDocument, SearchResult
+    from .vector_database_interface import (
+        SearchResult,
+        VectorDatabaseInterface,
+        VectorDBConfig,
+        VectorDocument,
+    )
 except ImportError:
-    from vector_database_interface import VectorDatabaseInterface, VectorDBConfig, VectorDocument, SearchResult
+    from vector_database_interface import (
+        SearchResult,
+        VectorDatabaseInterface,
+        VectorDBConfig,
+        VectorDocument,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +42,9 @@ class FAISSVectorDatabase(VectorDatabaseInterface):
     def __init__(self, config: VectorDBConfig):
         super().__init__(config)
         self.index = None
-        self.documents: Dict[str, VectorDocument] = {}
-        self.id_to_faiss_id: Dict[str, int] = {}
-        self.faiss_id_to_id: Dict[int, str] = {}
+        self.documents: dict[str, VectorDocument] = {}
+        self.id_to_faiss_id: dict[str, int] = {}
+        self.faiss_id_to_id: dict[int, str] = {}
         self.next_faiss_id = 0
 
         if not FAISS_AVAILABLE:
@@ -94,7 +105,7 @@ class FAISSVectorDatabase(VectorDatabaseInterface):
             logger.error(f"❌ Error inicializando FAISS: {e}")
             return False
 
-    def add_documents(self, documents: List[VectorDocument]) -> bool:
+    def add_documents(self, documents: list[VectorDocument]) -> bool:
         """Añade documentos al índice FAISS"""
         if not self.is_initialized:
             logger.error("❌ FAISS no está inicializado")
@@ -150,7 +161,7 @@ class FAISSVectorDatabase(VectorDatabaseInterface):
             return False
 
     def search(self, query_embedding: np.ndarray, k: int = 10,
-               filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
+               filters: dict[str, Any] | None = None) -> list[SearchResult]:
         """Busca documentos similares usando FAISS"""
         if not self.is_initialized or self.index.ntotal == 0:
             return []
@@ -171,9 +182,8 @@ class FAISSVectorDatabase(VectorDatabaseInterface):
             if filters:
                 # Búsqueda con filtros (menos eficiente pero necesaria)
                 return self._search_with_filters(query, k, filters)
-            else:
-                # Búsqueda directa
-                distances, indices = self.index.search(query, k)
+            # Búsqueda directa
+            distances, indices = self.index.search(query, k)
 
             search_time = time.time() - start_time
 
@@ -217,7 +227,7 @@ class FAISSVectorDatabase(VectorDatabaseInterface):
             return []
 
     def _search_with_filters(self, query: np.ndarray, k: int,
-                           filters: Dict[str, Any]) -> List[SearchResult]:
+                           filters: dict[str, Any]) -> list[SearchResult]:
         """Búsqueda con filtros aplicados post-procesamiento"""
         # Buscar más resultados para compensar filtrado
         search_k = min(k * 10, self.index.ntotal)
@@ -258,12 +268,10 @@ class FAISSVectorDatabase(VectorDatabaseInterface):
 
         return results
 
-    def _matches_filters(self, doc: VectorDocument, filters: Dict[str, Any]) -> bool:
+    def _matches_filters(self, doc: VectorDocument, filters: dict[str, Any]) -> bool:
         """Verifica si un documento coincide con los filtros"""
         for key, value in filters.items():
-            if key == "category" and doc.category != value:
-                return False
-            elif key in doc.metadata and doc.metadata[key] != value:
+            if (key == "category" and doc.category != value) or (key in doc.metadata and doc.metadata[key] != value):
                 return False
         return True
 
@@ -284,7 +292,7 @@ class FAISSVectorDatabase(VectorDatabaseInterface):
 
         return False
 
-    def get_document(self, document_id: str) -> Optional[VectorDocument]:
+    def get_document(self, document_id: str) -> VectorDocument | None:
         """Obtiene un documento por ID"""
         return self.documents.get(document_id)
 
@@ -298,7 +306,7 @@ class FAISSVectorDatabase(VectorDatabaseInterface):
             return True
         return False
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Obtiene estadísticas del índice FAISS"""
         stats = {
             "db_type": "faiss",
@@ -413,7 +421,7 @@ class FAISSVectorDatabase(VectorDatabaseInterface):
             logger.error(f"❌ Error limpiando índice FAISS: {e}")
             return False
 
-    def rebuild_index(self, remove_document_ids: Optional[List[str]] = None) -> bool:
+    def rebuild_index(self, remove_document_ids: list[str] | None = None) -> bool:
         """Reconstruye el índice excluyendo documentos específicos"""
         try:
             if remove_document_ids:

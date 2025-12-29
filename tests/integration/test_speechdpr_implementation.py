@@ -4,10 +4,9 @@ Script de prueba para la implementación de SpeechDPR.
 Verifica que el modelo se pueda cargar correctamente y generar embeddings.
 """
 
-import sys
-import os
 import logging
 from pathlib import Path
+import sys
 
 CURRENT_FILE = Path(__file__).resolve()
 TESTS_ROOT = CURRENT_FILE
@@ -16,7 +15,7 @@ while TESTS_ROOT.name != "tests" and TESTS_ROOT.parent != TESTS_ROOT:
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-from tests.common.path_utils import ensure_sys_path, SRC_ROOT
+from tests.common.path_utils import SRC_ROOT, ensure_sys_path
 
 ensure_sys_path([SRC_ROOT])
 
@@ -56,10 +55,10 @@ def test_speechdpr_import():
 
     try:
         from speechdpr_audio_embeddings import (
+            SPEECHDPR_AVAILABLE,
             SpeechDPRAudioEmbeddingGenerator,
             SpeechDPRConfig,
             get_speechdpr_embedding_generator,
-            SPEECHDPR_AVAILABLE
         )
 
         print("✅ Módulo SpeechDPR importado correctamente")
@@ -77,10 +76,8 @@ def test_config_integration():
 
     try:
         from models_config import (
-            get_models_config,
             AudioEmbeddingModel,
-            SpeechDPRConfig,
-            ModelsConfigLoader
+            get_models_config,
         )
 
         # Verificar que SpeechDPR está en el enum
@@ -115,14 +112,17 @@ def test_speechdpr_initialization():
     print("\n🚀 Probando inicialización de SpeechDPR...")
 
     try:
-        from speechdpr_audio_embeddings import get_speechdpr_embedding_generator, SpeechDPRConfig
+        from speechdpr_audio_embeddings import (
+            SpeechDPRConfig,
+            get_speechdpr_embedding_generator,
+        )
 
         # Crear configuración de prueba (modelos más pequeños si es posible)
         test_config = SpeechDPRConfig()
         test_config.speech_encoder_model = "facebook/hubert-base-ls960"  # Modelo más pequeño
         test_config.max_audio_length = 10  # Duración más corta para pruebas
 
-        print(f"📋 Configuración de prueba:")
+        print("📋 Configuración de prueba:")
         print(f"   Speech Encoder: {test_config.speech_encoder_model}")
         print(f"   Text Encoder: {test_config.text_encoder_model}")
         print(f"   Device: {test_config.device}")
@@ -147,7 +147,10 @@ def test_text_embedding():
     print("\n📝 Probando generación de embedding de texto...")
 
     try:
-        from speechdpr_audio_embeddings import get_speechdpr_embedding_generator, SpeechDPRConfig
+        from speechdpr_audio_embeddings import (
+            SpeechDPRConfig,
+            get_speechdpr_embedding_generator,
+        )
 
         test_config = SpeechDPRConfig()
         test_config.speech_encoder_model = "facebook/hubert-base-ls960"
@@ -161,7 +164,7 @@ def test_text_embedding():
         # Generar embedding
         text_embedding = embedder.generate_text_embedding(test_text)
 
-        print(f"✅ Embedding de texto generado")
+        print("✅ Embedding de texto generado")
         print(f"📊 Shape: {text_embedding.shape}")
         print(f"📈 Tipo: {type(text_embedding)}")
         print(f"🔢 Primeros valores: {text_embedding[:5]}")

@@ -4,9 +4,9 @@ Prueba rápida del sistema de benchmark de embeddings.
 Ejecuta una evaluación pequeña para verificar que todo funciona.
 """
 
-import sys
 import logging
 from pathlib import Path
+import sys
 
 CURRENT_FILE = Path(__file__).resolve()
 TESTS_ROOT = CURRENT_FILE
@@ -98,9 +98,8 @@ def test_quick_benchmark():
 
             print(f"\n✅ Prueba completada. Resultados en: {benchmark.output_dir}")
             return True
-        else:
-            print("❌ Error en evaluación")
-            return False
+        print("❌ Error en evaluación")
+        return False
 
     except Exception as e:
         print(f"❌ Error en prueba: {e}")

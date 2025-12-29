@@ -4,12 +4,9 @@ Prueba simplificada del sistema de benchmark.
 Evita problemas de imports y se enfoca en funcionalidad básica.
 """
 
-import sys
-import os
 import logging
-import numpy as np
-import pandas as pd
 from pathlib import Path
+import sys
 
 CURRENT_FILE = Path(__file__).resolve()
 TESTS_ROOT = CURRENT_FILE
@@ -18,7 +15,7 @@ while TESTS_ROOT.name != "tests" and TESTS_ROOT.parent != TESTS_ROOT:
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-from tests.common.path_utils import artifacts_dir, ensure_sys_path, SRC_ROOT
+from tests.common.path_utils import SRC_ROOT, artifacts_dir, ensure_sys_path
 
 SIMPLE_ARTIFACTS = artifacts_dir("simple_benchmark")
 
@@ -82,7 +79,7 @@ def test_bertscore():
         # Calcular BERTScore
         P, R, F1 = bert_score(predictions, references, lang="es", verbose=False)
 
-        print(f"✅ BERTScore calculado:")
+        print("✅ BERTScore calculado:")
         print(f"   Precision: {P.mean():.3f}")
         print(f"   Recall: {R.mean():.3f}")
         print(f"   F1: {F1.mean():.3f}")
@@ -120,7 +117,7 @@ def test_sentence_similarity():
         # Calcular similitudes
         similarities = cosine_similarity(embeddings)
 
-        print(f"✅ Similitudes calculadas:")
+        print("✅ Similitudes calculadas:")
         print(f"   Economía-Política: {similarities[0,1]:.3f}")
         print(f"   Economía-Tecnología: {similarities[0,2]:.3f}")
 
@@ -139,7 +136,6 @@ def test_visualization():
 
     try:
         import matplotlib.pyplot as plt
-        import seaborn as sns
 
         # Datos sintéticos para prueba
         models = ['YAMNet', 'SpeechDPR', 'CLAP']
@@ -179,7 +175,6 @@ def test_metrics_calculation():
     print("🎯 Probando métricas de recuperación...")
 
     try:
-        from sklearn.metrics import precision_score, recall_score
 
         # Simular resultados de búsqueda
         # Ground truth: elementos 1, 3, 5 son relevantes
@@ -192,7 +187,7 @@ def test_metrics_calculation():
         precision_at_5 = len(set(top_5_results).intersection(set(ground_truth))) / 5
         recall_at_5 = len(set(top_5_results).intersection(set(ground_truth))) / len(ground_truth)
 
-        print(f"✅ Métricas calculadas:")
+        print("✅ Métricas calculadas:")
         print(f"   Precision@5: {precision_at_5:.3f}")
         print(f"   Recall@5: {recall_at_5:.3f}")
 

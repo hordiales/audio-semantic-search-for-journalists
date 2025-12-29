@@ -4,12 +4,12 @@ Test de integración del vector database de Supabase con el sistema existente
 Prueba la configuración sin necesidad de conectar a Supabase real
 """
 
-import sys
 import os
-import time
+from pathlib import Path
+import sys
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
 CURRENT_FILE = Path(__file__).resolve()
 TESTS_ROOT = CURRENT_FILE
@@ -18,7 +18,7 @@ while TESTS_ROOT.name != "tests" and TESTS_ROOT.parent != TESTS_ROOT:
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-from tests.common.path_utils import ensure_sys_path, SRC_ROOT, resources_dir
+from tests.common.path_utils import SRC_ROOT, ensure_sys_path, resources_dir
 
 ensure_sys_path([SRC_ROOT])
 
@@ -30,7 +30,7 @@ def test_supabase_configuration():
     print("=" * 60)
 
     try:
-        from vector_database_config import get_configurator, ConfigurationPreset
+        from vector_database_config import ConfigurationPreset, get_configurator
         from vector_database_interface import VectorDBType
 
         # Test 1: Configuración con preset PRODUCTION
@@ -62,7 +62,7 @@ def test_supabase_configuration():
 
         # Obtener configuración actualizada
         updated_config = configurator.get_vector_db_config(VectorDBType.SUPABASE)
-        print(f"   ✅ Variables aplicadas correctamente")
+        print("   ✅ Variables aplicadas correctamente")
 
         # Restaurar valores originales
         for key, value in original_env.items():
@@ -85,8 +85,8 @@ def test_supabase_vector_database_class():
     print("=" * 60)
 
     try:
-        from vector_db_supabase import SupabaseVectorDatabase
         from vector_database_interface import VectorDBConfig, VectorDBType
+        from vector_db_supabase import SupabaseVectorDatabase
 
         # Crear configuración de prueba
         config = VectorDBConfig(
@@ -340,9 +340,8 @@ def main():
         print("   4. Ejecutar: python migrate_to_supabase.py")
         print("   5. ¡Disfrutar búsquedas vectoriales en la nube!")
         return 0
-    else:
-        print("⚠️  Algunos tests fallaron. Revisar configuración.")
-        return 1
+    print("⚠️  Algunos tests fallaron. Revisar configuración.")
+    return 1
 
 if __name__ == "__main__":
     try:

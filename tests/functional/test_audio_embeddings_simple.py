@@ -4,14 +4,14 @@ Test simple de generación de embeddings de audio
 Genera embeddings localmente y los compara sin usar la base de datos
 """
 
+from dataclasses import dataclass
+import json
 import os
+from pathlib import Path
 import sys
 import time
-import json
+
 import numpy as np
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass
 
 CURRENT_FILE = Path(__file__).resolve()
 TESTS_ROOT = CURRENT_FILE
@@ -31,7 +31,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 class EmbeddingResult:
     """Resultado de generar embedding"""
     success: bool
-    embedding: Optional[np.ndarray] = None
+    embedding: np.ndarray | None = None
     dimension: int = 0
     confidence: float = 0.0
     processing_time_ms: int = 0
@@ -51,7 +51,6 @@ class SimpleAudioEmbeddingTester:
             return self._loaded_models['yamnet']
 
         try:
-            import tensorflow as tf
             import tensorflow_hub as hub
 
             print("🔄 Cargando YAMNet...")
@@ -98,8 +97,8 @@ class SimpleAudioEmbeddingTester:
                     model_name="yamnet"
                 )
 
-            import tensorflow as tf
             import librosa
+            import tensorflow as tf
 
             # Cargar audio
             audio, sr = librosa.load(audio_path, sr=16000, mono=True)
@@ -130,7 +129,7 @@ class SimpleAudioEmbeddingTester:
             return EmbeddingResult(
                 success=False,
                 processing_time_ms=processing_time,
-                error_message=f"Error YAMNet: {str(e)}",
+                error_message=f"Error YAMNet: {e!s}",
                 model_name="yamnet"
             )
 
@@ -167,11 +166,11 @@ class SimpleAudioEmbeddingTester:
             return EmbeddingResult(
                 success=False,
                 processing_time_ms=processing_time,
-                error_message=f"Error CLAP: {str(e)}",
+                error_message=f"Error CLAP: {e!s}",
                 model_name="clap_laion"
             )
 
-    def find_audio_files(self) -> List[str]:
+    def find_audio_files(self) -> list[str]:
         """Encontrar archivos de audio"""
         search_paths = [
             self.audio_folder,

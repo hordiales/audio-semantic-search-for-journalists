@@ -3,14 +3,12 @@ Sentiment Analysis Module for Text Sentiment Search
 Enables searching by different mood states like angry, happy, sad, etc.
 """
 
-import pandas as pd
-import numpy as np
-from typing import List, Dict, Optional, Tuple, Union
 import logging
-from datetime import datetime
+
+import pandas as pd
 
 try:
-    from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
@@ -27,19 +25,19 @@ class SentimentAnalyzer:
     """
     Analizador de sentimientos para búsqueda por estados de ánimo
     """
-    
+
     # Mapeo de sentimientos en español a categorías estándar
     SENTIMENT_MAPPING = {
         # Emociones positivas
         'feliz': 'POSITIVE',
-        'alegre': 'POSITIVE', 
+        'alegre': 'POSITIVE',
         'contento': 'POSITIVE',
         'optimista': 'POSITIVE',
         'esperanzado': 'POSITIVE',
         'entusiasta': 'POSITIVE',
         'satisfecho': 'POSITIVE',
         'eufórico': 'POSITIVE',
-        
+
         # Emociones negativas
         'triste': 'NEGATIVE',
         'enojado': 'NEGATIVE',
@@ -55,14 +53,14 @@ class SentimentAnalyzer:
         'preocupado': 'NEGATIVE',
         'estresado': 'NEGATIVE',
         'irritado': 'NEGATIVE',
-        
+
         # Emociones neutrales
         'neutral': 'NEUTRAL',
         'calmado': 'NEUTRAL',
         'tranquilo': 'NEUTRAL',
         'sereno': 'NEUTRAL',
         'equilibrado': 'NEUTRAL',
-        
+
         # Sinónimos en inglés
         'happy': 'POSITIVE',
         'sad': 'NEGATIVE',
@@ -75,7 +73,7 @@ class SentimentAnalyzer:
         'worried': 'NEGATIVE',
         'calm': 'NEUTRAL'
     }
-    
+
     def __init__(self, model_name: str = None, logger=None):
         """
         Inicializa el analizador de sentimientos
@@ -86,32 +84,32 @@ class SentimentAnalyzer:
         """
         if not TRANSFORMERS_AVAILABLE:
             raise RuntimeError("Transformers library es requerida para análisis de sentimientos. Instala con: pip install transformers")
-        
+
         self.model_name = model_name or "cardiffnlp/twitter-roberta-base-sentiment-latest"
         self.pipeline = None
         self.tokenizer = None
         self.model = None
         self.log = logger.info if logger else print
         self.log_error = logger.error if logger else lambda msg: print(msg, file=sys.stderr)
-        
+
         try:
             self._initialize_model()
         except Exception as e:
             raise RuntimeError(f"Error inicializando modelo de sentimientos: {e}")
-    
+
     def _initialize_model(self):
         """Inicializa el modelo de análisis de sentimientos"""
         if not TRANSFORMERS_AVAILABLE:
             raise ImportError("Transformers library no disponible")
-        
+
         try:
             # Intentar usar un modelo en español si está disponible
             spanish_models = [
                 "pysentimiento/robertuito-sentiment-analysis",
-                "finiteautomata/beto-sentiment-analysis", 
+                "finiteautomata/beto-sentiment-analysis",
                 "cardiffnlp/twitter-roberta-base-sentiment-latest"
             ]
-            
+
             model_to_use = self.model_name
             if self.model_name == "cardiffnlp/twitter-roberta-base-sentiment-latest":
                 # Probar modelos en español primero
@@ -122,15 +120,15 @@ class SentimentAnalyzer:
                         break
                     except:
                         continue
-            
+
             self.pipeline = pipeline("sentiment-analysis", model=model_to_use)
             logging.info(f"Modelo de sentimientos inicializado: {model_to_use}")
-            
+
         except Exception as e:
             logging.error(f"Error inicializando modelo: {e}")
             raise
-    
-    def analyze_text(self, text: str) -> Dict[str, float]:
+
+    def analyze_text(self, text: str) -> dict[str, float]:
         """
         Analiza el sentimiento de un texto
         
@@ -140,28 +138,28 @@ class SentimentAnalyzer:
         Returns:
             Diccionario con scores de sentimiento
         """
-        
+
         try:
             # Limpiar texto
             text = text.strip()
             if not text:
                 return {'POSITIVE': 0.33, 'NEGATIVE': 0.33, 'NEUTRAL': 0.34}
-            
+
             # Truncar texto si es muy largo
             if len(text) > 512:
                 text = text[:512]
-            
+
             # Realizar análisis
             result = self.pipeline(text)
-            
+
             # Normalizar resultados según el modelo
             return self._normalize_sentiment_result(result)
-            
+
         except Exception as e:
             logging.error(f"Error en análisis de sentimientos: {e}")
             raise RuntimeError(f"Error analizando sentimiento: {e}")
-    
-    def _normalize_sentiment_result(self, result: List[Dict]) -> Dict[str, float]:
+
+    def _normalize_sentiment_result(self, result: list[dict]) -> dict[str, float]:
         """
         Normaliza resultados de diferentes modelos a formato estándar
         
@@ -173,46 +171,46 @@ class SentimentAnalyzer:
         """
         if not result:
             return {'POSITIVE': 0.33, 'NEGATIVE': 0.33, 'NEUTRAL': 0.34}
-        
+
         # Tomar el primer resultado
         sentiment_result = result[0] if isinstance(result, list) else result
-        
+
         label = sentiment_result.get('label', '').upper()
         score = sentiment_result.get('score', 0.0)
-        
+
         # Mapear etiquetas comunes a nuestro formato
         label_mapping = {
             'POSITIVE': 'POSITIVE',
-            'POS': 'POSITIVE', 
+            'POS': 'POSITIVE',
             'LABEL_2': 'POSITIVE',  # RoBERTa
             '2': 'POSITIVE',
-            
+
             'NEGATIVE': 'NEGATIVE',
             'NEG': 'NEGATIVE',
             'LABEL_0': 'NEGATIVE',  # RoBERTa
             '0': 'NEGATIVE',
-            
+
             'NEUTRAL': 'NEUTRAL',
             'NEU': 'NEUTRAL',
             'LABEL_1': 'NEUTRAL',  # RoBERTa
             '1': 'NEUTRAL'
         }
-        
+
         normalized_label = label_mapping.get(label, 'NEUTRAL')
-        
+
         # Crear distribución de probabilidades
         sentiment_scores = {'POSITIVE': 0.0, 'NEGATIVE': 0.0, 'NEUTRAL': 0.0}
         sentiment_scores[normalized_label] = score
-        
+
         # Distribuir el resto de probabilidad
         remaining_prob = 1.0 - score
-        other_labels = [l for l in sentiment_scores.keys() if l != normalized_label]
+        other_labels = [l for l in sentiment_scores if l != normalized_label]
         for other_label in other_labels:
             sentiment_scores[other_label] = remaining_prob / len(other_labels)
-        
+
         return sentiment_scores
-    
-    
+
+
     def process_dataframe(self, df: pd.DataFrame, text_column: str = 'text') -> pd.DataFrame:
         """
         Procesa un DataFrame añadiendo análisis de sentimientos
@@ -226,38 +224,38 @@ class SentimentAnalyzer:
         """
         if text_column not in df.columns:
             raise ValueError(f"Columna '{text_column}' no encontrada en DataFrame")
-        
+
         self.log(f"Analizando sentimientos de {len(df)} textos...")
-        
+
         results = []
         for idx, text in enumerate(df[text_column]):
             if idx % 100 == 0:
                 self.log(f"Procesando texto {idx + 1}/{len(df)}")
-            
+
             sentiment_scores = self.analyze_text(str(text))
             results.append(sentiment_scores)
-        
+
         # Añadir columnas de sentimiento
         df_result = df.copy()
         df_result['sentiment_positive'] = [r['POSITIVE'] for r in results]
         df_result['sentiment_negative'] = [r['NEGATIVE'] for r in results]
         df_result['sentiment_neutral'] = [r['NEUTRAL'] for r in results]
-        
+
         # Determinar sentimiento dominante
         def get_dominant_sentiment(row):
             scores = {
                 'POSITIVE': row['sentiment_positive'],
-                'NEGATIVE': row['sentiment_negative'], 
+                'NEGATIVE': row['sentiment_negative'],
                 'NEUTRAL': row['sentiment_neutral']
             }
             return max(scores, key=scores.get)
-        
+
         df_result['dominant_sentiment'] = df_result.apply(get_dominant_sentiment, axis=1)
-        
+
         self.log("Análisis de sentimientos completado")
         return df_result
-    
-    def search_by_sentiment(self, df: pd.DataFrame, mood_query: str, 
+
+    def search_by_sentiment(self, df: pd.DataFrame, mood_query: str,
                            threshold: float = 0.5, top_k: int = 10) -> pd.DataFrame:
         """
         Busca textos por sentimiento/estado de ánimo
@@ -274,37 +272,37 @@ class SentimentAnalyzer:
         # Mapear consulta a sentimiento
         mood_lower = mood_query.lower().strip()
         target_sentiment = self.SENTIMENT_MAPPING.get(mood_lower)
-        
+
         if not target_sentiment:
             # Buscar coincidencias parciales
             for mood_key, sentiment in self.SENTIMENT_MAPPING.items():
                 if mood_key in mood_lower or mood_lower in mood_key:
                     target_sentiment = sentiment
                     break
-        
+
         if not target_sentiment:
             self.log_error(f"No se pudo mapear '{mood_query}' a un sentimiento conocido")
             return pd.DataFrame()
-        
+
         # Filtrar por sentimiento
         sentiment_column = f'sentiment_{target_sentiment.lower()}'
-        
+
         if sentiment_column not in df.columns:
             self.log_error(f"Columna {sentiment_column} no encontrada. Ejecutar process_dataframe primero.")
             return pd.DataFrame()
-        
+
         # Filtrar por umbral y ordenar por score
         filtered_df = df[df[sentiment_column] >= threshold].copy()
         filtered_df = filtered_df.sort_values(sentiment_column, ascending=False)
-        
+
         # Añadir información de la consulta
         filtered_df['sentiment_query'] = mood_query
         filtered_df['sentiment_type'] = target_sentiment
         filtered_df['sentiment_score'] = filtered_df[sentiment_column]
-        
+
         return filtered_df.head(top_k)
-    
-    def get_sentiment_distribution(self, df: pd.DataFrame) -> Dict[str, int]:
+
+    def get_sentiment_distribution(self, df: pd.DataFrame) -> dict[str, int]:
         """
         Obtiene la distribución de sentimientos en el dataset
         
@@ -316,10 +314,10 @@ class SentimentAnalyzer:
         """
         if 'dominant_sentiment' not in df.columns:
             return {}
-        
+
         return df['dominant_sentiment'].value_counts().to_dict()
-    
-    def get_available_moods(self) -> List[str]:
+
+    def get_available_moods(self) -> list[str]:
         """
         Retorna lista de estados de ánimo disponibles para búsqueda
         
@@ -330,7 +328,7 @@ class SentimentAnalyzer:
 
 
 # Funciones de utilidad
-def analyze_sentiment_dataset(df: pd.DataFrame, text_column: str = 'text', 
+def analyze_sentiment_dataset(df: pd.DataFrame, text_column: str = 'text',
                             model_name: str = None) -> pd.DataFrame:
     """
     Función de conveniencia para analizar sentimientos en un dataset
@@ -347,7 +345,7 @@ def analyze_sentiment_dataset(df: pd.DataFrame, text_column: str = 'text',
     return analyzer.process_dataframe(df, text_column)
 
 
-def search_by_mood(df: pd.DataFrame, mood: str, threshold: float = 0.5, 
+def search_by_mood(df: pd.DataFrame, mood: str, threshold: float = 0.5,
                   top_k: int = 10) -> pd.DataFrame:
     """
     Función de conveniencia para buscar por estado de ánimo
@@ -371,36 +369,36 @@ if __name__ == "__main__":
     sample_data = {
         'text': [
             "Estoy muy feliz con los resultados obtenidos",
-            "Me siento triste por la situación actual", 
+            "Me siento triste por la situación actual",
             "Esto me enoja mucho, es una situación terrible",
             "Es una noticia neutral, sin mayor impacto",
             "¡Excelente trabajo! Me emociona ver el progreso",
             "La situación económica es preocupante y genera ansiedad"
         ]
     }
-    
+
     df = pd.DataFrame(sample_data)
-    
+
     # Inicializar analizador
     if not TRANSFORMERS_AVAILABLE:
         logging.error("❌ Transformers no está disponible. No se pueden ejecutar las pruebas.")
         exit(1)
-    
+
     analyzer = SentimentAnalyzer()
-    
+
     # Procesar sentimientos
     df_with_sentiment = analyzer.process_dataframe(df)
     logging.info("Resultados del análisis:")
     logging.info(df_with_sentiment[['text', 'dominant_sentiment', 'sentiment_positive', 'sentiment_negative']])
-    
+
     # Buscar por estado de ánimo
     happy_results = analyzer.search_by_sentiment(df_with_sentiment, "feliz", threshold=0.5)
     logging.info(f"\nTextos 'felices' encontrados: {len(happy_results)}")
-    
+
     # Mostrar distribución
     distribution = analyzer.get_sentiment_distribution(df_with_sentiment)
     logging.info(f"\nDistribución de sentimientos: {distribution}")
-    
+
     # Mostrar estados de ánimo disponibles
     moods = analyzer.get_available_moods()
     logging.info(f"\nEstados de ánimo disponibles: {moods[:10]}...")  # Primeros 10

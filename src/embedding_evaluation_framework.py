@@ -3,22 +3,20 @@ Framework comprehensivo para evaluación y comparación de diferentes modelos de
 Incluye métricas como BERTScore, similitud semántica, precisión de recuperación y más.
 """
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from typing import List, Dict, Tuple, Optional, Any, Union
 import logging
 import time
+from typing import Any
 import warnings
+
+import numpy as np
+import pandas as pd
+
 warnings.filterwarnings('ignore')
 
-import os
-import sys
-from pathlib import Path
-from dataclasses import dataclass, field
 from collections import defaultdict
+from dataclasses import dataclass, field
 import json
+from pathlib import Path
 
 # Imports condicionales para métricas
 try:
@@ -35,8 +33,12 @@ except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 try:
-    from sklearn.metrics import precision_recall_curve, average_precision_score
-    from sklearn.metrics import ndcg_score, dcg_score
+    from sklearn.metrics import (
+        average_precision_score,
+        dcg_score,
+        ndcg_score,
+        precision_recall_curve,
+    )
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
@@ -66,27 +68,39 @@ def _import_with_fallback():
 
     try:
         # Intentar imports relativos primero
-        from .models_config import get_models_config, AudioEmbeddingModel
         from .audio_embeddings import get_audio_embedding_generator
+        from .models_config import AudioEmbeddingModel, get_models_config
         try:
-            from .clap_audio_embeddings import get_clap_embedding_generator, CLAP_AVAILABLE
+            from .clap_audio_embeddings import (
+                CLAP_AVAILABLE,
+                get_clap_embedding_generator,
+            )
         except ImportError:
             pass
         try:
-            from .speechdpr_audio_embeddings import get_speechdpr_embedding_generator, SPEECHDPR_AVAILABLE
+            from .speechdpr_audio_embeddings import (
+                SPEECHDPR_AVAILABLE,
+                get_speechdpr_embedding_generator,
+            )
         except ImportError:
             pass
     except ImportError:
         # Fallback a imports absolutos
         try:
-            from models_config import get_models_config, AudioEmbeddingModel
             from audio_embeddings import get_audio_embedding_generator
+            from models_config import AudioEmbeddingModel, get_models_config
             try:
-                from clap_audio_embeddings import get_clap_embedding_generator, CLAP_AVAILABLE
+                from clap_audio_embeddings import (
+                    CLAP_AVAILABLE,
+                    get_clap_embedding_generator,
+                )
             except ImportError:
                 pass
             try:
-                from speechdpr_audio_embeddings import get_speechdpr_embedding_generator, SPEECHDPR_AVAILABLE
+                from speechdpr_audio_embeddings import (
+                    SPEECHDPR_AVAILABLE,
+                    get_speechdpr_embedding_generator,
+                )
             except ImportError:
                 pass
         except ImportError as e:
@@ -134,8 +148,8 @@ class EvaluationMetrics:
     bert_score_f1: float = 0.0
 
     # Métricas de recuperación
-    precision_at_k: Dict[int, float] = field(default_factory=dict)
-    recall_at_k: Dict[int, float] = field(default_factory=dict)
+    precision_at_k: dict[int, float] = field(default_factory=dict)
+    recall_at_k: dict[int, float] = field(default_factory=dict)
     map_score: float = 0.0  # Mean Average Precision
     ndcg_score: float = 0.0  # Normalized Discounted Cumulative Gain
 
@@ -158,9 +172,9 @@ class EvaluationMetrics:
 class TestCase:
     """Caso de prueba para evaluación"""
     query_text: str
-    expected_keywords: List[str]
-    audio_file_path: Optional[str] = None
-    ground_truth_rank: Optional[int] = None
+    expected_keywords: list[str]
+    audio_file_path: str | None = None
+    ground_truth_rank: int | None = None
     category: str = "general"
     difficulty: str = "medium"  # easy, medium, hard
 
@@ -203,11 +217,11 @@ class EmbeddingBenchmark:
         self.results = {}
         self.comparison_data = defaultdict(list)
 
-        logger.info(f"🚀 Framework de evaluación inicializado")
+        logger.info("🚀 Framework de evaluación inicializado")
         logger.info(f"📁 Resultados en: {self.output_dir}")
         logger.info(f"🤖 Modelos disponibles: {list(self.available_models.keys())}")
 
-    def _detect_available_models(self) -> Dict[str, bool]:
+    def _detect_available_models(self) -> dict[str, bool]:
         """Detecta qué modelos están disponibles"""
         available = {
             "yamnet": True,  # Siempre disponible si TensorFlow está instalado
@@ -217,7 +231,7 @@ class EmbeddingBenchmark:
 
         return {k: v for k, v in available.items() if v}
 
-    def initialize_model(self, model_name: str) -> Optional[Any]:
+    def initialize_model(self, model_name: str) -> Any | None:
         """
         Inicializa un modelo específico
 
@@ -281,7 +295,7 @@ class EmbeddingBenchmark:
             logger.error(f"❌ Error inicializando {model_name}: {e}")
             return None
 
-    def generate_test_cases(self) -> List[TestCase]:
+    def generate_test_cases(self) -> list[TestCase]:
         """
         Genera casos de prueba para evaluación semántica
 
@@ -454,7 +468,7 @@ class EmbeddingBenchmark:
         self.test_dataset = df
         return df
 
-    def calculate_bert_score(self, predictions: List[str], references: List[str]) -> Tuple[float, float, float]:
+    def calculate_bert_score(self, predictions: list[str], references: list[str]) -> tuple[float, float, float]:
         """
         Calcula BERTScore entre predicciones y referencias
 
@@ -515,7 +529,7 @@ class EmbeddingBenchmark:
             logger.error(f"❌ Error calculando similitud semántica: {e}")
             return 0.0
 
-    def evaluate_retrieval_metrics(self, results: pd.DataFrame, ground_truth: List[int], k_values: List[int] = [1, 3, 5, 10]) -> Dict[str, Dict[int, float]]:
+    def evaluate_retrieval_metrics(self, results: pd.DataFrame, ground_truth: list[int], k_values: list[int] = [1, 3, 5, 10]) -> dict[str, dict[int, float]]:
         """
         Evalúa métricas de recuperación (precision@k, recall@k, etc.)
 
@@ -562,7 +576,7 @@ class EmbeddingBenchmark:
 
         return metrics
 
-    def run_single_model_evaluation(self, model_name: str, test_cases: List[TestCase], dataset: pd.DataFrame) -> EvaluationMetrics:
+    def run_single_model_evaluation(self, model_name: str, test_cases: list[TestCase], dataset: pd.DataFrame) -> EvaluationMetrics:
         """
         Ejecuta evaluación completa para un modelo específico
 
@@ -696,7 +710,7 @@ class EmbeddingBenchmark:
 
         return metrics
 
-    def run_comparative_benchmark(self, models: List[str] = None) -> Dict[str, EvaluationMetrics]:
+    def run_comparative_benchmark(self, models: list[str] = None) -> dict[str, EvaluationMetrics]:
         """
         Ejecuta benchmark comparativo entre múltiples modelos
 
@@ -709,7 +723,7 @@ class EmbeddingBenchmark:
         if models is None:
             models = list(self.available_models.keys())
 
-        logger.info(f"🚀 Iniciando benchmark comparativo")
+        logger.info("🚀 Iniciando benchmark comparativo")
         logger.info(f"🤖 Modelos a evaluar: {models}")
 
         # Generar datos de prueba
@@ -803,9 +817,9 @@ class EmbeddingBenchmark:
 
         logger.info(f"📋 Información de modelos guardada en: {model_info_file}")
 
-    def generate_semantic_heatmaps(self, models: List[str] = None,
+    def generate_semantic_heatmaps(self, models: list[str] = None,
                                  include_interactive: bool = True,
-                                 include_clustering: bool = True) -> Dict[str, str]:
+                                 include_clustering: bool = True) -> dict[str, str]:
         """
         Genera mapas de calor semánticos para analizar las relaciones entre embeddings
 
@@ -907,7 +921,7 @@ class EmbeddingBenchmark:
 
         return generated_files
 
-    def _extract_embeddings_for_heatmap(self, model_name: str) -> Tuple[np.ndarray, List[str], List[Dict]]:
+    def _extract_embeddings_for_heatmap(self, model_name: str) -> tuple[np.ndarray, list[str], list[dict]]:
         """
         Extrae embeddings, etiquetas y metadatos para generar mapas de calor
 
@@ -944,7 +958,7 @@ class EmbeddingBenchmark:
 
         return np.array(embeddings), labels, metadata
 
-    def _generate_synthetic_heatmap_data(self, model_name: str) -> Tuple[List[np.ndarray], List[str], List[Dict]]:
+    def _generate_synthetic_heatmap_data(self, model_name: str) -> tuple[list[np.ndarray], list[str], list[dict]]:
         """
         Genera datos sintéticos para demostrar mapas de calor
 
@@ -986,7 +1000,7 @@ class EmbeddingBenchmark:
 
         return embeddings, labels, metadata
 
-    def _generate_cross_model_heatmap_comparison(self, models: List[str], visualizer) -> Dict[str, str]:
+    def _generate_cross_model_heatmap_comparison(self, models: list[str], visualizer) -> dict[str, str]:
         """
         Genera comparaciones de mapas de calor entre diferentes modelos
 

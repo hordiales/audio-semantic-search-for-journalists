@@ -4,10 +4,9 @@ Test de integración del sistema de mapas de calor semánticos con el framework 
 Demuestra la funcionalidad sin cargar modelos pesados de ML.
 """
 
-import sys
-import os
 import logging
 from pathlib import Path
+import sys
 
 CURRENT_FILE = Path(__file__).resolve()
 TESTS_ROOT = CURRENT_FILE
@@ -16,7 +15,7 @@ while TESTS_ROOT.name != "tests" and TESTS_ROOT.parent != TESTS_ROOT:
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-from tests.common.path_utils import artifacts_dir, ensure_sys_path, SRC_ROOT
+from tests.common.path_utils import SRC_ROOT, artifacts_dir, ensure_sys_path
 
 HEATMAP_ARTIFACTS = artifacts_dir("semantic_heatmap")
 STANDALONE_ARTIFACTS = artifacts_dir("semantic_heatmap_standalone")
@@ -40,7 +39,7 @@ def test_semantic_heatmap_integration():
         # Crear instancia del framework
         benchmark = EmbeddingBenchmark(str(HEATMAP_ARTIFACTS))
 
-        print(f"✅ Framework inicializado")
+        print("✅ Framework inicializado")
         print(f"📁 Directorio de salida: {benchmark.output_dir}")
         print(f"🤖 Modelos disponibles detectados: {list(benchmark.available_models.keys())}")
 
@@ -79,8 +78,8 @@ def test_semantic_heatmap_integration():
             )
 
             if heatmap_files:
-                print(f"✅ Mapas de calor generados exitosamente")
-                print(f"📂 Archivos generados por modelo:")
+                print("✅ Mapas de calor generados exitosamente")
+                print("📂 Archivos generados por modelo:")
                 for model_name, files in heatmap_files.items():
                     print(f"   🤖 {model_name}: {len(files) if isinstance(files, dict) else 1} archivos")
                     if isinstance(files, dict):
@@ -129,14 +128,15 @@ def test_standalone_heatmap_visualizer():
 
     try:
         ensure_sys_path([SRC_ROOT])
-        from semantic_heatmap_visualizer import SemanticHeatmapVisualizer
         import numpy as np
+
+        from semantic_heatmap_visualizer import SemanticHeatmapVisualizer
 
         # Crear instancia del visualizador
         output_dir = str(STANDALONE_ARTIFACTS)
         visualizer = SemanticHeatmapVisualizer(output_dir)
 
-        print(f"✅ Visualizador creado")
+        print("✅ Visualizador creado")
         print(f"📁 Directorio de salida: {output_dir}")
 
         # Generar datos de prueba
@@ -220,7 +220,7 @@ def test_standalone_heatmap_visualizer():
         except Exception as e:
             print(f"❌ Error en análisis comprehensivo: {e}")
 
-        print(f"\n📊 Resumen de visualizaciones creadas:")
+        print("\n📊 Resumen de visualizaciones creadas:")
         for test_name, result in test_results.items():
             if result:
                 if isinstance(result, dict):

@@ -3,31 +3,31 @@ Visualizador de mapas de calor semánticos para análisis de embeddings de audio
 Permite visualizar similitudes semánticas entre segmentos de audio y consultas.
 """
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from typing import List, Dict, Tuple, Optional, Any, Union
 import logging
 from pathlib import Path
+from typing import Any
 import warnings
+
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+
 warnings.filterwarnings('ignore')
 
 # Imports para clustering y análisis
-from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.spatial.distance import squareform
+from sklearn.cluster import DBSCAN, KMeans
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
-from sklearn.preprocessing import StandardScaler
-from scipy.cluster.hierarchy import dendrogram, linkage
-from scipy.spatial.distance import pdist, squareform
 
 # Imports condicionales para visualizaciones avanzadas
 try:
-    import plotly.graph_objects as go
     import plotly.express as px
-    from plotly.subplots import make_subplots
     import plotly.figure_factory as ff
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
@@ -40,12 +40,12 @@ except ImportError:
 
 # Imports locales
 try:
-    from .test_data_generator import SyntheticTestDataGenerator
     from .embedding_evaluation_framework import EmbeddingBenchmark
+    from .test_data_generator import SyntheticTestDataGenerator
 except ImportError:
     try:
-        from test_data_generator import SyntheticTestDataGenerator
         from embedding_evaluation_framework import EmbeddingBenchmark
+        from test_data_generator import SyntheticTestDataGenerator
     except ImportError:
         pass
 
@@ -71,7 +71,7 @@ class SemanticHeatmapVisualizer:
         plt.style.use('default')
         sns.set_palette("viridis")
 
-        logger.info(f"🔥 Visualizador de mapas de calor semánticos inicializado")
+        logger.info("🔥 Visualizador de mapas de calor semánticos inicializado")
         logger.info(f"📁 Salida en: {self.output_dir}")
 
     def calculate_similarity_matrix(self, embeddings: np.ndarray,
@@ -104,9 +104,9 @@ class SemanticHeatmapVisualizer:
         return similarity_matrix
 
     def create_basic_heatmap(self, similarity_matrix: np.ndarray,
-                           labels: List[str] = None,
+                           labels: list[str] = None,
                            title: str = "Mapa de Calor Semántico",
-                           save_path: Optional[str] = None) -> plt.Figure:
+                           save_path: str | None = None) -> plt.Figure:
         """
         Crea mapa de calor básico con matplotlib/seaborn
 
@@ -156,10 +156,10 @@ class SemanticHeatmapVisualizer:
         return fig
 
     def create_interactive_heatmap(self, similarity_matrix: np.ndarray,
-                                 labels: List[str] = None,
-                                 metadata: List[Dict] = None,
+                                 labels: list[str] = None,
+                                 metadata: list[dict] = None,
                                  title: str = "Mapa de Calor Semántico Interactivo",
-                                 save_path: Optional[str] = None):
+                                 save_path: str | None = None):
         """
         Crea mapa de calor interactivo con Plotly
 
@@ -228,11 +228,11 @@ class SemanticHeatmapVisualizer:
         return fig
 
     def create_clustered_heatmap(self, similarity_matrix: np.ndarray,
-                                labels: List[str] = None,
+                                labels: list[str] = None,
                                 clustering_method: str = "hierarchical",
                                 n_clusters: int = 5,
                                 title: str = "Mapa de Calor con Clustering",
-                                save_path: Optional[str] = None) -> Tuple[plt.Figure, np.ndarray]:
+                                save_path: str | None = None) -> tuple[plt.Figure, np.ndarray]:
         """
         Crea mapa de calor con clustering jerárquico
 
@@ -334,11 +334,11 @@ class SemanticHeatmapVisualizer:
         return fig, cluster_order
 
     def create_semantic_landscape(self, embeddings: np.ndarray,
-                                labels: List[str] = None,
-                                metadata: List[Dict] = None,
+                                labels: list[str] = None,
+                                metadata: list[dict] = None,
                                 method: str = "tsne",
                                 title: str = "Paisaje Semántico 2D",
-                                save_path: Optional[str] = None) -> plt.Figure:
+                                save_path: str | None = None) -> plt.Figure:
         """
         Crea visualización 2D del paisaje semántico usando reducción de dimensionalidad
 
@@ -432,10 +432,10 @@ class SemanticHeatmapVisualizer:
 
     def create_query_similarity_heatmap(self, query_embeddings: np.ndarray,
                                       document_embeddings: np.ndarray,
-                                      query_labels: List[str],
-                                      document_labels: List[str],
+                                      query_labels: list[str],
+                                      document_labels: list[str],
                                       title: str = "Similitud Consulta-Documento",
-                                      save_path: Optional[str] = None) -> plt.Figure:
+                                      save_path: str | None = None) -> plt.Figure:
         """
         Crea mapa de calor de similitud entre consultas y documentos
 
@@ -488,11 +488,11 @@ class SemanticHeatmapVisualizer:
         return fig
 
     def create_comprehensive_semantic_analysis(self, embeddings: np.ndarray,
-                                             labels: List[str],
-                                             metadata: List[Dict],
-                                             queries: List[str] = None,
+                                             labels: list[str],
+                                             metadata: list[dict],
+                                             queries: list[str] = None,
                                              query_embeddings: np.ndarray = None,
-                                             output_prefix: str = "semantic_analysis") -> Dict[str, Any]:
+                                             output_prefix: str = "semantic_analysis") -> dict[str, Any]:
         """
         Crea análisis semántico comprehensivo con múltiples visualizaciones
 
@@ -599,7 +599,7 @@ class SemanticHeatmapVisualizer:
         return results
 
     def _analyze_by_categories(self, similarity_matrix: np.ndarray,
-                              metadata: List[Dict]) -> Dict[str, Any]:
+                              metadata: list[dict]) -> dict[str, Any]:
         """
         Analiza similitudes por categorías
 
@@ -659,9 +659,9 @@ class SemanticHeatmapVisualizer:
         return analysis
 
     def create_category_comparison_heatmap(self, similarity_matrix: np.ndarray,
-                                         metadata: List[Dict],
+                                         metadata: list[dict],
                                          title: str = "Similitud por Categorías",
-                                         save_path: Optional[str] = None) -> plt.Figure:
+                                         save_path: str | None = None) -> plt.Figure:
         """
         Crea mapa de calor agregado por categorías
 
@@ -783,18 +783,18 @@ def create_demo_semantic_heatmap():
         )
 
         # Mostrar resultados
-        print(f"✅ Análisis completado")
+        print("✅ Análisis completado")
         print(f"📁 Archivos generados: {len(results['files_generated'])}")
         for file_path in results['files_generated']:
             print(f"   📄 {file_path}")
 
-        print(f"\n📊 Métricas:")
+        print("\n📊 Métricas:")
         for key, value in results['metrics'].items():
             if key != 'category_analysis':
                 print(f"   {key}: {value}")
 
         if 'category_analysis' in results['metrics']:
-            print(f"\n🏷️  Análisis por categorías:")
+            print("\n🏷️  Análisis por categorías:")
             cat_analysis = results['metrics']['category_analysis']
 
             print("   Similitud intra-categoría:")

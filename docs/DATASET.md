@@ -9,7 +9,7 @@
 ##  Tools:
   * Transcripciones: Modelo Whisper https://github.com/openai/whisper
     * Robust Speech Recognition via Large-Scale Weak Supervision
-  * 
+  *
 
 
 # Estructura final del dataset:
@@ -30,16 +30,16 @@
 Si no existe, crear archivo .env
   touch .env
 
-  build_corpus_dataset.sh
-  
+  scripts/shell/build_corpus_dataset.sh
+
   or
 
   python simple_dataset_pipeline.py -i data/ -o ./dataset
-  
 
 
-para continuar desde donde fallo: 
-	python src/resume_pipeline.py ./dataset	
+
+para continuar desde donde fallo:
+	python src/resume_pipeline.py ./dataset
 
 
  Verificación del Dataset
@@ -47,8 +47,8 @@ para continuar desde donde fallo:
   1. Verificar integridad del dataset:
 
   python src/verify_dataset.py ./dataset
-  
-  
+
+
   ## Procesar por lotes
   python simple_dataset_pipeline.py -i data/ -o ./dataset --batch_size 50
 
@@ -85,7 +85,7 @@ para continuar desde donde fallo:
   1. Uso de memoria:
   # Batch pequeño - Menos memoria, más lento
   --batch-size 2    # 2GB-4GB RAM
-  --batch-size 4    # 4GB-8GB RAM  
+  --batch-size 4    # 4GB-8GB RAM
   --batch-size 8    # 8GB-16GB RAM
   --batch-size 16   # 16GB+ RAM
 
@@ -123,7 +123,7 @@ para continuar desde donde fallo:
     --workers 4 \
     --batch-size 4
 
-  # Para 8 cores  
+  # Para 8 cores
   python run_dataset_pipeline.py \
     --input data/ \
     --output ./dataset \
@@ -266,10 +266,10 @@ Se analiza el sentimiento del texto
   # Intentar usar un modelo en español si está disponible
   spanish_models = [
       "pysentimiento/robertuito-sentiment-analysis",
-      "finiteautomata/beto-sentiment-analysis", 
+      "finiteautomata/beto-sentiment-analysis",
       "cardiffnlp/twitter-roberta-base-sentiment-latest"
   ]
-            
+
 
  $ python src/add_sentiment_to_dataset.py ./dataset
 
@@ -314,7 +314,7 @@ Nota: Este dataset ya contiene las transcripciones (evita el paso de speech2text
 
 ---
 # Usar YAMNet real (requiere TensorFlow)
-  
+
  % python src/regenerate_audio_embeddings.py ./dataset --use-real-yamnet
 
   1. Verificar Requisitos para YAMNet Real
@@ -352,19 +352,19 @@ Nota: Este dataset ya contiene las transcripciones (evita el paso de speech2text
 Bajar archivos de youtube, por ejemplo entrevistas o podcasts
 
 Youtube Downloader
-  $ pip install yt-dlp 
+  $ pip install yt-dlp
 
 -x es para extract-audio
 recordar poner url entre "
 
   yt-dlp -x "URL"
 
-Herramienta: 
+Herramienta:
 
 
 # Otras fuentes de información útil
 
-RadioCut es un servicio en línea que permite a los usuarios escuchar radios en vivo y, lo más importante, acceder a grabaciones de programas pasados para escucharlos en diferido y crear recortes de audio para compartir con otros. Es una plataforma que combina la escucha de radio tradicional con la posibilidad de crear y compartir contenido basado en programas de radio. 
+RadioCut es un servicio en línea que permite a los usuarios escuchar radios en vivo y, lo más importante, acceder a grabaciones de programas pasados para escucharlos en diferido y crear recortes de audio para compartir con otros. Es una plataforma que combina la escucha de radio tradicional con la posibilidad de crear y compartir contenido basado en programas de radio.
 Contiene grabaciones de diferentes paises
 * Radiocut AR https://ar.radiocut.fm/
 https://ar.radiocut.fm/about/

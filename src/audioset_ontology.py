@@ -10,7 +10,7 @@ AUDIOSET_CLASSES = {
     "conversation": {"id": "/m/01h8n0", "name": "Conversation", "description": "Conversación"},
     "narration": {"id": "/m/02rhddq", "name": "Narration, monologue", "description": "Narración"},
     "babbling": {"id": "/m/03qtq", "name": "Babbling", "description": "Balbuceo"},
-    
+
     # Sonidos humanos
     "laughter": {"id": "/m/01j3sz", "name": "Laughter", "description": "Risas"},
     "applause": {"id": "/m/0b_fwt", "name": "Applause", "description": "Aplausos"},
@@ -21,13 +21,13 @@ AUDIOSET_CLASSES = {
     "whistling": {"id": "/m/02bk07", "name": "Whistling", "description": "Silbidos"},
     "shouting": {"id": "/m/07pggtn", "name": "Shouting, yelling", "description": "Gritos"},
     "whispering": {"id": "/m/0dl9sf8", "name": "Whispering", "description": "Susurros"},
-    
+
     # Multitudes
     "crowd": {"id": "/m/01bjv", "name": "Crowd", "description": "Multitud"},
     "hubbub": {"id": "/m/03qtwd", "name": "Hubbub, speech noise", "description": "Murmullo de voces"},
     "chatter": {"id": "/m/07pws3f", "name": "Chatter", "description": "Charla"},
     "chanting": {"id": "/m/02rtxlg", "name": "Chanting", "description": "Cánticos"},
-    
+
     # Música
     "music": {"id": "/m/04rlf", "name": "Music", "description": "Música"},
     "singing": {"id": "/m/015lz1", "name": "Singing", "description": "Canto"},
@@ -36,7 +36,7 @@ AUDIOSET_CLASSES = {
     "guitar": {"id": "/m/0342h", "name": "Guitar", "description": "Guitarra"},
     "drum": {"id": "/m/026t6", "name": "Drum", "description": "Tambor"},
     "orchestra": {"id": "/m/05k0_", "name": "Orchestra", "description": "Orquesta"},
-    
+
     # Vehículos
     "vehicle": {"id": "/m/07yv9", "name": "Vehicle", "description": "Vehículo"},
     "car": {"id": "/m/0k4j", "name": "Car", "description": "Automóvil"},
@@ -47,14 +47,14 @@ AUDIOSET_CLASSES = {
     "aircraft": {"id": "/m/0cmf2", "name": "Aircraft", "description": "Aeronave"},
     "helicopter": {"id": "/m/03j1ly", "name": "Helicopter", "description": "Helicóptero"},
     "engine": {"id": "/m/02mk9", "name": "Engine", "description": "Motor"},
-    
+
     # Sirenas y alarmas
     "siren": {"id": "/m/01yrx", "name": "Siren", "description": "Sirena"},
     "alarm": {"id": "/m/0b_fwt", "name": "Alarm", "description": "Alarma"},
     "fire_alarm": {"id": "/m/016622", "name": "Fire alarm", "description": "Alarma de incendio"},
     "smoke_detector": {"id": "/m/03kmc9", "name": "Smoke detector", "description": "Detector de humo"},
     "buzzer": {"id": "/m/07pkxks", "name": "Buzzer", "description": "Zumbador"},
-    
+
     # Naturaleza
     "wind": {"id": "/m/09t49", "name": "Wind", "description": "Viento"},
     "rain": {"id": "/m/05r5wn", "name": "Rain", "description": "Lluvia"},
@@ -64,7 +64,7 @@ AUDIOSET_CLASSES = {
     "bird": {"id": "/m/015p6", "name": "Bird", "description": "Pájaro"},
     "dog": {"id": "/m/0bt9lr", "name": "Dog", "description": "Perro"},
     "cat": {"id": "/m/01yrx", "name": "Cat", "description": "Gato"},
-    
+
     # Tecnología
     "telephone": {"id": "/m/07gql", "name": "Telephone", "description": "Teléfono"},
     "phone_ringing": {"id": "/m/0c2wf", "name": "Phone ringing", "description": "Teléfono sonando"},
@@ -77,21 +77,21 @@ AUDIOSET_CLASSES = {
     "loudspeaker": {"id": "/m/0d31p", "name": "Loudspeaker", "description": "Altavoz"},
     "television": {"id": "/m/07c52", "name": "Television", "description": "Televisión"},
     "radio": {"id": "/m/06bz3", "name": "Radio", "description": "Radio"},
-    
+
     # Construcción y trabajo
     "construction": {"id": "/m/03j1ly", "name": "Construction", "description": "Construcción"},
     "drilling": {"id": "/m/02p01q", "name": "Drilling", "description": "Taladrado"},
     "hammer": {"id": "/m/07gql", "name": "Hammer", "description": "Martillo"},
     "saw": {"id": "/m/05r5wn", "name": "Saw", "description": "Sierra"},
     "machinery": {"id": "/m/0838f", "name": "Machinery", "description": "Maquinaria"},
-    
+
     # Sonidos de ambiente
     "silence": {"id": "/m/028v0c", "name": "Silence", "description": "Silencio"},
     "ambient": {"id": "/m/015lz1", "name": "Ambient", "description": "Ambiente"},
     "noise": {"id": "/m/02mscn", "name": "Noise", "description": "Ruido"},
     "white_noise": {"id": "/m/05r5c", "name": "White noise", "description": "Ruido blanco"},
     "background_noise": {"id": "/m/0342h", "name": "Background noise", "description": "Ruido de fondo"},
-    
+
     # Medios y comunicación
     "broadcast": {"id": "/m/026t6", "name": "Broadcast", "description": "Transmisión"},
     "news": {"id": "/m/05k0_", "name": "News", "description": "Noticias"},
@@ -103,7 +103,7 @@ AUDIOSET_CLASSES = {
     "seminar": {"id": "/m/07jdr", "name": "Seminar", "description": "Seminario"},
     "meeting": {"id": "/m/0cmf2", "name": "Meeting", "description": "Reunión"},
     "conference": {"id": "/m/03j1ly", "name": "Conference", "description": "Conferencia"},
-    
+
     # Eventos políticos y sociales
     "protest": {"id": "/m/01yrx", "name": "Protest", "description": "Protesta"},
     "demonstration": {"id": "/m/0b_fwt", "name": "Demonstration", "description": "Manifestación"},
@@ -141,16 +141,16 @@ def search_audio_classes(query: str):
     """Busca clases de audio que contengan el término"""
     results = []
     query_lower = query.lower()
-    
+
     for class_name, info in AUDIOSET_CLASSES.items():
-        if (query_lower in class_name.lower() or 
+        if (query_lower in class_name.lower() or
             query_lower in info.get("name", "").lower() or
             query_lower in info.get("description", "").lower()):
             results.append({
                 "class": class_name,
                 "info": info
             })
-    
+
     return results
 
 def get_all_categories():
@@ -166,11 +166,11 @@ def print_ontology():
     """Imprime la ontología completa"""
     logging.info("🎵 AudioSet Ontology")
     logging.info("=" * 50)
-    
+
     for category, classes in AUDIOSET_CATEGORIES.items():
         logging.info(f"\n📂 {category.upper().replace('_', ' ')}")
         logging.info("-" * 30)
-        
+
         for class_name in classes:
             info = AUDIOSET_CLASSES.get(class_name, {})
             name = info.get("name", class_name)

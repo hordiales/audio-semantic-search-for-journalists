@@ -9,22 +9,23 @@ Esta implementación se basa en:
 - Embeddings directos de audio para búsqueda semántica
 """
 
+import logging
+import os
+import warnings
+
+import librosa
 import numpy as np
 import pandas as pd
-import librosa
-from typing import List, Dict, Optional, Union
-import os
-import logging
-import warnings
+
 warnings.filterwarnings('ignore')
 
 try:
-    from .models_config import get_models_config, SpeechDPRConfig
     from .audio_embeddings import BaseAudioEmbedding
+    from .models_config import SpeechDPRConfig, get_models_config
 except ImportError:
     # Para ejecutar como script independiente
-    from models_config import get_models_config, SpeechDPRConfig
     from audio_embeddings import BaseAudioEmbedding
+    from models_config import SpeechDPRConfig, get_models_config
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ try:
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
-    from transformers import HubertModel, AutoProcessor, RobertaModel, RobertaTokenizer
+    from transformers import AutoProcessor, HubertModel, RobertaModel, RobertaTokenizer
     SPEECHDPR_AVAILABLE = True
     logger.info("✅ SpeechDPR dependencies disponibles")
 except ImportError as e:
@@ -95,7 +96,7 @@ class SpeechDPREmbedding(BaseAudioEmbedding):
     - Más eficiente computacionalmente
     """
 
-    def __init__(self, config: Optional[SpeechDPRConfig] = None):
+    def __init__(self, config: SpeechDPRConfig | None = None):
         """
         Inicializa el generador SpeechDPR
 
@@ -132,10 +133,9 @@ class SpeechDPREmbedding(BaseAudioEmbedding):
         if self.config.device == "auto":
             if torch.cuda.is_available():
                 return "cuda"
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                 return "mps"
-            else:
-                return "cpu"
+            return "cpu"
         return self.config.device
 
     def _load_model(self):
@@ -186,7 +186,7 @@ class SpeechDPREmbedding(BaseAudioEmbedding):
             logger.error(f"❌ Error cargando SpeechDPR: {e}")
             raise RuntimeError(f"No se pudo cargar SpeechDPR: {e}")
 
-    def preprocess_audio(self, audio_path: str, target_sr: Optional[int] = None) -> torch.Tensor:
+    def preprocess_audio(self, audio_path: str, target_sr: int | None = None) -> torch.Tensor:
         """
         Preprocesa audio para SpeechDPR
 
@@ -281,7 +281,7 @@ class SpeechDPREmbedding(BaseAudioEmbedding):
             logger.error(f"❌ Error generando embedding SpeechDPR para {audio_path}: {e}")
             raise RuntimeError(f"Error procesando audio con SpeechDPR: {e}")
 
-    def generate_embeddings_batch(self, audio_paths: List[str], batch_size: int = 4) -> np.ndarray:
+    def generate_embeddings_batch(self, audio_paths: list[str], batch_size: int = 4) -> np.ndarray:
         """
         Genera embeddings para múltiples archivos de audio
 
@@ -470,7 +470,7 @@ class SpeechDPREmbedding(BaseAudioEmbedding):
 SpeechDPRAudioEmbeddingGenerator = SpeechDPREmbedding
 
 
-def get_speechdpr_embedding_generator(config: Optional[SpeechDPRConfig] = None) -> SpeechDPREmbedding:
+def get_speechdpr_embedding_generator(config: SpeechDPRConfig | None = None) -> SpeechDPREmbedding:
     """
     Factory function para obtener generador SpeechDPR
 
@@ -491,7 +491,7 @@ if __name__ == "__main__":
 
         try:
             embedder = get_speechdpr_embedding_generator()
-            print(f"✅ Modelo SpeechDPR inicializado correctamente")
+            print("✅ Modelo SpeechDPR inicializado correctamente")
             print(f"📐 Dimensiones de embedding: {embedder.embedding_dim}")
             print(f"🖥️  Device: {embedder.device}")
 

@@ -3,14 +3,14 @@
 Test completo de todos los modelos de embeddings disponibles
 """
 
+from dataclasses import dataclass
+import json
 import os
+from pathlib import Path
 import sys
 import time
-import json
+
 import numpy as np
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass
 
 CURRENT_FILE = Path(__file__).resolve()
 TESTS_ROOT = CURRENT_FILE
@@ -49,7 +49,6 @@ class CompleteModelTester:
             return self._loaded_models['yamnet']
 
         try:
-            import tensorflow as tf
             import tensorflow_hub as hub
 
             print("🔄 Cargando YAMNet...")
@@ -112,8 +111,8 @@ class CompleteModelTester:
                     error_message="YAMNet no disponible"
                 )
 
-            import tensorflow as tf
             import librosa
+            import tensorflow as tf
 
             # Cargar audio
             audio, sr = librosa.load(audio_path, sr=16000, mono=True)
@@ -140,7 +139,7 @@ class CompleteModelTester:
                 model_name="yamnet",
                 success=False,
                 processing_time_ms=processing_time,
-                error_message=f"Error YAMNet: {str(e)}"
+                error_message=f"Error YAMNet: {e!s}"
             )
 
     def test_clap(self, audio_path: str) -> ModelTestResult:
@@ -176,7 +175,7 @@ class CompleteModelTester:
                 model_name="clap_laion",
                 success=False,
                 processing_time_ms=processing_time,
-                error_message=f"Error CLAP: {str(e)}"
+                error_message=f"Error CLAP: {e!s}"
             )
 
     def test_speechdpr(self, audio_path: str) -> ModelTestResult:
@@ -218,10 +217,10 @@ class CompleteModelTester:
                 model_name="speechdpr",
                 success=False,
                 processing_time_ms=processing_time,
-                error_message=f"Error SpeechDPR: {str(e)}"
+                error_message=f"Error SpeechDPR: {e!s}"
             )
 
-    def find_audio_files(self) -> List[str]:
+    def find_audio_files(self) -> list[str]:
         """Encontrar archivos de audio"""
         search_paths = [
             self.audio_folder,
@@ -305,7 +304,7 @@ class CompleteModelTester:
         # Guardar resultados
         self.save_results(all_results)
 
-    def print_summary(self, all_results: List[Dict], models_to_test: List[Tuple]):
+    def print_summary(self, all_results: list[dict], models_to_test: list[tuple]):
         """Imprimir resumen de resultados"""
         print("\n" + "=" * 60)
         print("📊 RESUMEN DE RESULTADOS")
@@ -339,7 +338,7 @@ class CompleteModelTester:
                     print(f"      - {fail.error_message}")
 
         # Comparación de rendimiento
-        print(f"\n🏆 RANKING DE MODELOS (por tiempo de procesamiento):")
+        print("\n🏆 RANKING DE MODELOS (por tiempo de procesamiento):")
         print("-" * 40)
 
         successful_models = []
@@ -362,7 +361,7 @@ class CompleteModelTester:
             emoji = "🥇" if i == 1 else "🥈" if i == 2 else "🥉"
             print(f"{emoji} {i}. {model_name}: {avg_time:.0f}ms")
 
-    def save_results(self, all_results: List[Dict]):
+    def save_results(self, all_results: list[dict]):
         """Guardar resultados en archivo JSON"""
         output_file = RESULTS_DIR / "complete_model_test_results.json"
 

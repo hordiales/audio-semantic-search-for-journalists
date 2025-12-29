@@ -3,28 +3,29 @@ Dashboard de visualización para comparar resultados de diferentes modelos de em
 Incluye gráficos interactivos, tablas de comparación y análisis detallado de métricas.
 """
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional, Any
 import json
 import logging
 from pathlib import Path
 import warnings
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
 warnings.filterwarnings('ignore')
 
 # Imports condicionales para visualizaciones avanzadas
 try:
-    import plotly.graph_objects as go
     import plotly.express as px
+    import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
 
 try:
-    from embedding_evaluation_framework import EvaluationMetrics, EmbeddingModelInfo
+    from embedding_evaluation_framework import EmbeddingModelInfo, EvaluationMetrics
 except ImportError:
     # Definiciones simples para fallback
     class EvaluationMetrics:
@@ -67,14 +68,14 @@ class EmbeddingVisualizationDashboard:
         model_info_file = self.results_dir / "model_info.json"
 
         if results_file.exists():
-            with open(results_file, 'r', encoding='utf-8') as f:
+            with open(results_file, encoding='utf-8') as f:
                 self.results_data = json.load(f)
             logger.info(f"✅ Resultados cargados desde {results_file}")
         else:
             logger.warning(f"⚠️  No se encontraron resultados en {results_file}")
 
         if model_info_file.exists():
-            with open(model_info_file, 'r', encoding='utf-8') as f:
+            with open(model_info_file, encoding='utf-8') as f:
                 self.model_info = json.load(f)
             logger.info(f"✅ Información de modelos cargada desde {model_info_file}")
 
@@ -126,7 +127,7 @@ class EmbeddingVisualizationDashboard:
         df = pd.DataFrame(data)
         return df
 
-    def plot_bertscore_comparison(self, save_path: Optional[str] = None):
+    def plot_bertscore_comparison(self, save_path: str | None = None):
         """
         Crea gráfico de comparación de BERTScore
 
@@ -176,7 +177,7 @@ class EmbeddingVisualizationDashboard:
 
         plt.show()
 
-    def plot_precision_recall_curves(self, save_path: Optional[str] = None):
+    def plot_precision_recall_curves(self, save_path: str | None = None):
         """
         Crea gráficos de curvas Precision@K y Recall@K
 
@@ -229,7 +230,7 @@ class EmbeddingVisualizationDashboard:
 
         plt.show()
 
-    def plot_performance_radar(self, save_path: Optional[str] = None):
+    def plot_performance_radar(self, save_path: str | None = None):
         """
         Crea gráfico radar para comparar rendimiento general
 
@@ -296,7 +297,7 @@ class EmbeddingVisualizationDashboard:
 
         plt.show()
 
-    def plot_efficiency_comparison(self, save_path: Optional[str] = None):
+    def plot_efficiency_comparison(self, save_path: str | None = None):
         """
         Crea gráfico de comparación de eficiencia (tiempo vs. calidad)
 
@@ -346,7 +347,7 @@ class EmbeddingVisualizationDashboard:
 
         plt.show()
 
-    def create_summary_table(self, save_path: Optional[str] = None):
+    def create_summary_table(self, save_path: str | None = None):
         """
         Crea tabla resumen con todas las métricas
 
@@ -357,7 +358,7 @@ class EmbeddingVisualizationDashboard:
 
         if df.empty:
             logger.warning("⚠️  No hay datos para crear tabla")
-            return
+            return None
 
         # Seleccionar métricas más importantes
         summary_cols = [
@@ -423,7 +424,7 @@ class EmbeddingVisualizationDashboard:
 
         return summary_df
 
-    def create_interactive_dashboard(self, save_path: Optional[str] = None):
+    def create_interactive_dashboard(self, save_path: str | None = None):
         """
         Crea dashboard interactivo con Plotly (si está disponible)
 
@@ -517,7 +518,7 @@ class EmbeddingVisualizationDashboard:
         self.plot_efficiency_comparison()
         self.create_summary_table()
 
-    def generate_full_report(self, output_dir: Optional[str] = None):
+    def generate_full_report(self, output_dir: str | None = None):
         """
         Genera reporte completo con todas las visualizaciones
 

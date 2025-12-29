@@ -4,13 +4,13 @@ Soporta FAISS, ChromaDB y Supabase (pgvector) con una interfaz unificada.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, Tuple, Union
-import numpy as np
 from dataclasses import dataclass
 from enum import Enum
 import logging
-import time
 from pathlib import Path
+from typing import Any
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +27,12 @@ class VectorDocument:
     id: str
     embedding: np.ndarray
     text: str
-    metadata: Dict[str, Any]
-    category: Optional[str] = None
-    timestamp: Optional[float] = None
-    audio_file_path: Optional[str] = None
+    metadata: dict[str, Any]
+    category: str | None = None
+    timestamp: float | None = None
+    audio_file_path: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convierte a diccionario serializable"""
         return {
             "id": self.id,
@@ -63,18 +63,18 @@ class VectorDBConfig:
 
     # FAISS específico
     faiss_index_type: str = "flat"  # flat, ivf, hnsw
-    faiss_index_path: Optional[str] = None
+    faiss_index_path: str | None = None
     faiss_gpu: bool = False
     faiss_nprobe: int = 10
 
     # ChromaDB específico
-    chromadb_path: Optional[str] = None
+    chromadb_path: str | None = None
     chromadb_collection_name: str = "audio_embeddings"
     chromadb_distance_function: str = "cosine"
 
     # Supabase específico
-    supabase_url: Optional[str] = None
-    supabase_key: Optional[str] = None
+    supabase_url: str | None = None
+    supabase_key: str | None = None
     supabase_table_name: str = "audio_embeddings"
     supabase_connection_pool_size: int = 10
 
@@ -89,53 +89,43 @@ class VectorDatabaseInterface(ABC):
     @abstractmethod
     def initialize(self) -> bool:
         """Inicializa la base de datos"""
-        pass
 
     @abstractmethod
-    def add_documents(self, documents: List[VectorDocument]) -> bool:
+    def add_documents(self, documents: list[VectorDocument]) -> bool:
         """Añade documentos a la base de datos"""
-        pass
 
     @abstractmethod
     def search(self, query_embedding: np.ndarray, k: int = 10,
-               filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
+               filters: dict[str, Any] | None = None) -> list[SearchResult]:
         """Busca documentos similares"""
-        pass
 
     @abstractmethod
     def delete_document(self, document_id: str) -> bool:
         """Elimina un documento"""
-        pass
 
     @abstractmethod
-    def get_document(self, document_id: str) -> Optional[VectorDocument]:
+    def get_document(self, document_id: str) -> VectorDocument | None:
         """Obtiene un documento por ID"""
-        pass
 
     @abstractmethod
     def update_document(self, document: VectorDocument) -> bool:
         """Actualiza un documento"""
-        pass
 
     @abstractmethod
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Obtiene estadísticas de la base de datos"""
-        pass
 
     @abstractmethod
     def save_index(self, path: str) -> bool:
         """Guarda el índice (si aplica)"""
-        pass
 
     @abstractmethod
     def load_index(self, path: str) -> bool:
         """Carga el índice (si aplica)"""
-        pass
 
     @abstractmethod
     def clear(self) -> bool:
         """Limpia toda la base de datos"""
-        pass
 
     def get_document_count(self) -> int:
         """Retorna el número de documentos"""
@@ -150,9 +140,9 @@ class MemoryVectorDatabase(VectorDatabaseInterface):
 
     def __init__(self, config: VectorDBConfig):
         super().__init__(config)
-        self.documents: Dict[str, VectorDocument] = {}
-        self.embeddings: Optional[np.ndarray] = None
-        self.document_ids: List[str] = []
+        self.documents: dict[str, VectorDocument] = {}
+        self.embeddings: np.ndarray | None = None
+        self.document_ids: list[str] = []
 
     def initialize(self) -> bool:
         """Inicializa la base de datos en memoria"""
@@ -165,7 +155,7 @@ class MemoryVectorDatabase(VectorDatabaseInterface):
             logger.error(f"❌ Error inicializando base de datos en memoria: {e}")
             return False
 
-    def add_documents(self, documents: List[VectorDocument]) -> bool:
+    def add_documents(self, documents: list[VectorDocument]) -> bool:
         """Añade documentos a la memoria"""
         try:
             for doc in documents:
@@ -185,7 +175,7 @@ class MemoryVectorDatabase(VectorDatabaseInterface):
             return False
 
     def search(self, query_embedding: np.ndarray, k: int = 10,
-               filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
+               filters: dict[str, Any] | None = None) -> list[SearchResult]:
         """Busca documentos similares en memoria"""
         if self.embeddings is None or len(self.document_ids) == 0:
             return []
@@ -242,12 +232,10 @@ class MemoryVectorDatabase(VectorDatabaseInterface):
             logger.error(f"❌ Error en búsqueda en memoria: {e}")
             return []
 
-    def _matches_filters(self, doc: VectorDocument, filters: Dict[str, Any]) -> bool:
+    def _matches_filters(self, doc: VectorDocument, filters: dict[str, Any]) -> bool:
         """Verifica si un documento coincide con los filtros"""
         for key, value in filters.items():
-            if key == "category" and doc.category != value:
-                return False
-            elif key in doc.metadata and doc.metadata[key] != value:
+            if (key == "category" and doc.category != value) or (key in doc.metadata and doc.metadata[key] != value):
                 return False
         return True
 
@@ -269,7 +257,7 @@ class MemoryVectorDatabase(VectorDatabaseInterface):
             return True
         return False
 
-    def get_document(self, document_id: str) -> Optional[VectorDocument]:
+    def get_document(self, document_id: str) -> VectorDocument | None:
         """Obtiene un documento por ID"""
         return self.documents.get(document_id)
 
@@ -283,7 +271,7 @@ class MemoryVectorDatabase(VectorDatabaseInterface):
             return True
         return False
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Obtiene estadísticas de la base de datos"""
         return {
             "db_type": "memory",
@@ -361,22 +349,21 @@ def create_vector_database(config: VectorDBConfig) -> VectorDatabaseInterface:
         except ImportError:
             from vector_db_faiss import FAISSVectorDatabase
         return FAISSVectorDatabase(config)
-    elif config.db_type == VectorDBType.CHROMADB:
+    if config.db_type == VectorDBType.CHROMADB:
         try:
             from .vector_db_chromadb import ChromaVectorDatabase
         except ImportError:
             from vector_db_chromadb import ChromaVectorDatabase
         return ChromaVectorDatabase(config)
-    elif config.db_type == VectorDBType.SUPABASE:
+    if config.db_type == VectorDBType.SUPABASE:
         try:
             from .vector_db_supabase import SupabaseVectorDatabase
         except ImportError:
             from vector_db_supabase import SupabaseVectorDatabase
         return SupabaseVectorDatabase(config)
-    elif config.db_type == VectorDBType.MEMORY:
+    if config.db_type == VectorDBType.MEMORY:
         return MemoryVectorDatabase(config)
-    else:
-        raise ValueError(f"Tipo de base de datos no soportado: {config.db_type}")
+    raise ValueError(f"Tipo de base de datos no soportado: {config.db_type}")
 
 def get_default_config(db_type: VectorDBType, embedding_dimension: int = 512) -> VectorDBConfig:
     """Obtiene configuración por defecto para un tipo de DB"""

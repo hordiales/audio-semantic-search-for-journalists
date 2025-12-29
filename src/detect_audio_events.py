@@ -4,14 +4,14 @@ Script específico para detectar eventos de audio como risas, música, aplausos
 usando YAMNet real y agregar esta información al dataset
 """
 
-import pandas as pd
-import numpy as np
-import json
 import argparse
+from datetime import datetime
+import json
 import logging
 from pathlib import Path
-from datetime import datetime
-from typing import Dict, List, Tuple
+
+import numpy as np
+import pandas as pd
 
 # Configurar logging
 logging.basicConfig(
@@ -22,23 +22,23 @@ logger = logging.getLogger(__name__)
 
 class AudioEventDetector:
     """Detector especializado de eventos de audio usando YAMNet"""
-    
+
     def __init__(self):
         """Inicializa el detector de eventos"""
         self.model = None
         self.class_names = None
         self._load_yamnet()
         self._setup_event_mapping()
-    
+
     def _load_yamnet(self):
         """Carga YAMNet desde TensorFlow Hub"""
         try:
             import tensorflow as tf
             import tensorflow_hub as hub
-            
+
             logger.info("🔄 Cargando YAMNet para detección de eventos...")
             self.model = hub.load('https://tfhub.dev/google/yamnet/1')
-            
+
             # Cargar nombres de clases si están disponibles
             try:
                 import csv
@@ -51,14 +51,14 @@ class AudioEventDetector:
                 logger.info(f"✅ YAMNet cargado con {len(self.class_names)} clases")
             except:
                 logger.info("✅ YAMNet cargado (sin nombres de clases)")
-                
+
         except Exception as e:
             logger.error(f"❌ Error cargando YAMNet: {e}")
             raise
-    
+
     def _setup_event_mapping(self):
         """Configura el mapeo de eventos de interés periodístico"""
-        
+
         # Eventos de interés para periodismo
         self.events_of_interest = {
             'laughter': {
@@ -102,8 +102,8 @@ class AudioEventDetector:
                 'importance': 'high'
             }
         }
-    
-    def detect_events_in_audio(self, audio_path: str, start_time: float = None, end_time: float = None) -> Dict:
+
+    def detect_events_in_audio(self, audio_path: str, start_time: float = None, end_time: float = None) -> dict:
         """
         Detecta eventos específicos en un archivo de audio
         
@@ -117,37 +117,37 @@ class AudioEventDetector:
         """
         try:
             import librosa
-            
+
             # Cargar audio
             audio, sr = librosa.load(audio_path, sr=16000, mono=True)
-            
+
             # Extraer segmento específico si se proporcionan tiempos
             if start_time is not None and end_time is not None:
                 start_sample = int(start_time * sr)
                 end_sample = int(end_time * sr)
                 audio = audio[start_sample:end_sample]
-            
+
             audio = librosa.util.normalize(audio).astype(np.float32)
-            
+
             # Procesar con YAMNet
             scores, embeddings, spectrogram = self.model(audio)
             scores_np = scores.numpy()
-            
+
             # Analizar scores a lo largo del tiempo
             frame_events = []
             for frame_idx, frame_scores in enumerate(scores_np):
                 frame_events.append(self._analyze_frame_scores(frame_scores, frame_idx))
-            
+
             # Consolidar eventos detectados
             consolidated_events = self._consolidate_events(frame_events)
-            
+
             # Calcular estadísticas generales
             avg_scores = np.mean(scores_np, axis=0)
             max_scores = np.max(scores_np, axis=0)
-            
+
             # Análisis temporal de eventos
             temporal_analysis = self._analyze_temporal_patterns(frame_events)
-            
+
             return {
                 'events_detected': consolidated_events,
                 'temporal_analysis': temporal_analysis,
@@ -156,7 +156,7 @@ class AudioEventDetector:
                 'max_confidence': float(np.max(max_scores)),
                 'processing_success': True
             }
-            
+
         except Exception as e:
             logger.error(f"❌ Error detectando eventos en {audio_path}: {e}")
             return {
@@ -168,11 +168,11 @@ class AudioEventDetector:
                 'processing_success': False,
                 'error': str(e)
             }
-    
-    def _analyze_frame_scores(self, scores: np.ndarray, frame_idx: int) -> Dict:
+
+    def _analyze_frame_scores(self, scores: np.ndarray, frame_idx: int) -> dict:
         """Analiza scores de un frame específico"""
         events_in_frame = {}
-        
+
         # Umbrales ajustados para programas de radio y contenido mediático
         # Los eventos de audiencia (aplausos, gritos) tienen menores umbrales
         # ya que en radio suelen tener menor calidad/volumen que la música de fondo
@@ -186,16 +186,16 @@ class AudioEventDetector:
             'cheering': 0.3,    # Reducido: vítores suelen mezclarse con otros sonidos
             'booing': 0.25       # Ligero ajuste: abucheos suelen ser más claros
         }
-        
+
         for event_name, event_info in self.events_of_interest.items():
             max_score = 0
             detected_classes = []
             threshold = thresholds.get(event_name, 0.25)  # Default threshold
-            
+
             # Si tenemos nombres de clases, buscar por keywords
             if self.class_names:
                 for i, class_name in enumerate(self.class_names):
-                    if any(keyword.lower() in class_name.lower() 
+                    if any(keyword.lower() in class_name.lower()
                           for keyword in event_info['keywords']):
                         if scores[i] > max_score:
                             max_score = scores[i]
@@ -206,7 +206,7 @@ class AudioEventDetector:
                 for idx in approximate_indices:
                     if idx < len(scores) and scores[idx] > max_score:
                         max_score = scores[idx]
-            
+
             if max_score > threshold:
                 events_in_frame[event_name] = {
                     'confidence': float(max_score),
@@ -214,10 +214,10 @@ class AudioEventDetector:
                     'detected_classes': detected_classes,
                     'importance': event_info['importance']
                 }
-        
+
         return events_in_frame
-    
-    def _get_approximate_indices(self, event_name: str) -> List[int]:
+
+    def _get_approximate_indices(self, event_name: str) -> list[int]:
         """Mapeo aproximado de eventos a índices de AudioSet"""
         # Nota: Estos son índices aproximados, en un sistema real
         # necesitarías el mapeo exacto de YAMNet a AudioSet
@@ -232,20 +232,20 @@ class AudioEventDetector:
             'booing': [125, 126]
         }
         return mapping.get(event_name, [])
-    
-    def _consolidate_events(self, frame_events: List[Dict]) -> Dict:
+
+    def _consolidate_events(self, frame_events: list[dict]) -> dict:
         """Consolida eventos detectados a lo largo de todos los frames"""
         consolidated = {}
-        
+
         for event_name in self.events_of_interest.keys():
             detections = []
             confidences = []
-            
+
             for frame_event in frame_events:
                 if event_name in frame_event:
                     detections.append(frame_event[event_name])
                     confidences.append(frame_event[event_name]['confidence'])
-            
+
             if detections:
                 consolidated[event_name] = {
                     'detected': True,
@@ -266,10 +266,10 @@ class AudioEventDetector:
                     'importance': self.events_of_interest[event_name]['importance'],
                     'description': self.events_of_interest[event_name]['description']
                 }
-        
+
         return consolidated
-    
-    def _analyze_temporal_patterns(self, frame_events: List[Dict]) -> Dict:
+
+    def _analyze_temporal_patterns(self, frame_events: list[dict]) -> dict:
         """Analiza patrones temporales de eventos"""
         analysis = {
             'event_timeline': [],
@@ -277,7 +277,7 @@ class AudioEventDetector:
             'dominant_events': [],
             'event_transitions': []
         }
-        
+
         # Timeline de eventos por frame
         for i, frame_event in enumerate(frame_events):
             if frame_event:
@@ -286,7 +286,7 @@ class AudioEventDetector:
                     'events': list(frame_event.keys()),
                     'max_confidence': max(e['confidence'] for e in frame_event.values())
                 })
-        
+
         # Identificar momentos pico (alta actividad de eventos)
         confidences_by_frame = []
         for frame_event in frame_events:
@@ -295,22 +295,22 @@ class AudioEventDetector:
                 confidences_by_frame.append(avg_conf)
             else:
                 confidences_by_frame.append(0)
-        
+
         if confidences_by_frame:
             threshold = np.mean(confidences_by_frame) + np.std(confidences_by_frame)
             peaks = [i for i, conf in enumerate(confidences_by_frame) if conf > threshold]
             analysis['peak_moments'] = peaks
-        
+
         return analysis
 
 
 class DatasetEventProcessor:
     """Procesador para agregar detección de eventos al dataset"""
-    
+
     def __init__(self, dataset_dir: str):
         self.dataset_dir = Path(dataset_dir)
         self.detector = AudioEventDetector()
-    
+
     def process_dataset_events(self, overwrite: bool = False) -> bool:
         """
         Procesa el dataset agregando detección de eventos de audio
@@ -326,37 +326,37 @@ class DatasetEventProcessor:
             dataset_file = self.dataset_dir / "final" / "complete_dataset.pkl"
             logger.info(f"📊 Cargando dataset desde: {dataset_file}")
             df = pd.read_pickle(dataset_file)
-            
+
             # Determinar qué segmentos procesar
             if overwrite or 'audio_events_detailed' not in df.columns:
                 segments_to_process = df.index.tolist()
             else:
                 segments_to_process = df[df['audio_events_detailed'].isna()].index.tolist()
-            
+
             logger.info(f"🔄 Procesando eventos de audio en {len(segments_to_process)} segmentos...")
-            
+
             processed_count = 0
-            
+
             # Procesar cada segmento
             for idx in segments_to_process:
                 row = df.iloc[idx]
-                
+
                 try:
                     audio_file = row['source_file']
                     if not pd.isna(audio_file) and Path(audio_file).exists():
-                        
+
                         # Obtener tiempos del segmento
                         start_time = row.get('start_time', None)
                         end_time = row.get('end_time', None)
-                        
+
                         # Detectar eventos en el segmento específico
                         events_result = self.detector.detect_events_in_audio(
                             audio_file, start_time, end_time)
-                        
+
                         if events_result['processing_success']:
                             # Agregar información detallada de eventos
                             df.at[idx, 'audio_events_detailed'] = json.dumps(events_result)
-                            
+
                             # Agregar columnas específicas para eventos importantes
                             events = events_result['events_detected']
                             df.at[idx, 'has_laughter'] = events.get('laughter', {}).get('detected', False)
@@ -364,36 +364,36 @@ class DatasetEventProcessor:
                             df.at[idx, 'has_music'] = events.get('music', {}).get('detected', False)
                             df.at[idx, 'has_crowd'] = events.get('crowd', {}).get('detected', False)
                             df.at[idx, 'has_cheering'] = events.get('cheering', {}).get('detected', False)
-                            
+
                             # Confidence scores para eventos principales
                             df.at[idx, 'laughter_confidence'] = events.get('laughter', {}).get('max_confidence', 0.0)
                             df.at[idx, 'applause_confidence'] = events.get('applause', {}).get('max_confidence', 0.0)
                             df.at[idx, 'music_confidence'] = events.get('music', {}).get('max_confidence', 0.0)
-                            
+
                             processed_count += 1
-                        
+
                         if processed_count % 50 == 0:
                             logger.info(f"📊 Progreso: {processed_count}/{len(segments_to_process)} segmentos")
-                            
+
                 except Exception as e:
                     logger.warning(f"⚠️  Error procesando segmento {idx}: {e}")
                     continue
-            
+
             # Guardar dataset actualizado
             df.to_pickle(dataset_file)
-            
+
             # Guardar resumen de eventos
             self._save_events_summary(df)
-            
-            logger.info(f"✅ Procesamiento de eventos completado:")
+
+            logger.info("✅ Procesamiento de eventos completado:")
             logger.info(f"  ✅ Segmentos procesados: {processed_count}")
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"❌ Error en procesamiento de eventos: {e}")
             return False
-    
+
     def _save_events_summary(self, df: pd.DataFrame):
         """Guarda un resumen de eventos detectados"""
         try:
@@ -406,13 +406,13 @@ class DatasetEventProcessor:
                 'segments_with_cheering': df['has_cheering'].sum() if 'has_cheering' in df.columns else 0,
                 'analysis_date': datetime.now().isoformat()
             }
-            
+
             summary_file = self.dataset_dir / "final" / "audio_events_summary.json"
             with open(summary_file, 'w') as f:
                 json.dump(summary, f, indent=2)
-            
+
             logger.info(f"📄 Resumen de eventos guardado: {summary_file}")
-            
+
             # Imprimir estadísticas
             logger.info("📊 Estadísticas de eventos detectados:")
             for event, count in summary.items():
@@ -420,7 +420,7 @@ class DatasetEventProcessor:
                     event_name = event.replace('segments_with_', '').title()
                     percentage = (count / summary['total_segments']) * 100 if summary['total_segments'] > 0 else 0
                     logger.info(f"  🎵 {event_name}: {count} segmentos ({percentage:.1f}%)")
-            
+
         except Exception as e:
             logger.warning(f"⚠️  No se pudo guardar resumen de eventos: {e}")
 
@@ -430,19 +430,19 @@ def main():
     parser = argparse.ArgumentParser(description="Detectar eventos de audio en el dataset")
     parser.add_argument("dataset_dir", help="Directorio del dataset")
     parser.add_argument("--overwrite", action="store_true", help="Sobreescribir análisis existente")
-    
+
     args = parser.parse_args()
-    
+
     print("🎵 Detector de Eventos de Audio para Dataset")
     print("=" * 50)
     print(f"📁 Dataset: {args.dataset_dir}")
     print(f"🔄 Overwrite: {args.overwrite}")
     print()
-    
+
     try:
         processor = DatasetEventProcessor(args.dataset_dir)
         success = processor.process_dataset_events(overwrite=args.overwrite)
-        
+
         if success:
             print("✅ ¡Detección de eventos de audio completada!")
             print(f"📁 Dataset actualizado en: {args.dataset_dir}/final/complete_dataset.pkl")
@@ -458,10 +458,9 @@ def main():
             print("   🔍 > aplausos")
             print("   🔍 > música")
             return 0
-        else:
-            print("❌ Error en la detección de eventos")
-            return 1
-            
+        print("❌ Error en la detección de eventos")
+        return 1
+
     except Exception as e:
         print(f"❌ Error: {e}")
         return 1

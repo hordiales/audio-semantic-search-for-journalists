@@ -4,12 +4,12 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable
+from dataclasses import dataclass
 import json
+from pathlib import Path
 import subprocess
 import sys
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Iterable, List
 
 CURRENT_DIR = Path(__file__).resolve().parent
 PARENT_DIR = CURRENT_DIR.parent
@@ -27,16 +27,16 @@ class TestEntry:
     description: str
 
 
-def load_catalog() -> dict[str, List[TestEntry]]:
+def load_catalog() -> dict[str, list[TestEntry]]:
     raw_catalog = json.loads(CATALOG_PATH.read_text())
-    catalog: dict[str, List[TestEntry]] = {}
+    catalog: dict[str, list[TestEntry]] = {}
     for category, entries in raw_catalog.items():
         catalog[category] = [TestEntry(**entry) for entry in entries]
     return catalog
 
 
-def iter_selected_categories(catalog: dict[str, List[TestEntry]], selections: Iterable[str]) -> List[TestEntry]:
-    ordered: List[TestEntry] = []
+def iter_selected_categories(catalog: dict[str, list[TestEntry]], selections: Iterable[str]) -> list[TestEntry]:
+    ordered: list[TestEntry] = []
     for category in selections:
         ordered.extend(catalog.get(category, []))
     return ordered
@@ -53,7 +53,7 @@ def run_module(entry: TestEntry) -> int:
     return proc.returncode
 
 
-def list_catalog(catalog: dict[str, List[TestEntry]]) -> None:
+def list_catalog(catalog: dict[str, list[TestEntry]]) -> None:
     for category, entries in catalog.items():
         print(f"\n[{category}] ({len(entries)} tests)")
         for entry in entries:

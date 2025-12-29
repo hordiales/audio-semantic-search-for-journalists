@@ -4,15 +4,15 @@ Test y comparación de rendimiento entre bases de datos vectoriales:
 FAISS, ChromaDB, Supabase y Memoria
 """
 
-import sys
-import os
+import json
 import logging
+from pathlib import Path
+import sys
 import time
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from typing import Dict, List, Any
-import json
 
 CURRENT_FILE = Path(__file__).resolve()
 TESTS_ROOT = CURRENT_FILE
@@ -21,7 +21,7 @@ while TESTS_ROOT.name != "tests" and TESTS_ROOT.parent != TESTS_ROOT:
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-from tests.common.path_utils import artifacts_dir, ensure_sys_path, SRC_ROOT
+from tests.common.path_utils import SRC_ROOT, artifacts_dir, ensure_sys_path
 
 ensure_sys_path([SRC_ROOT])
 OUTPUT_ROOT = artifacts_dir("vector_databases")
@@ -36,8 +36,10 @@ def test_vector_databases():
     print("=" * 80)
 
     try:
-        from vector_database_interface import VectorDBType, VectorDocument, create_vector_database
-        from vector_database_config import get_configurator, ConfigurationPreset
+        from vector_database_config import ConfigurationPreset, get_configurator
+        from vector_database_interface import (
+            VectorDBType,
+        )
 
         # Configurar para pruebas
         configurator = get_configurator("test_vector_db_config.json")
@@ -55,7 +57,7 @@ def test_vector_databases():
         test_data = generate_test_data(num_docs=1000, embedding_dim=256)
         test_queries = generate_test_queries(num_queries=50, embedding_dim=256)
 
-        print(f"📊 Datos de prueba generados:")
+        print("📊 Datos de prueba generados:")
         print(f"   📄 Documentos: {len(test_data)}")
         print(f"   🔍 Consultas: {len(test_queries)}")
 
@@ -88,7 +90,7 @@ def test_vector_databases():
         traceback.print_exc()
         return False
 
-def generate_test_data(num_docs: int, embedding_dim: int) -> List[VectorDocument]:
+def generate_test_data(num_docs: int, embedding_dim: int) -> list[VectorDocument]:
     """Genera datos de prueba sintéticos"""
     print(f"📊 Generando {num_docs} documentos de prueba...")
 
@@ -136,7 +138,7 @@ def generate_test_data(num_docs: int, embedding_dim: int) -> List[VectorDocument
     print(f"✅ {len(documents)} documentos generados")
     return documents
 
-def generate_test_queries(num_queries: int, embedding_dim: int) -> List[np.ndarray]:
+def generate_test_queries(num_queries: int, embedding_dim: int) -> list[np.ndarray]:
     """Genera consultas de prueba"""
     print(f"🔍 Generando {num_queries} consultas de prueba...")
 
@@ -152,8 +154,8 @@ def generate_test_queries(num_queries: int, embedding_dim: int) -> List[np.ndarr
     print(f"✅ {len(queries)} consultas generadas")
     return queries
 
-def test_single_database(db_type: VectorDBType, configurator, test_data: List[VectorDocument],
-                        test_queries: List[np.ndarray]) -> Dict[str, Any]:
+def test_single_database(db_type: VectorDBType, configurator, test_data: list[VectorDocument],
+                        test_queries: list[np.ndarray]) -> dict[str, Any]:
     """Prueba una base de datos específica"""
 
     # Crear configuración específica
@@ -234,7 +236,7 @@ def test_single_database(db_type: VectorDBType, configurator, test_data: List[Ve
         print(f"   ⏱️  Búsqueda promedio: {metrics['avg_search_time']:.3f}s ({metrics['search_rate']:.1f} búsquedas/s)")
 
         # 4. Evaluación de precisión
-        print(f"📊 Evaluando precisión...")
+        print("📊 Evaluando precisión...")
         accuracy_metrics = evaluate_search_accuracy(test_data, test_queries, search_results)
         metrics["accuracy_metrics"] = accuracy_metrics
 
@@ -256,8 +258,8 @@ def test_single_database(db_type: VectorDBType, configurator, test_data: List[Ve
 
     return metrics
 
-def evaluate_search_accuracy(test_data: List[VectorDocument], test_queries: List[np.ndarray],
-                           search_results: List[List]) -> Dict[str, float]:
+def evaluate_search_accuracy(test_data: list[VectorDocument], test_queries: list[np.ndarray],
+                           search_results: list[list]) -> dict[str, float]:
     """Evalúa la precisión de los resultados de búsqueda"""
 
     if not search_results or not test_queries:
@@ -301,7 +303,7 @@ def evaluate_search_accuracy(test_data: List[VectorDocument], test_queries: List
         "successful_searches": successful_searches
     }
 
-def generate_comparison_report(results: Dict[str, Dict[str, Any]]):
+def generate_comparison_report(results: dict[str, dict[str, Any]]):
     """Genera reporte de comparación entre bases de datos"""
     print(f"\n{'='*80}")
     print("📊 REPORTE DE COMPARACIÓN DE BASES DE DATOS VECTORIALES")
@@ -341,7 +343,7 @@ def generate_comparison_report(results: Dict[str, Dict[str, Any]]):
         print(df.to_string(index=False))
 
     # Detalles específicos
-    print(f"\n📋 DETALLES POR BASE DE DATOS:")
+    print("\n📋 DETALLES POR BASE DE DATOS:")
     for db_name, metrics in results.items():
         print(f"\n🔸 {db_name.upper()}:")
 
@@ -355,13 +357,13 @@ def generate_comparison_report(results: Dict[str, Dict[str, Any]]):
 
         accuracy = metrics.get('accuracy_metrics', {})
         if accuracy:
-            print(f"   📊 Precisión:")
+            print("   📊 Precisión:")
             print(f"      • Tasa de éxito: {accuracy.get('success_rate', 0)*100:.1f}%")
             print(f"      • Coherencia de categorías: {accuracy.get('avg_category_coherence', 0)*100:.1f}%")
             print(f"      • Resultados promedio: {accuracy.get('avg_results_per_search', 0):.1f}")
 
     # Recomendaciones
-    print(f"\n💡 RECOMENDACIONES:")
+    print("\n💡 RECOMENDACIONES:")
 
     successful_dbs = [db for db, metrics in results.items() if "error" not in metrics]
 
@@ -384,11 +386,11 @@ def generate_comparison_report(results: Dict[str, Dict[str, Any]]):
                        key=lambda db: results[db].get('accuracy_metrics', {}).get('success_rate', 0))
     print(f"   🎯 Mejor precisión: {most_accurate.upper()}")
 
-    print(f"\n💾 Casos de uso recomendados:")
-    print(f"   • Desarrollo/Prototipado: MEMORY")
-    print(f"   • Producción local: FAISS")
-    print(f"   • Aplicaciones web: CHROMADB")
-    print(f"   • Producción escalable: SUPABASE")
+    print("\n💾 Casos de uso recomendados:")
+    print("   • Desarrollo/Prototipado: MEMORY")
+    print("   • Producción local: FAISS")
+    print("   • Aplicaciones web: CHROMADB")
+    print("   • Producción escalable: SUPABASE")
 
     # Guardar resultados detallados
     output_dir = OUTPUT_ROOT
@@ -407,9 +409,8 @@ def main():
         if success:
             print("\n🏆 TESTS COMPLETADOS EXITOSAMENTE")
             return 0
-        else:
-            print("\n💥 TESTS FALLARON")
-            return 1
+        print("\n💥 TESTS FALLARON")
+        return 1
     except KeyboardInterrupt:
         print("\n🛑 Tests interrumpidos")
         return 1

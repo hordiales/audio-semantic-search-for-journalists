@@ -1,14 +1,13 @@
-import numpy as np
-import pandas as pd
-import librosa
-from typing import List, Dict, Optional
 from abc import ABC, abstractmethod
-import pickle
 import os
 import warnings
+
+import librosa
+import numpy as np
+import pandas as pd
+
 warnings.filterwarnings('ignore')
 import logging
-import sys
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +16,11 @@ import tensorflow as tf
 import tensorflow_hub as hub
 
 try:
-    from .models_config import get_models_config, YAMNetConfig, AudioEmbeddingModel
+    from .models_config import AudioEmbeddingModel, YAMNetConfig, get_models_config
 except ImportError:
     # Fallback para ejecución desde diferentes directorios
     try:
-        from models_config import get_models_config, YAMNetConfig, AudioEmbeddingModel
+        from models_config import AudioEmbeddingModel, YAMNetConfig, get_models_config
     except ImportError:
         # Definiciones mínimas para evitar errores
         def get_models_config():
@@ -54,10 +53,9 @@ class BaseAudioEmbedding(ABC):
     @abstractmethod
     def _load_model(self):
         """Carga el modelo de embeddings"""
-        pass
 
     @abstractmethod
-    def preprocess_audio(self, audio_path: str, target_sr: Optional[int] = None) -> np.ndarray:
+    def preprocess_audio(self, audio_path: str, target_sr: int | None = None) -> np.ndarray:
         """
         Preprocesa un archivo de audio según los requisitos del modelo
 
@@ -68,7 +66,6 @@ class BaseAudioEmbedding(ABC):
         Returns:
             Audio preprocesado como array numpy
         """
-        pass
 
     @abstractmethod
     def generate_embedding(self, audio_path: str) -> np.ndarray:
@@ -81,9 +78,8 @@ class BaseAudioEmbedding(ABC):
         Returns:
             Array numpy con el embedding del audio
         """
-        pass
 
-    def generate_embeddings_batch(self, audio_paths: List[str]) -> np.ndarray:
+    def generate_embeddings_batch(self, audio_paths: list[str]) -> np.ndarray:
         """
         Genera embeddings para una lista de archivos de audio
 
@@ -236,7 +232,7 @@ class YAMNetEmbedding(BaseAudioEmbedding):
     Implementación de embeddings de audio usando YAMNet de TensorFlow Hub
     """
 
-    def __init__(self, config: Optional[YAMNetConfig] = None):
+    def __init__(self, config: YAMNetConfig | None = None):
         """
         Inicializa el generador de embeddings YAMNet
 
@@ -270,7 +266,7 @@ class YAMNetEmbedding(BaseAudioEmbedding):
             logger.error(f"Error cargando YAMNet: {e}")
             raise RuntimeError(f"No se pudo cargar YAMNet: {e}")
 
-    def preprocess_audio(self, audio_path: str, target_sr: Optional[int] = None) -> np.ndarray:
+    def preprocess_audio(self, audio_path: str, target_sr: int | None = None) -> np.ndarray:
         """
         Preprocesa un archivo de audio para YAMNet
 
@@ -359,7 +355,7 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
                     from clap_audio_embeddings import CLAPEmbedding
                     return CLAPEmbedding()
                 except ImportError:
-                    logger.warning(f"⚠️  CLAP no disponible, usando YAMNet como fallback")
+                    logger.warning("⚠️  CLAP no disponible, usando YAMNet como fallback")
                     return YAMNetEmbedding()
 
         # SpeechDPR
@@ -383,7 +379,7 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
 if __name__ == "__main__":
     # Ejemplo de uso del generador de embeddings de audio
     embedder = get_audio_embedding_generator()
-    
+
     # Datos de ejemplo
     sample_data = {
         'text': [
@@ -394,11 +390,11 @@ if __name__ == "__main__":
         'end_time': [10, 20],
         'source_file': ['audio1.wav', 'audio1.wav']
     }
-    
+
     df = pd.DataFrame(sample_data)
-    
+
     # Generar embeddings reales
     # df_with_embeddings = embedder.process_transcription_dataframe(df)
     # logger.info(f"DataFrame con embeddings: {df_with_embeddings.columns.tolist()}")
-    
+
     logger.info("Módulo de embeddings de audio listo.")

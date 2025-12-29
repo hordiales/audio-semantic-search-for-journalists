@@ -3,31 +3,48 @@ Sistema de búsqueda semántica mejorado con soporte para múltiples bases de da
 Integra FAISS, ChromaDB y Supabase con el framework existente de embeddings de audio.
 """
 
+import json
 import logging
-import pandas as pd
-import numpy as np
-from typing import List, Dict, Any, Optional, Tuple, Union
 from pathlib import Path
 import time
-import json
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 try:
+    from .vector_database_config import (
+        ConfigurationPreset,
+        VectorDatabaseConfigurator,
+        get_configurator,
+    )
     from .vector_database_interface import (
-        VectorDatabaseInterface, VectorDocument, SearchResult, VectorDBType, create_vector_database
+        SearchResult,
+        VectorDatabaseInterface,
+        VectorDBType,
+        VectorDocument,
+        create_vector_database,
     )
-    from .vector_database_config import get_configurator, VectorDatabaseConfigurator, ConfigurationPreset
 except ImportError:
-    from vector_database_interface import (
-        VectorDatabaseInterface, VectorDocument, SearchResult, VectorDBType, create_vector_database
+    from vector_database_config import (
+        ConfigurationPreset,
+        VectorDatabaseConfigurator,
+        get_configurator,
     )
-    from vector_database_config import get_configurator, VectorDatabaseConfigurator, ConfigurationPreset
+    from vector_database_interface import (
+        SearchResult,
+        VectorDatabaseInterface,
+        VectorDBType,
+        VectorDocument,
+        create_vector_database,
+    )
 
 logger = logging.getLogger(__name__)
 
 # Imports existentes del sistema
 try:
     from .audio_embeddings import get_audio_embedding_generator
-    from .models_config import get_models_config, AudioEmbeddingModel
+    from .models_config import AudioEmbeddingModel, get_models_config
     AUDIO_EMBEDDINGS_AVAILABLE = True
 except ImportError:
     AUDIO_EMBEDDINGS_AVAILABLE = False
@@ -38,7 +55,7 @@ class EnhancedSemanticSearch:
     Sistema de búsqueda semántica mejorado con soporte para múltiples bases de datos vectoriales
     """
 
-    def __init__(self, configurator: Optional[VectorDatabaseConfigurator] = None):
+    def __init__(self, configurator: VectorDatabaseConfigurator | None = None):
         """
         Inicializa el sistema de búsqueda semántica
 
@@ -46,8 +63,8 @@ class EnhancedSemanticSearch:
             configurator: Configurador de bases de datos vectoriales (usa global si None)
         """
         self.configurator = configurator or get_configurator()
-        self.vector_db: Optional[VectorDatabaseInterface] = None
-        self.fallback_db: Optional[VectorDatabaseInterface] = None
+        self.vector_db: VectorDatabaseInterface | None = None
+        self.fallback_db: VectorDatabaseInterface | None = None
 
         # Generadores de embeddings
         self.audio_embedding_generator = None
@@ -134,7 +151,7 @@ class EnhancedSemanticSearch:
         except Exception as e:
             logger.error(f"❌ Error inicializando generadores de embeddings: {e}")
 
-    def add_audio_documents(self, audio_data: Union[pd.DataFrame, List[Dict[str, Any]]]) -> bool:
+    def add_audio_documents(self, audio_data: pd.DataFrame | list[dict[str, Any]]) -> bool:
         """
         Añade documentos de audio a la base de datos vectorial
 
@@ -223,7 +240,7 @@ class EnhancedSemanticSearch:
             logger.error(f"❌ Error añadiendo documentos de audio: {e}")
             return False
 
-    def _add_documents_batch(self, documents: List[VectorDocument]) -> bool:
+    def _add_documents_batch(self, documents: list[VectorDocument]) -> bool:
         """Añade un lote de documentos con fallback automático"""
         try:
             # Intentar con base de datos principal
@@ -245,7 +262,7 @@ class EnhancedSemanticSearch:
             return False
 
     def search_by_text(self, query: str, k: int = 10,
-                      filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
+                      filters: dict[str, Any] | None = None) -> list[SearchResult]:
         """
         Busca documentos usando consulta de texto
 
@@ -284,7 +301,7 @@ class EnhancedSemanticSearch:
             return []
 
     def search_by_audio(self, audio_path: str, k: int = 10,
-                       filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
+                       filters: dict[str, Any] | None = None) -> list[SearchResult]:
         """
         Busca documentos usando archivo de audio
 
@@ -322,7 +339,7 @@ class EnhancedSemanticSearch:
             return []
 
     def search_by_embedding(self, embedding: np.ndarray, k: int = 10,
-                          filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
+                          filters: dict[str, Any] | None = None) -> list[SearchResult]:
         """
         Busca documentos usando embedding directo
 
@@ -353,7 +370,7 @@ class EnhancedSemanticSearch:
             return []
 
     def _search_with_fallback(self, query_embedding: np.ndarray, k: int,
-                            filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
+                            filters: dict[str, Any] | None = None) -> list[SearchResult]:
         """Realiza búsqueda con fallback automático"""
         try:
             # Intentar con base de datos principal
@@ -385,7 +402,7 @@ class EnhancedSemanticSearch:
             (current_avg * (total_searches - 1) + search_time) / total_searches
         )
 
-    def get_similar_documents(self, document_id: str, k: int = 5) -> List[SearchResult]:
+    def get_similar_documents(self, document_id: str, k: int = 5) -> list[SearchResult]:
         """
         Encuentra documentos similares a uno específico
 
@@ -418,7 +435,7 @@ class EnhancedSemanticSearch:
             logger.error(f"❌ Error buscando documentos similares: {e}")
             return []
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Obtiene estadísticas completas del sistema"""
         stats = {
             "search_statistics": self.search_stats.copy(),
@@ -473,7 +490,7 @@ class EnhancedSemanticSearch:
             logger.error(f"❌ Error cambiando base de datos: {e}")
             return False
 
-    def save_index(self, path: Optional[str] = None) -> bool:
+    def save_index(self, path: str | None = None) -> bool:
         """Guarda el índice de la base de datos"""
         try:
             if path is None:
@@ -506,8 +523,8 @@ class EnhancedSemanticSearch:
             return False
 
 # Función de conveniencia para crear instancia configurada
-def create_enhanced_search(preset: Optional[ConfigurationPreset] = None,
-                         config_file: Optional[str] = None) -> EnhancedSemanticSearch:
+def create_enhanced_search(preset: ConfigurationPreset | None = None,
+                         config_file: str | None = None) -> EnhancedSemanticSearch:
     """
     Crea una instancia configurada del sistema de búsqueda semántica
 

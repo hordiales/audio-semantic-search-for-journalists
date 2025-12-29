@@ -4,9 +4,8 @@ Test CLAP con descarga completa (sin timeout)
 """
 
 import os
-import sys
-import time
 from pathlib import Path
+import time
 
 # Configurar warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -62,7 +61,7 @@ def test_clap_full():
 
         embed_time = time.time() - embed_start
 
-        print(f"✅ Embedding generado:")
+        print("✅ Embedding generado:")
         print(f"   📏 Dimensión: {len(embedding_np)}")
         print(f"   ⏱️  Tiempo: {embed_time:.1f}s")
         print(f"   📊 Tipo: {type(embedding_np)}")
@@ -77,7 +76,7 @@ def test_clap_full():
 
         text_time = time.time() - text_start
 
-        print(f"✅ Embedding de texto generado:")
+        print("✅ Embedding de texto generado:")
         print(f"   📏 Dimensión: {len(text_embedding_np)}")
         print(f"   ⏱️  Tiempo: {text_time:.1f}s")
 
