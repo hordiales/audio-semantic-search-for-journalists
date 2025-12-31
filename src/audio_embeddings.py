@@ -369,11 +369,19 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
         # CLAP Models (modelo por defecto y recomendado)
         if model_type in [AudioEmbeddingModel.CLAP_LAION, AudioEmbeddingModel.CLAP_MUSIC]:
             try:
+                # Intentar import relativo primero (cuando se ejecuta como módulo)
                 from .clap_audio_embeddings import CLAPEmbedding
                 logger.info(f"🎵 Usando CLAP ({model_type.value}) para embeddings de audio")
                 return CLAPEmbedding()
-            except ImportError:
+            except (ImportError, ValueError):
                 try:
+                    # Intentar import absoluto (cuando se ejecuta como script)
+                    import sys
+                    import os
+                    # Añadir el directorio src al path si no está
+                    src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    if src_dir not in sys.path:
+                        sys.path.insert(0, src_dir)
                     from clap_audio_embeddings import CLAPEmbedding
                     logger.info(f"🎵 Usando CLAP ({model_type.value}) para embeddings de audio")
                     return CLAPEmbedding()
@@ -413,8 +421,13 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
                     from .clap_audio_embeddings import CLAPEmbedding
                     logger.info("🎵 Usando CLAP como fallback")
                     return CLAPEmbedding()
-                except ImportError:
+                except (ImportError, ValueError):
                     try:
+                        import sys
+                        import os
+                        src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        if src_dir not in sys.path:
+                            sys.path.insert(0, src_dir)
                         from clap_audio_embeddings import CLAPEmbedding
                         logger.info("🎵 Usando CLAP como fallback")
                         return CLAPEmbedding()
@@ -432,8 +445,13 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
         from .clap_audio_embeddings import CLAPEmbedding
         logger.info("🎵 Usando CLAP (modelo por defecto) para embeddings de audio")
         return CLAPEmbedding()
-    except ImportError:
+    except (ImportError, ValueError):
         try:
+            import sys
+            import os
+            src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if src_dir not in sys.path:
+                sys.path.insert(0, src_dir)
             from clap_audio_embeddings import CLAPEmbedding
             logger.info("🎵 Usando CLAP (modelo por defecto) para embeddings de audio")
             return CLAPEmbedding()

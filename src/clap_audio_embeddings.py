@@ -16,8 +16,19 @@ import soundfile as sf
 
 warnings.filterwarnings('ignore')
 
-from .audio_embeddings import BaseAudioEmbedding
-from .models_config import CLAPConfig, get_models_config
+# Imports que funcionan tanto como módulo como script
+try:
+    from .audio_embeddings import BaseAudioEmbedding
+    from .models_config import CLAPConfig, get_models_config
+except (ImportError, ValueError):
+    # Fallback para cuando se ejecuta como script
+    import sys
+    import os
+    src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
+    from audio_embeddings import BaseAudioEmbedding
+    from models_config import CLAPConfig, get_models_config
 
 logger = logging.getLogger(__name__)
 
