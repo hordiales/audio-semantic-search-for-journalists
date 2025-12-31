@@ -55,9 +55,11 @@ class LocalAudioSearch:
         self.df = None
         self.faiss_index = None
         self.embeddings = None
+        self.dataset_config = None
 
         self._load_dataset()
         self._load_text_model()
+        self._load_dataset_config()
 
     def _load_dataset(self):
         """Carga el dataset local"""
@@ -161,6 +163,21 @@ class LocalAudioSearch:
 
         print("⚠️  No se encontraron embeddings pre-calculados")
         print("   Se generarán embeddings en tiempo de búsqueda (más lento)")
+
+    def _load_dataset_config(self):
+        """Carga la configuración del dataset desde el manifest"""
+        manifest_file = self.dataset_path / "final" / "dataset_manifest.json"
+        if manifest_file.exists():
+            try:
+                import json
+                with open(manifest_file, encoding='utf-8') as f:
+                    manifest = json.load(f)
+                    self.dataset_config = manifest
+            except Exception as e:
+                print(f"⚠️  Error cargando manifest: {e}")
+                self.dataset_config = None
+        else:
+            self.dataset_config = None
 
     def _build_faiss_index(self):
         """Construye índice FAISS desde embeddings"""
@@ -280,6 +297,7 @@ class LocalAudioSearch:
         for i, result in enumerate(results, 1):
             segment = result['segment']
             similarity = result['similarity']
+            score = similarity  # Score de similitud coseno
 
             # Información del segmento
             segment_id = segment.get('segment_id', i - 1)
@@ -294,7 +312,11 @@ class LocalAudioSearch:
             print(f"🎯 RESULTADO {i}")
             print(f"   📋 ID: {segment_id}")
             print(f"   🌐 Idioma: {language}")
-            print(f"   📊 Similitud: {similarity:.4f} ({similarity*100:.1f}%)")
+            # Formatear score de manera más clara
+            score_percent = score * 100
+            score_bar = "█" * int(score_percent / 5)  # Barra visual
+            print(f"   📊 Score: {score:.4f} ({score_percent:.1f}%) {score_bar}")
+            print(f"   🔍 Índice: 📝 Texto (transcripción)")
             print(f"   ⏱️  Tiempo: {start_time:.1f}s - {end_time:.1f}s ({duration:.1f}s)")
             print(f"   📁 Archivo: {original_file}")
 
@@ -502,6 +524,74 @@ class LocalAudioSearch:
                 print("\n🔄 Volviendo al menú de búsqueda...")
                 return
 
+    def _print_dataset_config(self):
+        """Imprime la configuración del dataset"""
+        print("\n📋 CONFIGURACIÓN DEL DATASET")
+        print("=" * 70)
+
+        if self.dataset_config and 'models_used' in self.dataset_config:
+            models = self.dataset_config['models_used']
+
+            # Transcripción
+            if 'transcription' in models:
+                trans = models['transcription']
+                print("🤖 Transcripción:")
+                print(f"   - Modelo Whisper: {trans.get('model', 'N/A')}")
+                print(f"   - Idioma: {trans.get('language', 'N/A')}")
+                seg_method = trans.get('segmentation_method', 'N/A')
+                print(f"   - Método segmentación: {seg_method}")
+
+                # Parámetros de segmentación
+                if 'segmentation_params' in trans:
+                    seg_params = trans['segmentation_params']
+                    if seg_method == 'time':
+                        print(f"   - Duración segmento: {seg_params.get('segment_duration', 'N/A')}s")
+                    elif seg_method == 'silence':
+                        print(f"   - Min silencio: {seg_params.get('min_silence_len', 'N/A')}ms")
+                        print(f"   - Umbral silencio: {seg_params.get('silence_thresh', 'N/A')}dB")
+                print()
+
+            # Embeddings de texto
+            if 'text_embeddings' in models:
+                text = models['text_embeddings']
+                print("📝 Embeddings de Texto:")
+                print(f"   - Modelo: {text.get('model', 'N/A')}")
+                print(f"   - Dimensión: {text.get('embedding_dimension', 'N/A')}")
+                print()
+
+            # Embeddings de audio
+            if 'audio_embeddings' in models:
+                audio = models['audio_embeddings']
+                print("🎵 Embeddings de Audio:")
+                print(f"   - Modelo: {audio.get('model', 'N/A')}")
+                print(f"   - Dimensión: {audio.get('embedding_dimension', 'N/A')}")
+                print()
+        else:
+            # Intentar obtener info del DataFrame
+            print("⚠️  Manifest no disponible, mostrando información del DataFrame:")
+            if len(self.df) > 0:
+                if 'embedding_model' in self.df.columns:
+                    print(f"   📝 Modelo texto: {self.df['embedding_model'].iloc[0]}")
+                if 'embedding_dim' in self.df.columns:
+                    print(f"   📊 Dimensión texto: {self.df['embedding_dim'].iloc[0]}")
+                if 'audio_embedding_model' in self.df.columns:
+                    print(f"   🎵 Modelo audio: {self.df['audio_embedding_model'].iloc[0]}")
+                if 'audio_embedding_dim' in self.df.columns:
+                    print(f"   📊 Dimensión audio: {self.df['audio_embedding_dim'].iloc[0]}")
+            print()
+
+        # Información adicional del DataFrame
+        if len(self.df) > 0:
+            # Verificar método de segmentación desde columnas
+            if 'segmentation_method' in self.df.columns:
+                seg_method = self.df['segmentation_method'].iloc[0]
+                print(f"   📐 Método segmentación: {seg_method}")
+            if 'segment_duration' in self.df.columns:
+                print(f"   ⏱️  Duración segmento: {self.df['segment_duration'].iloc[0]}s")
+
+        print("=" * 70)
+        print()
+
     def interactive_search(self):
         """Interfaz interactiva de búsqueda"""
         print("\n🔍 BÚSQUEDA SEMÁNTICA INTERACTIVA DE AUDIO")
@@ -509,8 +599,12 @@ class LocalAudioSearch:
         print(f"📂 Dataset: {self.dataset_path}")
         print(f"📊 Segmentos: {len(self.df)}")
         print(f"🔧 Backend: {'FAISS' if self.faiss_index else 'NumPy'}")
-        print()
+
+        # Mostrar configuración del dataset
+        self._print_dataset_config()
+
         print("💡 Ejemplos: 'política económica', 'entrevista', 'música de fondo'")
+        print("💡 Esta búsqueda usa el índice de texto (transcripciones)")
         print()
 
         while True:
