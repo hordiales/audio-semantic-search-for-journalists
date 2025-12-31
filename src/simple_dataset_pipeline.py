@@ -48,7 +48,12 @@ class SimpleDatasetPipeline:
             'silence_thresh': kwargs.get('silence_thresh', system_config.silence_thresh),
             'segment_duration': kwargs.get('segment_duration', system_config.segment_duration),
             'language': kwargs.get('language', 'es'),
-            'save_intermediate': kwargs.get('save_intermediate', True)
+            'save_intermediate': kwargs.get('save_intermediate', True),
+            # Configuración de overlapping para CLAP
+            'use_clap_overlapping': kwargs.get('use_clap_overlapping', False),
+            'clap_chunk_duration': kwargs.get('clap_chunk_duration', None),
+            'clap_overlap_duration': kwargs.get('clap_overlap_duration', None),
+            'clap_hop_duration': kwargs.get('clap_hop_duration', None)
         }
 
         # Crear directorios
@@ -261,7 +266,68 @@ class SimpleDatasetPipeline:
         # Embeddings de audio
         audio_model_name = getattr(self.audio_embedder, 'model_name', 'Desconocido')
         self.logger.info(f"Generando embeddings de audio usando modelo: {audio_model_name}")
-        df_with_all = self.audio_embedder.process_transcription_dataframe(df_with_text)
+
+        # Verificar si es CLAP y si se debe usar overlapping
+        use_overlapping = (
+            self.config.get('use_clap_overlapping', False) and
+            audio_model_name == 'CLAP' and
+            hasattr(self.audio_embedder, 'generate_overlapping_chunks')
+        )
+
+        if use_overlapping:
+            self.logger.info("🔄 Usando chunking con overlapping para CLAP")
+            # Obtener archivos únicos de audio
+            unique_audio_files = df_with_text['source_file'].unique()
+
+            # Generar chunks con overlapping para cada archivo
+            all_chunks_dfs = []
+            for audio_file in unique_audio_files:
+                try:
+                    chunks_df = self.audio_embedder.generate_overlapping_chunks(
+                        audio_file,
+                        chunk_duration=self.config.get('clap_chunk_duration'),
+                        overlap_duration=self.config.get('clap_overlap_duration'),
+                        hop_duration=self.config.get('clap_hop_duration')
+                    )
+
+                    if len(chunks_df) > 0:
+                        # Combinar con información de texto si es posible
+                        # Para chunks con overlapping, no hay transcripción directa
+                        # pero podemos mantener la estructura similar
+                        all_chunks_dfs.append(chunks_df)
+                except Exception as e:
+                    self.logger.error(f"Error generando chunks con overlapping para {audio_file}: {e}")
+                    # Fallback a método normal
+                    file_segments = df_with_text[df_with_text['source_file'] == audio_file]
+                    if len(file_segments) > 0:
+                        all_chunks_dfs.append(
+                            self.audio_embedder.process_transcription_dataframe(file_segments)
+                        )
+
+            if all_chunks_dfs:
+                df_with_all = pd.concat(all_chunks_dfs, ignore_index=True)
+                # Agregar columnas de texto si no existen (chunks con overlapping no tienen transcripciones)
+                if 'text' not in df_with_all.columns:
+                    df_with_all['text'] = ''
+                if 'text_embedding' not in df_with_all.columns:
+                    # Generar embeddings de texto vacío para mantener consistencia
+                    empty_text_embeddings = self.text_embedder.generate_embedding("")
+                    df_with_all['text_embedding'] = [empty_text_embeddings.tolist()] * len(df_with_all)
+                if 'embedding_model' not in df_with_all.columns:
+                    df_with_all['embedding_model'] = self.config['text_model']
+                if 'embedding_dim' not in df_with_all.columns:
+                    df_with_all['embedding_dim'] = self.text_embedder.embedding_dim
+                self.logger.info(
+                    f"✅ Generados {len(df_with_all)} chunks con overlapping "
+                    f"(sin transcripciones asociadas)"
+                )
+            else:
+                # Fallback si no se generaron chunks
+                self.logger.warning("No se generaron chunks con overlapping, usando método normal")
+                df_with_all = self.audio_embedder.process_transcription_dataframe(df_with_text)
+        else:
+            # Método normal: usar segmentos de transcripción
+            df_with_all = self.audio_embedder.process_transcription_dataframe(df_with_text)
 
         # Guardar embeddings
         embeddings_dir = self.output_dir / "embeddings"
@@ -417,6 +483,30 @@ class SimpleDatasetPipeline:
             }
         }
 
+        # Agregar información de chunking CLAP si es relevante
+        if final_audio_model == 'CLAP':
+            clap_config = getattr(self.audio_embedder, 'config', None)
+            if clap_config:
+                manifest["clap_chunking"] = {
+                    "use_overlapping": self.config.get('use_clap_overlapping', False),
+                    "chunk_duration": (
+                        self.config.get('clap_chunk_duration') or
+                        getattr(clap_config, 'chunk_duration', None)
+                    ),
+                    "overlap_duration": (
+                        self.config.get('clap_overlap_duration') or
+                        getattr(clap_config, 'overlap_duration', None)
+                    ),
+                    "hop_duration": (
+                        self.config.get('clap_hop_duration') or
+                        getattr(clap_config, 'hop_duration', None) or
+                        (
+                            (self.config.get('clap_chunk_duration') or getattr(clap_config, 'chunk_duration', 6.0)) -
+                            (self.config.get('clap_overlap_duration') or getattr(clap_config, 'overlap_duration', 2.0))
+                        )
+                    )
+                }
+
         manifest_file = final_dir / "dataset_manifest.json"
         with open(manifest_file, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, ensure_ascii=False, indent=2)
@@ -477,15 +567,36 @@ if __name__ == "__main__":
     parser.add_argument("--output", "-o", default="./dataset", help="Directorio de salida")
     parser.add_argument("--whisper-model", default="base", help="Modelo Whisper")
     parser.add_argument("--segmentation", default="silence", choices=["silence", "time"])
+    parser.add_argument(
+        "--use-clap-overlapping",
+        action="store_true",
+        help="Usar chunking con overlapping para CLAP (chunk=6s, overlap=2s, hop=4s)"
+    )
+    parser.add_argument("--clap-chunk-duration", type=float, help="Duración del chunk CLAP en segundos (default: 6.0)")
+    parser.add_argument("--clap-overlap-duration", type=float, help="Solapamiento CLAP en segundos (default: 2.0)")
+    parser.add_argument("--clap-hop-duration", type=float, help="Paso CLAP en segundos (default: chunk - overlap)")
 
     args = parser.parse_args()
 
     # Crear pipeline
+    pipeline_kwargs = {
+        'whisper_model': args.whisper_model,
+        'segmentation_method': args.segmentation
+    }
+
+    if args.use_clap_overlapping:
+        pipeline_kwargs['use_clap_overlapping'] = True
+        if args.clap_chunk_duration:
+            pipeline_kwargs['clap_chunk_duration'] = args.clap_chunk_duration
+        if args.clap_overlap_duration:
+            pipeline_kwargs['clap_overlap_duration'] = args.clap_overlap_duration
+        if args.clap_hop_duration:
+            pipeline_kwargs['clap_hop_duration'] = args.clap_hop_duration
+
     pipeline = SimpleDatasetPipeline(
         input_dir=args.input,
         output_dir=args.output,
-        whisper_model=args.whisper_model,
-        segmentation_method=args.segmentation
+        **pipeline_kwargs
     )
 
     # Ejecutar

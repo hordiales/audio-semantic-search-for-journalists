@@ -479,7 +479,11 @@ class LocalAudioSearch:
 
         if self.faiss_audio_index is not None and FAISS_AVAILABLE:
             # Búsqueda con FAISS (rápida)
-            query_embedding = query_embedding.reshape(1, -1)
+            # Asegurar que el query embedding esté normalizado
+            query_norm = np.linalg.norm(query_embedding)
+            if query_norm > 0:
+                query_embedding = query_embedding / query_norm
+            query_embedding = query_embedding.reshape(1, -1).astype(np.float32)
             similarities, indices = self.faiss_audio_index.search(query_embedding, k)
 
             results = []
@@ -504,7 +508,13 @@ class LocalAudioSearch:
             normalized = self.audio_embeddings / np.linalg.norm(self.audio_embeddings, axis=1, keepdims=True)
             normalized = np.nan_to_num(normalized, nan=0.0)
 
-            # Calcular similitudes
+            # Asegurar que el query embedding esté normalizado
+            query_norm = np.linalg.norm(query_embedding)
+            if query_norm > 0:
+                query_embedding = query_embedding / query_norm
+            query_embedding = np.nan_to_num(query_embedding, nan=0.0)
+
+            # Calcular similitudes (producto interno de vectores normalizados = coseno)
             similarities = np.dot(normalized, query_embedding)
 
             # Obtener top-k
@@ -619,9 +629,14 @@ class LocalAudioSearch:
             print(f"   📋 ID: {segment_id}")
             print(f"   🌐 Idioma: {language}")
             # Formatear score de manera más clara
-            score_percent = score * 100
-            score_bar = "█" * int(score_percent / 5)  # Barra visual
-            print(f"   📊 Score: {score:.4f} ({score_percent:.1f}%) {score_bar}")
+            # Los scores pueden ser negativos con similitud coseno (vectores opuestos)
+            # Normalmente deberían estar entre -1 y 1, pero valores positivos indican mayor similitud
+            score_percent = max(0, score * 100)  # Mostrar porcentaje positivo para visualización
+            score_bar_length = max(0, int((score + 1) * 10))  # Escalar de [-1,1] a [0,20] para barra
+            score_bar = "█" * score_bar_length
+            print(f"   📊 Score: {score:.4f} ({score*100:.1f}%) {score_bar}")
+            if score < 0:
+                print(f"      ⚠️  Score negativo: baja similitud (vectores en direcciones opuestas)")
 
             # Mostrar tipo de índice
             index_type = result.get('index_type', 'text')
