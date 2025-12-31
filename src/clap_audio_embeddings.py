@@ -337,7 +337,15 @@ class CLAPEmbedding(BaseAudioEmbedding):
             with torch.inference_mode():
                 text_embed = self.model.get_text_embedding([text])
 
-            embedding = text_embed.cpu().numpy().flatten().astype(np.float32)
+            # Manejar tanto tensores de PyTorch como arrays de numpy
+            if isinstance(text_embed, torch.Tensor):
+                embedding = text_embed.cpu().numpy().flatten().astype(np.float32)
+            elif isinstance(text_embed, np.ndarray):
+                embedding = text_embed.flatten().astype(np.float32)
+            else:
+                # Intentar convertir a numpy
+                embedding = np.array(text_embed).flatten().astype(np.float32)
+
             norm = np.linalg.norm(embedding) + 1e-10
             embedding = embedding / norm
 

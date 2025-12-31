@@ -268,6 +268,10 @@ class SimpleDatasetPipeline:
         embeddings_file = embeddings_dir / "embeddings_data.pkl"
         df_with_all.to_pickle(embeddings_file)
 
+        # Normalizar nombre de columna de embeddings de audio si es necesario
+        if 'audio_embedding_clap' in df_with_all.columns and 'audio_embedding' not in df_with_all.columns:
+            df_with_all = df_with_all.rename(columns={'audio_embedding_clap': 'audio_embedding'})
+
         # Guardar CSV sin embeddings
         csv_df = df_with_all.drop(columns=['text_embedding', 'audio_embedding'], errors='ignore')
         csv_file = embeddings_dir / "segments_metadata.csv"
@@ -319,6 +323,12 @@ class SimpleDatasetPipeline:
         self.logger.info("=== PASO 5: Creación de Dataset Final ===")
 
         final_dir = self.output_dir / "final"
+
+        # Normalizar nombre de columna de embeddings de audio
+        # CLAP usa 'audio_embedding_clap', normalizamos a 'audio_embedding' para consistencia
+        if 'audio_embedding_clap' in df.columns and 'audio_embedding' not in df.columns:
+            df = df.rename(columns={'audio_embedding_clap': 'audio_embedding'})
+            self.logger.info("   ℹ️  Normalizada columna 'audio_embedding_clap' a 'audio_embedding'")
 
         # Guardar dataset completo
         dataset_file = final_dir / "complete_dataset.pkl"

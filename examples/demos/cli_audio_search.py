@@ -49,7 +49,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 class LocalAudioSearch:
     """Sistema de búsqueda semántica local con FAISS"""
 
-    def __init__(self, dataset_path: str):
+    def __init__(self, dataset_path: str, default_search_type: str = "text"):
         self.dataset_path = Path(dataset_path)
         self.text_model = None
         self.audio_model = None
@@ -59,6 +59,7 @@ class LocalAudioSearch:
         self.embeddings = None  # Embeddings de texto
         self.audio_embeddings = None  # Embeddings de audio
         self.dataset_config = None
+        self.default_search_type = default_search_type  # Tipo de búsqueda por defecto
 
         self._load_dataset()
         self._load_text_model()
@@ -171,15 +172,22 @@ class LocalAudioSearch:
 
     def _load_audio_embeddings(self):
         """Carga los embeddings de audio"""
-        print("🎵 Cargando embeddings de audio...")
+        print("🎵 Cargando embeddings de audio del dataset...")
 
         # Primero intentar cargar desde columna del DataFrame
-        if 'audio_embedding' in self.df.columns:
-            print("   📊 Usando embeddings de audio del DataFrame")
+        # CLAP usa 'audio_embedding_clap', otros modelos pueden usar 'audio_embedding'
+        audio_embedding_col = None
+        if 'audio_embedding_clap' in self.df.columns:
+            audio_embedding_col = 'audio_embedding_clap'
+        elif 'audio_embedding' in self.df.columns:
+            audio_embedding_col = 'audio_embedding'
+
+        if audio_embedding_col:
+            print(f"   📊 Usando embeddings de audio del DataFrame (columna: {audio_embedding_col})")
             embeddings_list = []
 
             for idx, row in self.df.iterrows():
-                emb = row['audio_embedding']
+                emb = row[audio_embedding_col]
                 if isinstance(emb, str):
                     # Parsear string a array
                     import ast
@@ -228,8 +236,12 @@ class LocalAudioSearch:
                 self._build_audio_faiss_index()
                 return
 
-        print("⚠️  No se encontraron embeddings de audio pre-calculados")
-        print("   La búsqueda de audio no estará disponible")
+        print("⚠️  No se encontraron embeddings de audio pre-calculados en el dataset")
+        print("   ℹ️  Esto significa que el dataset no tiene embeddings de audio guardados")
+        print("   ℹ️  El modelo CLAP se cargará después, pero sin embeddings pre-calculados")
+        print("   ℹ️  la búsqueda de audio no funcionará hasta que regeneres el dataset")
+        print("   💡 Para habilitar búsqueda de audio, regenera el dataset con embeddings:")
+        print("      poetry run python src/simple_dataset_pipeline.py --input data/ --output ./dataset")
 
     def _build_audio_faiss_index(self):
         """Construye índice FAISS de audio desde embeddings"""
@@ -251,7 +263,7 @@ class LocalAudioSearch:
     def _load_audio_model(self):
         """Carga el modelo de embeddings de audio"""
         try:
-            print("🎵 Cargando modelo de embeddings de audio...")
+            print("🎵 Cargando modelo CLAP (para generar embeddings de audio)...")
             # Intentar importar y cargar el generador de embeddings de audio
             # Usar la misma estrategia que otros módulos del proyecto
             import sys
@@ -277,7 +289,10 @@ class LocalAudioSearch:
 
             self.audio_model = get_audio_embedding_generator()
             model_name = getattr(self.audio_model, 'model_name', 'Desconocido')
-            print(f"✅ Modelo de audio cargado: {model_name}")
+            print(f"✅ Modelo CLAP cargado: {model_name}")
+            print("   ℹ️  El modelo está disponible, pero sin embeddings pre-calculados")
+            print("   ℹ️  en el dataset, la búsqueda de audio no funcionará")
+            print("   💡 Regenera el dataset para incluir embeddings de audio")
         except Exception as e:
             print(f"⚠️  Error cargando modelo de audio: {e}")
             import traceback
@@ -452,6 +467,8 @@ class LocalAudioSearch:
 
         if self.audio_model is None:
             print("❌ Modelo de audio no disponible")
+            print("   ℹ️  El modelo CLAP no se pudo cargar")
+            print("   💡 Verifica que laion-clap esté instalado: pip install laion-clap")
             return []
 
         # Generar embedding de audio para la consulta
@@ -506,7 +523,15 @@ class LocalAudioSearch:
             print(f"✅ Búsqueda de audio completada: {len(results)} resultados")
             return results
 
-        print("❌ No hay embeddings de audio disponibles")
+        print("❌ No hay embeddings de audio disponibles en el dataset")
+        print("   ℹ️  El modelo CLAP está cargado, pero el dataset no tiene embeddings de audio")
+        print("   ℹ️  pre-calculados. Sin estos embeddings, no se puede hacer búsqueda de audio.")
+        print()
+        print("   💡 Soluciones:")
+        print("   1. Regenera el dataset con embeddings de audio:")
+        print("      poetry run python src/simple_dataset_pipeline.py --input data/ --output ./dataset")
+        print("   2. O usa búsqueda de texto (transcripciones) que sí está disponible")
+        print()
         return []
 
     def _search_combined(self, query_text: str, k: int = 5) -> list[dict]:
@@ -890,16 +915,35 @@ class LocalAudioSearch:
         print(f"📂 Dataset: {self.dataset_path}")
         print(f"📊 Segmentos: {len(self.df)}")
         print(f"🔧 Backend texto: {'FAISS' if self.faiss_index else 'NumPy'}")
-        print(f"🔧 Backend audio: {'FAISS' if self.faiss_audio_index else ('NumPy' if self.audio_embeddings is not None else 'No disponible')}")
+
+        # Estado del backend de audio
+        if self.faiss_audio_index:
+            print(f"🔧 Backend audio: FAISS ({self.faiss_audio_index.ntotal} vectores)")
+        elif self.audio_embeddings is not None:
+            print(f"🔧 Backend audio: NumPy ({self.audio_embeddings.shape[0]} vectores)")
+        elif self.audio_model:
+            print(f"🔧 Backend audio: Modelo cargado ({getattr(self.audio_model, 'model_name', 'N/A')}) pero sin datos")
+        else:
+            print(f"🔧 Backend audio: No disponible (modelo no cargado)")
 
         # Mostrar configuración del dataset
         self._print_dataset_config()
 
         print("💡 Ejemplos: 'política económica', 'entrevista', 'música de fondo'")
         print("💡 Tipos de búsqueda disponibles:")
-        print("   - 'texto' o 't': Búsqueda en transcripciones (por defecto)")
+        print("   - 'texto' o 't': Búsqueda en transcripciones")
         print("   - 'audio' o 'a': Búsqueda en embeddings de audio")
         print("   - 'ambos' o 'b': Búsqueda combinada (texto + audio)")
+
+        # Mostrar tipo por defecto configurado
+        default_display = self.default_search_type
+        if default_display == "text":
+            default_display = "texto"
+        elif default_display == "audio":
+            default_display = "audio"
+        elif default_display == "both":
+            default_display = "ambos"
+        print(f"   📌 Tipo por defecto: {default_display} (presiona Enter para usar)")
         print()
 
         while True:
@@ -914,14 +958,28 @@ class LocalAudioSearch:
                     print("⚠️  Búsqueda muy corta, intenta con al menos 2 caracteres")
                     continue
 
-                # Preguntar tipo de búsqueda
-                search_type_input = input("   Tipo de búsqueda [t]exto/[a]udio/[b]oth (default: texto): ").strip().lower()
-                if search_type_input in ['a', 'audio']:
+                # Preguntar tipo de búsqueda (con opción de usar el por defecto)
+                default_display = self.default_search_type
+                if default_display == "text":
+                    default_display = "texto"
+                elif default_display == "audio":
+                    default_display = "audio"
+                elif default_display == "both":
+                    default_display = "ambos"
+
+                search_type_input = input(f"   Tipo de búsqueda [t]exto/[a]udio/[b]oth (default: {default_display}, Enter para usar default): ").strip().lower()
+
+                if not search_type_input:  # Enter sin texto = usar default
+                    search_type = self.default_search_type
+                elif search_type_input in ['a', 'audio']:
                     search_type = "audio"
                 elif search_type_input in ['b', 'both', 'ambos']:
                     search_type = "both"
-                else:
+                elif search_type_input in ['t', 'text', 'texto']:
                     search_type = "text"
+                else:
+                    search_type = self.default_search_type
+                    print(f"   ℹ️  Usando tipo por defecto: {default_display}")
 
                 self.search_and_play(query, search_type=search_type)
                 print("\n" + "="*70 + "\n")
@@ -955,8 +1013,24 @@ Requisitos:
         default='./dataset',
         help='Ruta al directorio del dataset (default: ./dataset)'
     )
+    parser.add_argument(
+        '--search-type',
+        '--tipo-busqueda',
+        choices=['text', 'audio', 'both', 'texto', 'ambos'],
+        default='text',
+        help='Tipo de búsqueda por defecto: text/texto (transcripciones), audio (embeddings de audio), both/ambos (combinado). Default: text'
+    )
 
     args = parser.parse_args()
+
+    # Normalizar el tipo de búsqueda
+    search_type = args.search_type
+    if search_type in ['texto', 'text']:
+        search_type = 'text'
+    elif search_type in ['audio']:
+        search_type = 'audio'
+    elif search_type in ['ambos', 'both']:
+        search_type = 'both'
 
     print("🎵 CLI de Búsqueda Semántica de Audio (Local)")
     print("=" * 50)
@@ -988,7 +1062,7 @@ Requisitos:
 
     # Crear sistema de búsqueda
     try:
-        search_system = LocalAudioSearch(str(dataset_path))
+        search_system = LocalAudioSearch(str(dataset_path), default_search_type=search_type)
         search_system.interactive_search()
         return 0
 
