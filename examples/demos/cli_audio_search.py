@@ -253,16 +253,35 @@ class LocalAudioSearch:
         try:
             print("🎵 Cargando modelo de embeddings de audio...")
             # Intentar importar y cargar el generador de embeddings de audio
+            # Usar la misma estrategia que otros módulos del proyecto
+            import sys
+            import os
+
+            # Obtener el directorio del proyecto desde __file__
+            current_file = os.path.abspath(__file__)
+            examples_dir = os.path.dirname(current_file)
+            demos_dir = os.path.dirname(examples_dir)
+            project_root = os.path.dirname(demos_dir)
+            src_dir = os.path.join(project_root, 'src')
+
+            # Añadir src al path si no está
+            if src_dir not in sys.path:
+                sys.path.insert(0, src_dir)
+
+            # Intentar importar
             try:
-                from src.audio_embeddings import get_audio_embedding_generator
-            except ImportError:
                 from audio_embeddings import get_audio_embedding_generator
+            except ImportError:
+                # Si falla, intentar con src.audio_embeddings
+                from src.audio_embeddings import get_audio_embedding_generator
 
             self.audio_model = get_audio_embedding_generator()
             model_name = getattr(self.audio_model, 'model_name', 'Desconocido')
             print(f"✅ Modelo de audio cargado: {model_name}")
         except Exception as e:
             print(f"⚠️  Error cargando modelo de audio: {e}")
+            import traceback
+            traceback.print_exc()
             print("   La búsqueda de audio no estará disponible")
             self.audio_model = None
 
