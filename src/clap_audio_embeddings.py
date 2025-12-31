@@ -12,6 +12,7 @@ import warnings
 import librosa
 import numpy as np
 import pandas as pd
+import soundfile as sf
 
 warnings.filterwarnings('ignore')
 
@@ -140,11 +141,11 @@ class CLAPEmbedding(BaseAudioEmbedding):
     def preprocess_audio(self, audio_path: str, target_sr: int = 48000) -> np.ndarray:
         """
         Preprocesa un archivo de audio para CLAP
-        
+
         Args:
             audio_path: Ruta al archivo de audio
             target_sr: Frecuencia de muestreo objetivo (CLAP usa 48kHz)
-            
+
         Returns:
             Audio preprocesado como array numpy
         """
@@ -162,10 +163,10 @@ class CLAPEmbedding(BaseAudioEmbedding):
     def generate_embedding(self, audio_path: str) -> np.ndarray:
         """
         Genera embedding para un archivo de audio usando CLAP
-        
+
         Args:
             audio_path: Ruta al archivo de audio
-            
+
         Returns:
             Array numpy con el embedding del audio (512 dimensiones)
         """
@@ -198,11 +199,11 @@ class CLAPEmbedding(BaseAudioEmbedding):
     def generate_embeddings_batch(self, audio_paths: list[str], batch_size: int = 8) -> np.ndarray:
         """
         Genera embeddings para una lista de archivos de audio en lotes
-        
+
         Args:
             audio_paths: Lista de rutas a archivos de audio
             batch_size: Tamaño del lote para procesamiento eficiente
-            
+
         Returns:
             Array numpy con embeddings de todos los archivos
         """
@@ -238,11 +239,11 @@ class CLAPEmbedding(BaseAudioEmbedding):
                                       temp_audio_dir: str = "temp_audio_clap") -> pd.DataFrame:
         """
         Procesa un DataFrame con transcripciones y genera embeddings de audio usando CLAP
-        
+
         Args:
             df: DataFrame con información de segmentos de audio
             temp_audio_dir: Directorio temporal para archivos de audio
-            
+
         Returns:
             DataFrame con embeddings de audio CLAP añadidos
         """
@@ -266,7 +267,6 @@ class CLAPEmbedding(BaseAudioEmbedding):
                 segment_audio = audio[start_sample:end_sample]
 
                 # Guardar segmento
-                import soundfile as sf
                 sf.write(temp_audio_path, segment_audio, sr)
 
                 audio_paths.append(temp_audio_path)
@@ -312,10 +312,10 @@ class CLAPEmbedding(BaseAudioEmbedding):
     def generate_text_embedding(self, text: str) -> np.ndarray:
         """
         Genera embedding de texto usando CLAP (para búsqueda semántica)
-        
+
         Args:
             text: Texto para generar embedding
-            
+
         Returns:
             Array numpy con el embedding de texto
         """
@@ -340,13 +340,13 @@ class CLAPEmbedding(BaseAudioEmbedding):
                            top_k: int = 5, embedding_column: str = 'audio_embedding_clap') -> pd.DataFrame:
         """
         Busca audios similares usando una consulta de texto (funcionalidad única de CLAP)
-        
+
         Args:
             query: Consulta en texto natural
             df: DataFrame con embeddings de audio CLAP
             top_k: Número de resultados a retornar
             embedding_column: Nombre de la columna con embeddings
-            
+
         Returns:
             DataFrame con los resultados más similares
         """
@@ -379,17 +379,141 @@ class CLAPEmbedding(BaseAudioEmbedding):
                            audio_embeddings: np.ndarray) -> np.ndarray:
         """
         Calcula la similitud coseno entre embeddings
-        
+
         Args:
             query_embedding: Embedding de consulta
             audio_embeddings: Array con embeddings de audio
-            
+
         Returns:
             Array con las similitudes
         """
         # Los embeddings ya están normalizados, usar producto punto directo
         similarities = np.dot(audio_embeddings, query_embedding)
         return similarities
+
+    def generate_overlapping_chunks(
+        self,
+        audio_path: str,
+        chunk_duration: float | None = None,
+        overlap_duration: float | None = None,
+        hop_duration: float | None = None,
+        temp_audio_dir: str = "temp_audio_clap"
+    ) -> pd.DataFrame:
+        """
+        Genera chunks de audio con overlapping y sus embeddings CLAP
+
+        Args:
+            audio_path: Ruta al archivo de audio
+            chunk_duration: Duración del chunk en segundos (usa config si None)
+            overlap_duration: Solapamiento entre chunks en segundos (usa config si None)
+            hop_duration: Paso entre chunks en segundos (usa config si None, o calcula como chunk - overlap)
+            temp_audio_dir: Directorio temporal para archivos de audio
+
+        Returns:
+            DataFrame con información de chunks y sus embeddings
+        """
+        # Usar parámetros de configuración si no se proporcionan
+        chunk_duration = chunk_duration or self.config.chunk_duration
+        overlap_duration = overlap_duration or self.config.overlap_duration
+
+        # Calcular hop_duration si no se proporciona
+        if hop_duration is None:
+            if self.config.hop_duration is not None:
+                hop_duration = self.config.hop_duration
+            else:
+                hop_duration = chunk_duration - overlap_duration
+
+        # Validar parámetros
+        if chunk_duration <= 0:
+            raise ValueError("chunk_duration debe ser mayor que 0")
+        if overlap_duration < 0:
+            raise ValueError("overlap_duration no puede ser negativo")
+        if overlap_duration >= chunk_duration:
+            raise ValueError("overlap_duration debe ser menor que chunk_duration")
+        if hop_duration <= 0:
+            raise ValueError("hop_duration debe ser mayor que 0")
+
+        if not os.path.exists(temp_audio_dir):
+            os.makedirs(temp_audio_dir)
+
+        # Cargar audio completo
+        audio, sr = librosa.load(audio_path, sr=self.sample_rate, mono=True)
+        total_duration = len(audio) / sr
+
+        # Generar chunks con overlapping
+        chunks_info = []
+        current_time = 0.0
+        chunk_id = 0
+
+        while current_time < total_duration:
+            start_time = current_time
+            end_time = min(current_time + chunk_duration, total_duration)
+
+            # Calcular muestras
+            start_sample = int(start_time * sr)
+            end_sample = int(end_time * sr)
+
+            # Extraer chunk
+            chunk_audio = audio[start_sample:end_sample]
+            actual_duration = len(chunk_audio) / sr
+
+            # Guardar chunk temporal
+            temp_chunk_path = os.path.join(
+                temp_audio_dir,
+                f"clap_chunk_{chunk_id:05d}.wav"
+            )
+            sf.write(temp_chunk_path, chunk_audio, sr)
+
+            chunks_info.append({
+                'chunk_id': chunk_id,
+                'start_time': start_time,
+                'end_time': end_time,
+                'duration': actual_duration,
+                'temp_path': temp_chunk_path,
+                'source_file': audio_path
+            })
+
+            # Avanzar con hop_duration
+            current_time += hop_duration
+            chunk_id += 1
+
+        if not chunks_info:
+            logger.warning(f"⚠️  No se generaron chunks para {audio_path}")
+            return pd.DataFrame()
+
+        logger.info(
+            f"🔄 Generados {len(chunks_info)} chunks con overlapping "
+            f"(chunk={chunk_duration}s, overlap={overlap_duration}s, hop={hop_duration}s)"
+        )
+
+        # Generar embeddings para todos los chunks
+        chunk_paths = [chunk['temp_path'] for chunk in chunks_info]
+        embeddings = self.generate_embeddings_batch(chunk_paths)
+
+        # Crear DataFrame con resultados
+        result_data = []
+        for i, chunk_info in enumerate(chunks_info):
+            result_data.append({
+                'chunk_id': chunk_info['chunk_id'],
+                'start_time': chunk_info['start_time'],
+                'end_time': chunk_info['end_time'],
+                'duration': chunk_info['duration'],
+                'source_file': chunk_info['source_file'],
+                'audio_embedding_clap': embeddings[i].tolist(),
+                'audio_embedding_model': 'CLAP',
+                'audio_embedding_dim': self.embedding_dim
+            })
+
+        result_df = pd.DataFrame(result_data)
+
+        # Limpiar archivos temporales
+        for chunk_path in chunk_paths:
+            if os.path.exists(chunk_path):
+                os.remove(chunk_path)
+
+        logger.info(f"✅ {len(result_df)} chunks procesados con embeddings CLAP")
+
+        return result_df
 
 
 # Alias para compatibilidad con código existente
@@ -413,7 +537,7 @@ def get_clap_embedding_generator(config: CLAPConfig | None = None) -> CLAPEmbedd
 def get_audio_embedding_generator():
     """
     Función de compatibilidad que retorna CLAP o YAMNet según configuración
-    
+
     Returns:
         Generador de embeddings de audio
     """
