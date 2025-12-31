@@ -73,7 +73,7 @@ def check_audio_libraries():
 def check_disk_space():
     """Verifica espacio en disco"""
     import shutil
-    total, used, free = shutil.disk_usage('/')
+    _total, _used, free = shutil.disk_usage('/')
     free_gb = free // (1024**3)
     logging.info(f"💾 Espacio libre: {free_gb} GB")
 

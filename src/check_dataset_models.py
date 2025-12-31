@@ -5,8 +5,8 @@ Script para verificar qué información de modelos está disponible en un datase
 """
 
 import json
-import sys
 from pathlib import Path
+import sys
 
 import pandas as pd
 
@@ -40,7 +40,7 @@ def check_dataset_models(dataset_dir: str) -> dict:
     if manifest_file.exists():
         result["manifest_available"] = True
         try:
-            with open(manifest_file, 'r', encoding='utf-8') as f:
+            with open(manifest_file, encoding='utf-8') as f:
                 manifest = json.load(f)
 
             # Extraer información de modelos del manifest
@@ -89,7 +89,7 @@ def check_dataset_models(dataset_dir: str) -> dict:
     indices_metadata_file = dataset_path / "indices" / "indices_metadata.json"
     if indices_metadata_file.exists():
         try:
-            with open(indices_metadata_file, 'r', encoding='utf-8') as f:
+            with open(indices_metadata_file, encoding='utf-8') as f:
                 indices_metadata = json.load(f)
             result["indices_metadata"] = {
                 "text_model": indices_metadata.get("text_model", "N/A"),
@@ -103,7 +103,7 @@ def check_dataset_models(dataset_dir: str) -> dict:
     transcriptions_file = dataset_path / "transcriptions" / "all_transcriptions.json"
     if transcriptions_file.exists():
         try:
-            with open(transcriptions_file, 'r', encoding='utf-8') as f:
+            with open(transcriptions_file, encoding='utf-8') as f:
                 transcriptions = json.load(f)
 
             if "transcriptions" in transcriptions and len(transcriptions["transcriptions"]) > 0:
@@ -133,20 +133,20 @@ def print_model_info(result: dict):
 
             if "transcription" in models:
                 trans = models["transcription"]
-                print(f"  🤖 Transcripción:")
+                print("  🤖 Transcripción:")
                 print(f"     - Modelo Whisper: {trans.get('model', 'N/A')}")
                 print(f"     - Idioma: {trans.get('language', 'N/A')}")
                 print(f"     - Método segmentación: {trans.get('segmentation_method', 'N/A')}")
 
             if "text_embeddings" in models:
                 text = models["text_embeddings"]
-                print(f"  📝 Embeddings de Texto:")
+                print("  📝 Embeddings de Texto:")
                 print(f"     - Modelo: {text.get('model', 'N/A')}")
                 print(f"     - Dimensión: {text.get('embedding_dimension', 'N/A')}")
 
             if "audio_embeddings" in models:
                 audio = models["audio_embeddings"]
-                print(f"  🎵 Embeddings de Audio:")
+                print("  🎵 Embeddings de Audio:")
                 print(f"     - Modelo: {audio.get('model', 'N/A')}")
                 print(f"     - Dimensión: {audio.get('embedding_dimension', 'N/A')}")
         else:

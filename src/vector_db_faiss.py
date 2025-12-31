@@ -189,7 +189,7 @@ class FAISSVectorDatabase(VectorDatabaseInterface):
 
             # Convertir resultados
             results = []
-            for rank, (distance, faiss_idx) in enumerate(zip(distances[0], indices[0])):
+            for rank, (distance, faiss_idx) in enumerate(zip(distances[0], indices[0], strict=False)):
                 if faiss_idx == -1:  # No hay más resultados
                     break
 
@@ -234,7 +234,7 @@ class FAISSVectorDatabase(VectorDatabaseInterface):
         distances, indices = self.index.search(query, search_k)
 
         results = []
-        for rank, (distance, faiss_idx) in enumerate(zip(distances[0], indices[0])):
+        for _rank, (distance, faiss_idx) in enumerate(zip(distances[0], indices[0], strict=False)):
             if len(results) >= k or faiss_idx == -1:
                 break
 

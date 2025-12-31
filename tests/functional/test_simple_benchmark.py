@@ -143,7 +143,7 @@ def test_visualization():
         query_time = [0.045, 0.156, 0.123]
 
         # Crear gráfico simple
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+        _fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
 
         # BERTScore comparison
         ax1.bar(models, bertscore_f1, color=['skyblue', 'lightgreen', 'coral'])

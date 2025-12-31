@@ -34,10 +34,10 @@ from vector_indexing import VectorIndexManager
 class AudioDatasetClient:
     """Cliente para consultas al dataset de audio"""
 
-    def __init__(self, dataset_dir: str, config_file: str = None, logger=None):
+    def __init__(self, dataset_dir: str, config_file: str | None = None, logger=None):
         """
         Inicializa el cliente
-        
+
         Args:
             dataset_dir: Directorio del dataset
             config_file: Archivo de configuración (opcional)
@@ -133,11 +133,11 @@ class AudioDatasetClient:
     def search_text(self, query: str, k: int = 5) -> list[dict]:
         """
         Busca por texto usando embeddings
-        
+
         Args:
             query: Consulta de texto
             k: Número de resultados
-            
+
         Returns:
             Lista de resultados
         """
@@ -156,7 +156,7 @@ class AudioDatasetClient:
             distances, indices = self.index_manager.search_text_index(query_embedding, k)
             results = []
 
-            for i, (distance, idx) in enumerate(zip(distances, indices)):
+            for i, (distance, idx) in enumerate(zip(distances, indices, strict=False)):
                 row = self.df.iloc[idx]
                 result = {
                     'rank': i + 1,
@@ -213,11 +213,11 @@ class AudioDatasetClient:
     def search_audio(self, query_text: str, k: int = 5) -> list[dict]:
         """
         Busca por audio usando palabras clave en transcripciones
-        
+
         Args:
             query_text: Texto para buscar clases de audio relacionadas
             k: Número de resultados
-            
+
         Returns:
             Lista de resultados basados en palabras clave reales
         """
@@ -266,12 +266,12 @@ class AudioDatasetClient:
     def search_combined(self, query: str, k: int = 5, text_weight: float = 0.7) -> list[dict]:
         """
         Búsqueda combinada de texto y audio
-        
+
         Args:
             query: Consulta
             k: Número de resultados
             text_weight: Peso para texto (audio_weight = 1 - text_weight)
-            
+
         Returns:
             Lista de resultados combinados
         """
@@ -308,7 +308,7 @@ class AudioDatasetClient:
 
         # Calcular puntuaciones combinadas
         final_results = []
-        for key, scores in combined_scores.items():
+        for _key, scores in combined_scores.items():
             combined_score = (text_weight * scores['text_score'] +
                             audio_weight * scores['audio_score'])
 
@@ -404,7 +404,7 @@ class AudioDatasetClient:
             self.log_error(f"❌ Error en búsqueda por sentimiento: {e}")
             return []
 
-    def search_combined_with_sentiment(self, query: str, sentiment_filter: str = None, k: int = 5) -> list[dict]:
+    def search_combined_with_sentiment(self, query: str, sentiment_filter: str | None = None, k: int = 5) -> list[dict]:
         """Búsqueda combinada de texto con filtro de sentimiento"""
         if not self.sentiment_enabled:
             self.log_error("❌ Sistema de sentimientos no disponible")
@@ -903,7 +903,8 @@ Ejemplos:
             self.client.log("\n🎯 Capacidades del Sistema de Búsqueda:")
             self.client.log("-" * 40)
 
-            status_icon = lambda x: "✅" if x else "❌"
+            def status_icon(x):
+                return "✅" if x else "❌"
             self.client.log(f"{status_icon(capabilities['keyword_search'])} Búsqueda por palabras clave")
             self.client.log(f"{status_icon(capabilities['yamnet_embeddings'])} Embeddings YAMNet reales")
             self.client.log(f"{status_icon(capabilities['hybrid_search'])} Búsqueda híbrida")

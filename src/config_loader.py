@@ -83,7 +83,7 @@ class ConfigLoader:
     def __init__(self, env_file: str | None = None):
         """
         Inicializa el cargador de configuración
-        
+
         Args:
             env_file: Ruta al archivo .env (por defecto busca automáticamente)
         """
@@ -105,7 +105,7 @@ class ConfigLoader:
             current_dir = Path.cwd()
             env_path = None
 
-            for path in [current_dir] + list(current_dir.parents):
+            for path in [current_dir, *list(current_dir.parents)]:
                 potential_env = path / ".env"
                 if potential_env.exists():
                     env_path = potential_env
@@ -120,7 +120,7 @@ class ConfigLoader:
     def load_config(self) -> SystemConfig:
         """
         Carga la configuración completa del sistema
-        
+
         Returns:
             SystemConfig con toda la configuración
         """
@@ -205,7 +205,7 @@ class ConfigLoader:
     def get_llm_config_dict(self) -> dict[str, Any]:
         """
         Obtiene configuración específica para LLM en formato diccionario
-        
+
         Returns:
             Diccionario con configuración para LLM
         """
@@ -253,7 +253,7 @@ class ConfigLoader:
     def create_env_file(self, output_path: str = ".env"):
         """
         Crea un archivo .env con valores por defecto
-        
+
         Args:
             output_path: Ruta donde crear el archivo .env
         """
@@ -302,7 +302,7 @@ config_loader = ConfigLoader()
 def get_config() -> SystemConfig:
     """
     Función conveniente para obtener la configuración del sistema
-    
+
     Returns:
         SystemConfig con toda la configuración
     """

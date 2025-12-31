@@ -9,9 +9,9 @@ permitiendo revisar los cambios antes de aplicarlos todos.
 import argparse
 import logging
 import os
+from pathlib import Path
 import subprocess
 import sys
-from pathlib import Path
 
 # Intentar cargar python-dotenv para leer archivos .env
 try:
@@ -181,7 +181,7 @@ def main():
         logger.info("✅ No se encontraron errores de Ruff!")
         return 0
 
-    logger.info(f"\n📊 Se encontraron errores. Mostrando primeros 20:\n")
+    logger.info("\n📊 Se encontraron errores. Mostrando primeros 20:\n")
     lines = output.split("\n")[:20]
     for line in lines:
         logger.info(line)
@@ -219,7 +219,7 @@ def main():
             logger.info("✅ El código ya está formateado correctamente")
         return exit_code
 
-    elif choice == "2":
+    if choice == "2":
         logger.info("\n🔧 Aplicando correcciones automáticas seguras...")
         exit_code, output = run_ruff_fix(logger, dry_run=False)
         logger.info(output)
@@ -227,7 +227,7 @@ def main():
             logger.info("✅ Correcciones aplicadas exitosamente")
         return exit_code
 
-    elif choice == "3":
+    if choice == "3":
         logger.info("\n⚠️  Aplicando correcciones automáticas (incluyendo unsafe)...")
         logger.debug("Ejecutando: ruff check --fix --unsafe-fixes")
         result = subprocess.run(
@@ -241,7 +241,7 @@ def main():
             logger.info("✅ Correcciones aplicadas exitosamente")
         return result.returncode
 
-    elif choice == "4":
+    if choice == "4":
         logger.info("\n🎨 Formateando código...")
         exit_code, output = run_ruff_format(logger, dry_run=False)
         logger.info(output)
@@ -249,13 +249,12 @@ def main():
             logger.info("✅ Código formateado exitosamente")
         return exit_code
 
-    elif choice == "5":
+    if choice == "5":
         logger.info("👋 Saliendo sin cambios")
         return 0
 
-    else:
-        logger.error("❌ Opción inválida")
-        return 1
+    logger.error("❌ Opción inválida")
+    return 1
 
 
 if __name__ == "__main__":

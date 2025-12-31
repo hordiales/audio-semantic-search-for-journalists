@@ -150,7 +150,7 @@ class CLAPEmbedding(BaseAudioEmbedding):
             Audio preprocesado como array numpy
         """
         # Cargar audio con la frecuencia de muestreo correcta
-        audio, sr = librosa.load(audio_path, sr=target_sr, mono=True)
+        audio, _sr = librosa.load(audio_path, sr=target_sr, mono=True)
 
         # CLAP espera audio normalizado
         audio = librosa.util.normalize(audio)

@@ -33,7 +33,7 @@ class AudioTranscriber:
     def __init__(self, model_name: str | None = None, config: WhisperConfig | None = None):
         """
         Inicializa el transcriptor
-        
+
         Args:
             model_name: Nombre del modelo Whisper (tiny, base, small, medium, large) - opcional
             config: Configuración específica de Whisper - usa configuración global si None
@@ -55,14 +55,32 @@ class AudioTranscriber:
 
         self.model_name = model_name
         self.device = self._get_device()
-        self.model = whisper.load_model(model_name, device=self.device)
-        logging.info(f"Modelo Whisper '{model_name}' cargado en {self.device}")
+
+        # Intentar cargar el modelo con manejo de errores para MPS
+        try:
+            self.model = whisper.load_model(model_name, device=self.device)
+            logging.info(f"Modelo Whisper '{model_name}' cargado en {self.device}")
+        except (NotImplementedError, RuntimeError) as e:
+            # Si falla con MPS (problemas conocidos con tensores dispersos), usar CPU
+            if self.device == "mps":
+                logging.warning(
+                    f"⚠️  Error cargando modelo en MPS: {e!s}\n"
+                    "   Cambiando a CPU (MPS tiene limitaciones con algunas operaciones de Whisper)"
+                )
+                self.device = "cpu"
+                self.model = whisper.load_model(model_name, device=self.device)
+                logging.info(f"Modelo Whisper '{model_name}' cargado en {self.device} (fallback a CPU)")
+            else:
+                # Si no es MPS, re-lanzar el error
+                raise
 
     def _get_device(self) -> str:
         """Determina el device a usar basado en la configuración"""
         if self.config.device == "auto":
             if torch.cuda.is_available():
                 return "cuda"
+            # MPS puede tener problemas con Whisper (tensores dispersos)
+            # Se intentará usar pero habrá fallback a CPU si falla
             if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                 return "mps"  # Apple Silicon
             return "cpu"
@@ -71,27 +89,27 @@ class AudioTranscriber:
     def load_audio(self, file_path: str) -> np.ndarray:
         """
         Carga un archivo de audio y lo convierte al formato requerido por Whisper
-        
+
         Args:
             file_path: Ruta al archivo de audio
-            
+
         Returns:
             Audio normalizado como array numpy
         """
         # Whisper requiere 16kHz mono
-        audio, sr = librosa.load(file_path, sr=16000, mono=True)
+        audio, _sr = librosa.load(file_path, sr=16000, mono=True)
         return audio
 
     def segment_by_silence(self, audio_path: str, min_silence_len: int = 500,
                           silence_thresh: int = -40) -> list[dict]:
         """
         Segmenta el audio basándose en silencios preservando timestamps originales
-        
+
         Args:
             audio_path: Ruta al archivo de audio
             min_silence_len: Duración mínima del silencio en ms
             silence_thresh: Umbral de silencio en dB
-            
+
         Returns:
             Lista de diccionarios con información de segmentos con timestamps correctos
         """
@@ -162,11 +180,11 @@ class AudioTranscriber:
     def segment_by_time(self, audio_path: str, segment_duration: float = 10.0) -> list[dict]:
         """
         Segmenta el audio en intervalos fijos de tiempo
-        
+
         Args:
             audio_path: Ruta al archivo de audio
             segment_duration: Duración de cada segmento en segundos
-            
+
         Returns:
             Lista de diccionarios con información de segmentos
         """
@@ -206,10 +224,10 @@ class AudioTranscriber:
     def transcribe_segments(self, segments: list[dict]) -> list[dict]:
         """
         Transcribe una lista de segmentos de audio
-        
+
         Args:
             segments: Lista de diccionarios con información de segmentos
-            
+
         Returns:
             Lista de segmentos con transcripciones añadidas
         """
@@ -257,14 +275,14 @@ class AudioTranscriber:
                           **kwargs) -> pd.DataFrame:
         """
         Procesa un archivo de audio completo: segmenta y transcribe
-        
+
         Args:
             file_path: Ruta al archivo de audio
             segmentation_method: 'silence' o 'time'
             min_silence_len: Duración mínima de silencio para segmentar (ms)
             silence_thresh: Umbral de silencio (dBFS)
             segment_duration: Duración de cada segmento en segundos (para método 'time')
-            
+
         Returns:
             DataFrame con segmentos y transcripciones
         """
@@ -296,12 +314,12 @@ class AudioTranscriber:
                              **kwargs) -> pd.DataFrame:
         """
         Procesa múltiples archivos de audio
-        
+
         Args:
             file_paths: Lista de rutas a archivos de audio
             segmentation_method: Método de segmentación
             **kwargs: Argumentos adicionales
-            
+
         Returns:
             DataFrame combinado con todos los segmentos
         """

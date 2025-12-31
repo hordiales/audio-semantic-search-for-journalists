@@ -179,6 +179,35 @@ poetry run pytest
 poetry run pytest tests/functional/test_audio_segment_extraction.py
 ```
 
+## 🔍 Pre-commit Hooks (Ruff)
+
+El proyecto incluye pre-commit hooks que ejecutan ruff automáticamente antes de cada commit para mantener la calidad del código:
+
+```bash
+# 1. Instalar pre-commit (incluido en poetry install)
+poetry install
+
+# 2. Instalar los hooks de git
+poetry run pre-commit install
+
+# 3. (Opcional) Ejecutar manualmente en todos los archivos
+poetry run pre-commit run --all-files
+```
+
+**Qué hace automáticamente:**
+- ✅ Ejecuta ruff linting y corrige errores automáticamente
+- ✅ Formatea el código con ruff
+- ✅ Verifica archivos YAML, JSON, TOML
+- ✅ Verifica que no se suban archivos grandes
+- ✅ Elimina espacios en blanco al final de líneas
+
+**Si un hook falla:**
+- Ruff intenta corregir automáticamente los errores
+- Si hay errores que no se pueden corregir automáticamente, el commit se bloquea
+- Revisa los errores, corrígelos y vuelve a intentar el commit
+
+Ver [docs/comandos-útiles.md](docs/comandos-útiles.md) para más detalles.
+
 ## 📊 Modelos Soportados
 
 ### Embeddings de Audio
@@ -212,10 +241,68 @@ Este proyecto está bajo la licencia GPLv3. Ver `LICENSE` para más detalles.
 - [YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet)
 - [FastAPI](https://fastapi.tiangolo.com/)
 
+## 🔧 Troubleshooting
+
+### Error: `NotImplementedError: Could not run 'aten::empty.memory_format' with arguments from the 'SparseMPS' backend`
+
+**Problema**: Whisper falla al cargarse en MPS (Apple Silicon) debido a limitaciones del backend con operaciones de tensores dispersos.
+
+**Solución automática**: El código detecta este error y automáticamente hace fallback a CPU. Verás un mensaje de advertencia:
+
+```
+⚠️  Error cargando modelo en MPS: ...
+   Cambiando a CPU (MPS tiene limitaciones con algunas operaciones de Whisper)
+```
+
+**Forzar CPU desde el inicio** (opcional):
+```bash
+export WHISPER_DEVICE=cpu
+poetry run python src/simple_dataset_pipeline.py --input data/ --output ./dataset
+```
+
+Para más detalles sobre GPU y MPS, ver [docs/GPU_CONSIDERATIONS.md](docs/GPU_CONSIDERATIONS.md).
+
+### Error: `No module named 'triton'` en macOS
+
+**Esperado.** Triton no está disponible para macOS. El código funciona sin él. Si `poetry install` falla por triton:
+
+```bash
+# Crear venv (puede fallar en triton, pero crea el venv)
+poetry install || true
+
+# Instalar dependencias con pip (ignora triton)
+poetry run pip install -r requirements.txt
+```
+
+### Error: TensorFlow no disponible (YAMNet)
+
+Si ves el mensaje `⚠️ TensorFlow no disponible. YAMNet no estará disponible.`:
+
+```bash
+# Instalar extras para YAMNet
+poetry install --extras yamnet
+```
+
+### Problemas con Python 3.11.13
+
+Este proyecto requiere exactamente Python 3.11.13. Si tienes otra versión:
+
+```bash
+# Con pyenv
+pyenv install 3.11.13
+pyenv local 3.11.13
+
+# Verificar versión
+python --version  # Debe mostrar 3.11.13
+```
+
+Para más problemas, ver [docs/GPU_CONSIDERATIONS.md](docs/GPU_CONSIDERATIONS.md) y [docs/INSTALL.md](docs/INSTALL.md).
+
 ## 📞 Soporte
 
-- **Documentación**: Ver `doc/` para guías detalladas
-- **Problemas**: Ver [doc/TROUBLESHOOTING.md](doc/TROUBLESHOOTING.md)
+- **Documentación**: Ver `docs/` para guías detalladas
+- **Problemas de GPU/MPS**: Ver [docs/GPU_CONSIDERATIONS.md](docs/GPU_CONSIDERATIONS.md)
+- **Problemas de instalación**: Ver [docs/INSTALL.md](docs/INSTALL.md)
 - **Issues**: Abrir un issue en el repositorio
 
 ---

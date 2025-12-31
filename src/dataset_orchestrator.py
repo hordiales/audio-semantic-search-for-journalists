@@ -171,7 +171,7 @@ class DatasetOrchestrator:
     def __init__(self, config: DatasetConfig | None = None):
         """
         Inicializa el orquestador
-        
+
         Args:
             config: Configuración del dataset, usa defaults si es None
         """
@@ -242,7 +242,7 @@ class DatasetOrchestrator:
     def discover_audio_files(self) -> list[Path]:
         """
         Descubre archivos de audio en el directorio de entrada
-        
+
         Returns:
             Lista de rutas a archivos de audio encontrados
         """
@@ -269,10 +269,10 @@ class DatasetOrchestrator:
     def step1_convert_audio(self, audio_files: list[Path]) -> list[Path]:
         """
         Paso 1: Convierte todos los archivos a formato WAV
-        
+
         Args:
             audio_files: Lista de archivos de audio a convertir
-            
+
         Returns:
             Lista de archivos WAV convertidos
         """
@@ -310,10 +310,10 @@ class DatasetOrchestrator:
     def step2_transcribe_audio(self, wav_files: list[Path]) -> dict[str, any]:
         """
         Paso 2: Transcribe archivos WAV usando speech-to-text
-        
+
         Args:
             wav_files: Lista de archivos WAV a transcribir
-            
+
         Returns:
             Diccionario con transcripciones y metadatos
         """
@@ -370,10 +370,10 @@ class DatasetOrchestrator:
     def step3_generate_embeddings(self, transcription_data: dict) -> pd.DataFrame:
         """
         Paso 3: Genera embeddings de texto y audio
-        
+
         Args:
             transcription_data: Datos de transcripción del paso anterior
-            
+
         Returns:
             DataFrame con todos los datos incluyendo embeddings
         """
@@ -421,10 +421,10 @@ class DatasetOrchestrator:
     def step4_create_vector_indices(self, df_with_embeddings: pd.DataFrame) -> dict[str, str]:
         """
         Paso 4: Crea índices vectoriales para búsqueda
-        
+
         Args:
             df_with_embeddings: DataFrame con embeddings generados
-            
+
         Returns:
             Diccionario con rutas de los índices creados
         """
@@ -477,11 +477,11 @@ class DatasetOrchestrator:
     def step5_create_final_dataset(self, df_with_embeddings: pd.DataFrame, indices_info: dict) -> dict[str, str]:
         """
         Paso 5: Crea el dataset final consolidado
-        
+
         Args:
             df_with_embeddings: DataFrame con todos los datos
             indices_info: Información de los índices creados
-            
+
         Returns:
             Diccionario con rutas del dataset final
         """
@@ -589,7 +589,7 @@ df_meta = pd.read_csv('dataset_metadata.csv')
     def run_full_pipeline(self) -> dict[str, any]:
         """
         Ejecuta el pipeline completo de procesamiento
-        
+
         Returns:
             Diccionario con resultados y estadísticas
         """

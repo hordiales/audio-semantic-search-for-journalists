@@ -28,7 +28,11 @@ Scripts bash para automatización:
 
 ### Python
 
-- **fix_ruff_errors.py** - Script para corregir errores de Ruff
+- **fix_ruff_errors.py** - Script para corregir errores de Ruff de forma interactiva
+
+### Shell (Utilidades)
+
+- **verify_pre_commit.sh** - Verifica que los pre-commit hooks están configurados correctamente
 
 ## Uso
 
@@ -58,5 +62,9 @@ chmod +x scripts/shell/*.sh
 ### Scripts Python
 
 ```bash
+# Corregir errores de Ruff
 poetry run python scripts/fix_ruff_errors.py
+
+# Verificar pre-commit hooks
+bash scripts/verify_pre_commit.sh
 ```

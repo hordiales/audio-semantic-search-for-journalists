@@ -22,10 +22,10 @@ class SemanticSearchEngine:
     Motor de búsqueda semántica para contenido de audio transcrito
     """
 
-    def __init__(self, config: dict = None, logger=None):
+    def __init__(self, config: dict | None = None, logger=None):
         """
         Inicializa el motor de búsqueda semántica
-        
+
         Args:
             config: Configuración del motor de búsqueda
             logger: A logger instance (optional)
@@ -51,7 +51,7 @@ class SemanticSearchEngine:
     def _default_config(self) -> dict:
         """
         Configuración por defecto del sistema usando configuración centralizada
-        
+
         Returns:
             Diccionario con configuración por defecto
         """
@@ -90,11 +90,11 @@ class SemanticSearchEngine:
                            output_dir: str = "processed_data") -> pd.DataFrame:
         """
         Procesa archivos de audio: transcripción y generación de embeddings
-        
+
         Args:
             audio_files: Lista de rutas a archivos de audio
             output_dir: Directorio para guardar datos procesados
-            
+
         Returns:
             DataFrame con todos los datos procesados
         """
@@ -163,11 +163,11 @@ class SemanticSearchEngine:
                       index_dir: str = "indices") -> bool:
         """
         Crea índices vectoriales para búsqueda
-        
+
         Args:
             df: DataFrame con embeddings (usa self.processed_data si es None)
             index_dir: Directorio para guardar índices
-            
+
         Returns:
             True si se crearon exitosamente
         """
@@ -198,10 +198,10 @@ class SemanticSearchEngine:
     def load_indices(self, index_dir: str = "indices") -> bool:
         """
         Carga índices previamente creados
-        
+
         Args:
             index_dir: Directorio con los índices
-            
+
         Returns:
             True si se cargaron exitosamente
         """
@@ -215,16 +215,16 @@ class SemanticSearchEngine:
             return False
 
     def search(self, query: str, search_type: str = "combined",
-               top_k: int = None, sentiment_filter: str = None) -> pd.DataFrame:
+               top_k: int | None = None, sentiment_filter: str | None = None) -> pd.DataFrame:
         """
         Realiza búsqueda semántica
-        
+
         Args:
             query: Consulta en lenguaje natural
             search_type: Tipo de búsqueda ('text', 'audio', 'combined', 'sentiment')
             top_k: Número de resultados (usa config si es None)
             sentiment_filter: Filtro de sentimiento (ej: "feliz", "triste", "enojado")
-            
+
         Returns:
             DataFrame con resultados ordenados por relevancia
         """
@@ -281,11 +281,11 @@ class SemanticSearchEngine:
     def _search_text(self, query: str, top_k: int) -> pd.DataFrame:
         """
         Busca en el índice de texto
-        
+
         Args:
             query: Consulta
             top_k: Número de resultados
-            
+
         Returns:
             DataFrame con resultados
         """
@@ -309,11 +309,11 @@ class SemanticSearchEngine:
         """
         Busca en el índice de audio usando consulta de texto
         (implementación simplificada)
-        
+
         Args:
             query: Consulta
             top_k: Número de resultados
-            
+
         Returns:
             DataFrame con resultados
         """
@@ -331,11 +331,11 @@ class SemanticSearchEngine:
     def _search_sentiment(self, query: str, top_k: int) -> pd.DataFrame:
         """
         Busca textos por sentimiento/estado de ánimo
-        
+
         Args:
             query: Consulta de sentimiento (ej: "feliz", "triste", "enojado")
             top_k: Número de resultados
-            
+
         Returns:
             DataFrame con resultados filtrados por sentimiento
         """
@@ -365,11 +365,11 @@ class SemanticSearchEngine:
     def _apply_sentiment_filter(self, df: pd.DataFrame, sentiment_filter: str) -> pd.DataFrame:
         """
         Aplica filtro de sentimiento a resultados existentes
-        
+
         Args:
             df: DataFrame con resultados de búsqueda
             sentiment_filter: Filtro de sentimiento
-            
+
         Returns:
             DataFrame filtrado por sentimiento
         """
@@ -398,11 +398,11 @@ class SemanticSearchEngine:
                         audio_results: pd.DataFrame) -> pd.DataFrame:
         """
         Combina resultados de búsqueda de texto y audio
-        
+
         Args:
             text_results: Resultados de búsqueda de texto
             audio_results: Resultados de búsqueda de audio
-            
+
         Returns:
             DataFrame con resultados combinados
         """
@@ -457,7 +457,7 @@ class SemanticSearchEngine:
     def get_available_sentiments(self) -> list[str]:
         """
         Retorna lista de sentimientos disponibles para búsqueda
-        
+
         Returns:
             Lista de estados de ánimo soportados
         """
@@ -466,7 +466,7 @@ class SemanticSearchEngine:
     def get_sentiment_distribution(self) -> dict[str, int]:
         """
         Obtiene la distribución de sentimientos en el dataset actual
-        
+
         Returns:
             Diccionario con conteo de sentimientos
         """
@@ -478,7 +478,7 @@ class SemanticSearchEngine:
     def get_system_stats(self) -> dict:
         """
         Retorna estadísticas del sistema
-        
+
         Returns:
             Diccionario con estadísticas
         """
@@ -498,7 +498,7 @@ class SemanticSearchEngine:
     def export_results(self, results: pd.DataFrame, output_path: str):
         """
         Exporta resultados de búsqueda
-        
+
         Args:
             results: DataFrame con resultados
             output_path: Ruta del archivo de salida

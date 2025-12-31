@@ -202,9 +202,8 @@ def show_sample_data(dataset_dir: str, n_samples: int = 5):
             print(f"  📁 Archivo: {row['source_file']}", file=sys.stderr)
             print(f"  ⏱️  Tiempo: {row['start_time']:.1f}s - {row['end_time']:.1f}s ({row['duration']:.1f}s)", file=sys.stderr)
             print(f"  📝 Texto: {row['text'][:100]}{'...' if len(row['text']) > 100 else ''}", file=sys.stderr)
-        if 'confidence' in row:
-            if os.environ.get('MCP_MODE') != '1':
-                print(f"  🎯 Confianza: {row['confidence']:.2f}", file=sys.stderr)
+        if 'confidence' in row and os.environ.get('MCP_MODE') != '1':
+            print(f"  🎯 Confianza: {row['confidence']:.2f}", file=sys.stderr)
 
 def main():
     parser = argparse.ArgumentParser(description="Verificar dataset de audio procesado")

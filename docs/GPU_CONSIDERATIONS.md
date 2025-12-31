@@ -70,6 +70,27 @@ poetry install || true
 poetry run pip install -r requirements.txt
 ```
 
+### Problema con Whisper y MPS
+
+Whisper puede fallar al cargarse en MPS debido a limitaciones del backend con operaciones de tensores dispersos:
+
+```
+NotImplementedError: Could not run 'aten::empty.memory_format' with arguments from the 'SparseMPS' backend
+```
+
+**Solución automática**: El código detecta este error y automáticamente hace fallback a CPU. Verás un mensaje de advertencia:
+
+```
+⚠️  Error cargando modelo en MPS: ...
+   Cambiando a CPU (MPS tiene limitaciones con algunas operaciones de Whisper)
+```
+
+**Forzar CPU**: Si prefieres evitar el intento con MPS, configura la variable de entorno:
+
+```bash
+export WHISPER_DEVICE=cpu
+```
+
 ### Rendimiento en macOS
 
 | Modelo | CPU | MPS (Apple Silicon) | Notas |
@@ -153,6 +174,16 @@ sw_vers
 
 # Verificar PyTorch con soporte MPS
 python -c "import torch; print(torch.backends.mps.is_available())"
+```
+
+### "NotImplementedError: Could not run 'aten::empty.memory_format' with arguments from the 'SparseMPS' backend"
+**Problema conocido.** MPS no soporta todas las operaciones que Whisper necesita (especialmente tensores dispersos).
+
+**Solución automática**: El código detecta este error y automáticamente cambia a CPU. No necesitas hacer nada.
+
+**Forzar CPU desde el inicio**:
+```bash
+export WHISPER_DEVICE=cpu
 ```
 
 ### GPU NVIDIA no detectada en Linux

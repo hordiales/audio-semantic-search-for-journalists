@@ -65,7 +65,6 @@ class SentimentAnalyzer:
         'happy': 'POSITIVE',
         'sad': 'NEGATIVE',
         'angry': 'NEGATIVE',
-        'neutral': 'NEUTRAL',
         'positive': 'POSITIVE',
         'negative': 'NEGATIVE',
         'excited': 'POSITIVE',
@@ -74,10 +73,10 @@ class SentimentAnalyzer:
         'calm': 'NEUTRAL'
     }
 
-    def __init__(self, model_name: str = None, logger=None):
+    def __init__(self, model_name: str | None = None, logger=None):
         """
         Inicializa el analizador de sentimientos
-        
+
         Args:
             model_name: Nombre del modelo de análisis de sentimientos
             logger: A logger instance (optional)
@@ -131,10 +130,10 @@ class SentimentAnalyzer:
     def analyze_text(self, text: str) -> dict[str, float]:
         """
         Analiza el sentimiento de un texto
-        
+
         Args:
             text: Texto a analizar
-            
+
         Returns:
             Diccionario con scores de sentimiento
         """
@@ -162,10 +161,10 @@ class SentimentAnalyzer:
     def _normalize_sentiment_result(self, result: list[dict]) -> dict[str, float]:
         """
         Normaliza resultados de diferentes modelos a formato estándar
-        
+
         Args:
             result: Resultado del modelo de sentimientos
-            
+
         Returns:
             Diccionario normalizado con POSITIVE, NEGATIVE, NEUTRAL
         """
@@ -214,11 +213,11 @@ class SentimentAnalyzer:
     def process_dataframe(self, df: pd.DataFrame, text_column: str = 'text') -> pd.DataFrame:
         """
         Procesa un DataFrame añadiendo análisis de sentimientos
-        
+
         Args:
             df: DataFrame con textos
             text_column: Nombre de la columna con texto
-            
+
         Returns:
             DataFrame con columnas de sentimiento añadidas
         """
@@ -259,13 +258,13 @@ class SentimentAnalyzer:
                            threshold: float = 0.5, top_k: int = 10) -> pd.DataFrame:
         """
         Busca textos por sentimiento/estado de ánimo
-        
+
         Args:
             df: DataFrame con análisis de sentimientos
             mood_query: Consulta de estado de ánimo (ej: "feliz", "triste", "enojado")
             threshold: Umbral mínimo de score de sentimiento
             top_k: Número máximo de resultados
-            
+
         Returns:
             DataFrame con resultados filtrados por sentimiento
         """
@@ -305,10 +304,10 @@ class SentimentAnalyzer:
     def get_sentiment_distribution(self, df: pd.DataFrame) -> dict[str, int]:
         """
         Obtiene la distribución de sentimientos en el dataset
-        
+
         Args:
             df: DataFrame con análisis de sentimientos
-            
+
         Returns:
             Diccionario con conteo de sentimientos
         """
@@ -320,7 +319,7 @@ class SentimentAnalyzer:
     def get_available_moods(self) -> list[str]:
         """
         Retorna lista de estados de ánimo disponibles para búsqueda
-        
+
         Returns:
             Lista de estados de ánimo soportados
         """
@@ -329,15 +328,15 @@ class SentimentAnalyzer:
 
 # Funciones de utilidad
 def analyze_sentiment_dataset(df: pd.DataFrame, text_column: str = 'text',
-                            model_name: str = None) -> pd.DataFrame:
+                            model_name: str | None = None) -> pd.DataFrame:
     """
     Función de conveniencia para analizar sentimientos en un dataset
-    
+
     Args:
         df: DataFrame con textos
         text_column: Columna con texto a analizar
         model_name: Modelo de sentimientos a usar
-        
+
     Returns:
         DataFrame con análisis de sentimientos
     """
@@ -349,13 +348,13 @@ def search_by_mood(df: pd.DataFrame, mood: str, threshold: float = 0.5,
                   top_k: int = 10) -> pd.DataFrame:
     """
     Función de conveniencia para buscar por estado de ánimo
-    
+
     Args:
         df: DataFrame con análisis de sentimientos
         mood: Estado de ánimo a buscar
         threshold: Umbral mínimo de score
         top_k: Número de resultados
-        
+
     Returns:
         DataFrame con resultados
     """

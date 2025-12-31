@@ -103,15 +103,15 @@ class AudioEventDetector:
             }
         }
 
-    def detect_events_in_audio(self, audio_path: str, start_time: float = None, end_time: float = None) -> dict:
+    def detect_events_in_audio(self, audio_path: str, start_time: float | None = None, end_time: float | None = None) -> dict:
         """
         Detecta eventos específicos en un archivo de audio
-        
+
         Args:
             audio_path: Ruta al archivo de audio
             start_time: Tiempo de inicio del segmento (segundos)
             end_time: Tiempo de fin del segmento (segundos)
-            
+
         Returns:
             Dict con eventos detectados y metadatos
         """
@@ -130,7 +130,7 @@ class AudioEventDetector:
             audio = librosa.util.normalize(audio).astype(np.float32)
 
             # Procesar con YAMNet
-            scores, embeddings, spectrogram = self.model(audio)
+            scores, _embeddings, _spectrogram = self.model(audio)
             scores_np = scores.numpy()
 
             # Analizar scores a lo largo del tiempo
@@ -237,7 +237,7 @@ class AudioEventDetector:
         """Consolida eventos detectados a lo largo de todos los frames"""
         consolidated = {}
 
-        for event_name in self.events_of_interest.keys():
+        for event_name in self.events_of_interest:
             detections = []
             confidences = []
 
@@ -314,10 +314,10 @@ class DatasetEventProcessor:
     def process_dataset_events(self, overwrite: bool = False) -> bool:
         """
         Procesa el dataset agregando detección de eventos de audio
-        
+
         Args:
             overwrite: Si sobreescribir análisis existente
-            
+
         Returns:
             True si el procesamiento fue exitoso
         """

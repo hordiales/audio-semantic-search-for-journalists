@@ -104,7 +104,7 @@ class SemanticHeatmapVisualizer:
         return similarity_matrix
 
     def create_basic_heatmap(self, similarity_matrix: np.ndarray,
-                           labels: list[str] = None,
+                           labels: list[str] | None = None,
                            title: str = "Mapa de Calor Semántico",
                            save_path: str | None = None) -> plt.Figure:
         """
@@ -156,8 +156,8 @@ class SemanticHeatmapVisualizer:
         return fig
 
     def create_interactive_heatmap(self, similarity_matrix: np.ndarray,
-                                 labels: list[str] = None,
-                                 metadata: list[dict] = None,
+                                 labels: list[str] | None = None,
+                                 metadata: list[dict] | None = None,
                                  title: str = "Mapa de Calor Semántico Interactivo",
                                  save_path: str | None = None):
         """
@@ -199,10 +199,10 @@ class SemanticHeatmapVisualizer:
             hovertemplate='%{hovertext}<extra></extra>',
             hovertext=hover_text,
             colorscale='Viridis',
-            colorbar=dict(
-                title="Similitud Semántica",
-                titleside="right"
-            )
+            colorbar={
+                'title': "Similitud Semántica",
+                'titleside': "right"
+            }
         ))
 
         fig.update_layout(
@@ -228,7 +228,7 @@ class SemanticHeatmapVisualizer:
         return fig
 
     def create_clustered_heatmap(self, similarity_matrix: np.ndarray,
-                                labels: list[str] = None,
+                                labels: list[str] | None = None,
                                 clustering_method: str = "hierarchical",
                                 n_clusters: int = 5,
                                 title: str = "Mapa de Calor con Clustering",
@@ -334,8 +334,8 @@ class SemanticHeatmapVisualizer:
         return fig, cluster_order
 
     def create_semantic_landscape(self, embeddings: np.ndarray,
-                                labels: list[str] = None,
-                                metadata: list[dict] = None,
+                                labels: list[str] | None = None,
+                                metadata: list[dict] | None = None,
                                 method: str = "tsne",
                                 title: str = "Paisaje Semántico 2D",
                                 save_path: str | None = None) -> plt.Figure:
@@ -413,7 +413,7 @@ class SemanticHeatmapVisualizer:
 
         # Leyenda por categorías
         if metadata and colors:
-            unique_categories = list(set([item.get('category', 'unknown') for item in metadata]))
+            unique_categories = list({item.get('category', 'unknown') for item in metadata})
             legend_elements = []
             for i, cat in enumerate(unique_categories):
                 legend_elements.append(
@@ -490,7 +490,7 @@ class SemanticHeatmapVisualizer:
     def create_comprehensive_semantic_analysis(self, embeddings: np.ndarray,
                                              labels: list[str],
                                              metadata: list[dict],
-                                             queries: list[str] = None,
+                                             queries: list[str] | None = None,
                                              query_embeddings: np.ndarray = None,
                                              output_prefix: str = "semantic_analysis") -> dict[str, Any]:
         """
@@ -541,7 +541,7 @@ class SemanticHeatmapVisualizer:
 
         # 3. Mapa de calor con clustering
         clustered_heatmap_path = self.output_dir / f"{output_prefix}_clustered_heatmap.png"
-        fig_clustered, cluster_order = self.create_clustered_heatmap(
+        _fig_clustered, cluster_order = self.create_clustered_heatmap(
             similarity_matrix,
             labels,
             "hierarchical",
@@ -675,7 +675,7 @@ class SemanticHeatmapVisualizer:
             Figura de matplotlib
         """
         categories = [item.get('category', 'unknown') for item in metadata]
-        unique_categories = sorted(list(set(categories)))
+        unique_categories = sorted(set(categories))
 
         # Crear matriz agregada por categorías
         category_matrix = np.zeros((len(unique_categories), len(unique_categories)))

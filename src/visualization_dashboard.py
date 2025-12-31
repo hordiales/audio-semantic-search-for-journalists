@@ -148,14 +148,14 @@ class EmbeddingVisualizationDashboard:
         titles = ['Precisión', 'Recall', 'F1-Score']
         colors = ['skyblue', 'lightcoral', 'lightgreen']
 
-        for i, (metric, title, color) in enumerate(zip(metrics, titles, colors)):
+        for i, (metric, title, color) in enumerate(zip(metrics, titles, colors, strict=False)):
             ax = axes[i]
 
             # Gráfico de barras
             bars = ax.bar(df['modelo'], df[metric], color=color, alpha=0.7, edgecolor='black')
 
             # Añadir valores en las barras
-            for bar, value in zip(bars, df[metric]):
+            for bar, value in zip(bars, df[metric], strict=False):
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
                        f'{value:.3f}', ha='center', va='bottom', fontweight='bold')
@@ -263,7 +263,7 @@ class EmbeddingVisualizationDashboard:
             df_norm['tasa_error'] = 1 - df['tasa_error']
 
         # Crear gráfico radar
-        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
+        _fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'projection': 'polar'})
 
         angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False)
         angles = np.concatenate((angles, [angles[0]]))  # Cerrar el círculo
@@ -272,7 +272,7 @@ class EmbeddingVisualizationDashboard:
 
         for i, (_, row) in enumerate(df_norm.iterrows()):
             values = []
-            for metric_name, col_name in metrics.items():
+            for _metric_name, col_name in metrics.items():
                 value = row.get(col_name, 0.0)
                 values.append(value)
 
@@ -310,7 +310,7 @@ class EmbeddingVisualizationDashboard:
             return
 
         # Gráfico de dispersión: Tiempo vs. Calidad
-        fig, ax = plt.subplots(figsize=(10, 8))
+        _fig, ax = plt.subplots(figsize=(10, 8))
 
         colors = sns.color_palette("husl", len(df))
         sizes = df.get('dimension_embedding', [512] * len(df))  # Tamaño basado en dimensión
@@ -322,7 +322,7 @@ class EmbeddingVisualizationDashboard:
                            c=colors, s=sizes_norm, alpha=0.7, edgecolors='black')
 
         # Añadir etiquetas a los puntos
-        for i, (_, row) in enumerate(df.iterrows()):
+        for _i, (_, row) in enumerate(df.iterrows()):
             ax.annotate(row['modelo'],
                        (row['tiempo_consulta'], row['bert_score_f1']),
                        xytext=(5, 5), textcoords='offset points',
@@ -389,7 +389,7 @@ class EmbeddingVisualizationDashboard:
             summary_df = summary_df.sort_values('bert_score_f1', ascending=False)
 
         # Crear visualización de tabla
-        fig, ax = plt.subplots(figsize=(14, 6))
+        _fig, ax = plt.subplots(figsize=(14, 6))
         ax.axis('tight')
         ax.axis('off')
 
@@ -463,7 +463,7 @@ class EmbeddingVisualizationDashboard:
             go.Scatter(x=df['precision_at_5'], y=df['recall_at_5'],
                       mode='markers+text', text=df['modelo'],
                       textposition="top center", name='P@5 vs R@5',
-                      marker=dict(size=12, color='orange')),
+                      marker={'size': 12, 'color': 'orange'}),
             row=1, col=2
         )
 
@@ -472,7 +472,7 @@ class EmbeddingVisualizationDashboard:
             go.Scatter(x=df['tiempo_consulta'], y=df['bert_score_f1'],
                       mode='markers+text', text=df['modelo'],
                       textposition="top center", name='Efficiency',
-                      marker=dict(size=15, color='green')),
+                      marker={'size': 15, 'color': 'green'}),
             row=2, col=1
         )
 

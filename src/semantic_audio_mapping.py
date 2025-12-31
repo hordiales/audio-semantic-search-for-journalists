@@ -173,10 +173,10 @@ class SemanticAudioMapper:
     def get_audio_classes_for_text(self, text: str) -> list[str]:
         """
         Obtiene las clases de audio relevantes para un texto
-        
+
         Args:
             text: Texto de consulta
-            
+
         Returns:
             Lista de clases de audio relacionadas
         """
@@ -197,11 +197,11 @@ class SemanticAudioMapper:
     def get_semantic_score(self, text: str, audio_class: str) -> float:
         """
         Calcula la relevancia semántica entre texto y clase de audio
-        
+
         Args:
             text: Texto de consulta
             audio_class: Clase de audio
-            
+
         Returns:
             Score de relevancia (0-1)
         """
@@ -217,10 +217,10 @@ class SemanticAudioMapper:
     def suggest_audio_queries(self, text: str) -> list[dict]:
         """
         Sugiere consultas de audio basadas en el texto
-        
+
         Args:
             text: Texto de consulta
-            
+
         Returns:
             Lista de sugerencias con scores
         """
@@ -247,10 +247,10 @@ class SemanticAudioMapper:
     def validate_audio_query(self, query: str) -> dict:
         """
         Valida si una consulta de audio es válida
-        
+
         Args:
             query: Consulta de audio
-            
+
         Returns:
             Diccionario con validación y sugerencias
         """

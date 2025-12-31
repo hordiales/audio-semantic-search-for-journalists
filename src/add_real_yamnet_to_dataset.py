@@ -5,6 +5,8 @@ También detecta eventos de audio como risas, música, aplausos
 """
 
 import argparse
+import builtins
+import contextlib
 from datetime import datetime
 import json
 import logging
@@ -73,7 +75,7 @@ class RealYAMNetProcessor:
         """Preprocesa audio para YAMNet (16kHz, mono)"""
         try:
             # Cargar audio a 16kHz mono
-            audio, sr = librosa.load(audio_path, sr=16000, mono=True)
+            audio, _sr = librosa.load(audio_path, sr=16000, mono=True)
 
             # Normalizar
             audio = librosa.util.normalize(audio)
@@ -90,7 +92,7 @@ class RealYAMNetProcessor:
     def extract_audio_features(self, audio_path: str) -> dict:
         """
         Extrae embeddings y detecta eventos de audio usando YAMNet
-        
+
         Returns:
             Dict con embedding, scores, y eventos detectados
         """
@@ -99,7 +101,7 @@ class RealYAMNetProcessor:
             audio = self.preprocess_audio(audio_path)
 
             # Procesar con YAMNet
-            scores, embeddings, spectrogram = self.model(audio)
+            scores, embeddings, _spectrogram = self.model(audio)
 
             # Convertir a numpy
             scores_np = scores.numpy()
@@ -143,10 +145,10 @@ class RealYAMNetProcessor:
     def _detect_audio_events(self, scores: np.ndarray) -> dict:
         """
         Detecta eventos específicos de audio basado en scores de YAMNet
-        
+
         Args:
             scores: Array de 521 scores de AudioSet
-            
+
         Returns:
             Dict con eventos detectados y sus confianzas
         """
@@ -224,11 +226,11 @@ class DatasetAudioProcessor:
     def process_dataset(self, overwrite: bool = False, backup: bool = True) -> bool:
         """
         Procesa el dataset completo agregando análisis de audio real
-        
+
         Args:
             overwrite: Si sobreescribir embeddings existentes
             backup: Si crear backup antes de modificar
-            
+
         Returns:
             True si el procesamiento fue exitoso
         """
@@ -263,7 +265,7 @@ class DatasetAudioProcessor:
                 batch_results = self._process_batch(df, batch_indices)
 
                 # Actualizar DataFrame
-                for idx, result in zip(batch_indices, batch_results):
+                for idx, result in zip(batch_indices, batch_results, strict=False):
                     if result['processing_success']:
                         df.at[idx, 'audio_embedding'] = result['embedding']
                         df.at[idx, 'audio_embedding_model'] = result['model']
@@ -348,10 +350,8 @@ class DatasetAudioProcessor:
 
                 # Limpiar archivo temporal si se creó
                 if segment_audio_path != audio_file:
-                    try:
+                    with contextlib.suppress(builtins.BaseException):
                         os.remove(segment_audio_path)
-                    except:
-                        pass
 
             except Exception as e:
                 logger.error(f"❌ Error procesando segmento {idx}: {e}")
@@ -365,10 +365,10 @@ class DatasetAudioProcessor:
     def _extract_segment_audio(self, row: pd.DataFrame) -> str:
         """
         Extrae el segmento de audio específico si es necesario
-        
+
         Args:
             row: Fila del DataFrame con información del segmento
-            
+
         Returns:
             Ruta al archivo de audio (original o segmento extraído)
         """

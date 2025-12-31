@@ -22,7 +22,7 @@ class HybridAudioSearch:
     def __init__(self, dataset_dir: str, logger=None):
         """
         Inicializa el sistema híbrido
-        
+
         Args:
             dataset_dir: Directorio del dataset
             logger: A logger instance (optional)
@@ -102,12 +102,12 @@ class HybridAudioSearch:
     def search_by_keywords(self, df: pd.DataFrame, query: str, k: int = 10) -> list[dict]:
         """
         Búsqueda por palabras clave (método 1)
-        
+
         Args:
             df: DataFrame con transcripciones
             query: Consulta de texto
             k: Número de resultados
-            
+
         Returns:
             Lista de resultados con scores de palabras clave
         """
@@ -123,12 +123,12 @@ class HybridAudioSearch:
     def search_by_yamnet_embeddings(self, df: pd.DataFrame, query_audio_file: str, k: int = 10) -> list[dict]:
         """
         Búsqueda PURA por embeddings YAMNet usando archivo de audio como consulta
-        
+
         Args:
             df: DataFrame con embeddings YAMNet
             query_audio_file: Ruta al archivo de audio de consulta
             k: Número de resultados
-            
+
         Returns:
             Lista de resultados con scores de embeddings de audio
         """
@@ -152,7 +152,7 @@ class HybridAudioSearch:
             distances, indices = self.index_manager.search_audio_index(query_embedding, k)
 
             results = []
-            for i, (distance, idx) in enumerate(zip(distances, indices)):
+            for i, (distance, idx) in enumerate(zip(distances, indices, strict=False)):
                 if idx < len(df):
                     row = df.iloc[idx]
                     result = {
@@ -178,12 +178,12 @@ class HybridAudioSearch:
     def search_by_yamnet_similarity(self, df: pd.DataFrame, reference_segment: dict, k: int = 10) -> list[dict]:
         """
         Búsqueda por similitud YAMNet usando un segmento de referencia del dataset
-        
+
         Args:
             df: DataFrame con embeddings YAMNet
             reference_segment: Segmento de referencia con embedding
             k: Número de resultados
-            
+
         Returns:
             Lista de resultados similares
         """
@@ -202,7 +202,7 @@ class HybridAudioSearch:
             distances, indices = self.index_manager.search_audio_index(query_embedding, k + 1)  # +1 para excluir el mismo
 
             results = []
-            for i, (distance, idx) in enumerate(zip(distances, indices)):
+            for _i, (distance, idx) in enumerate(zip(distances, indices, strict=False)):
                 if idx < len(df):
                     row = df.iloc[idx]
 
@@ -247,13 +247,13 @@ class HybridAudioSearch:
                      keyword_weight: float = 0.7) -> list[dict]:
         """
         Búsqueda híbrida que combina ambos métodos
-        
+
         Args:
             df: DataFrame con datos
             query: Consulta de texto
             k: Número de resultados
             keyword_weight: Peso para búsqueda por palabras clave (0-1)
-            
+
         Returns:
             Lista de resultados combinados y rankeados
         """

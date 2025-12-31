@@ -27,7 +27,7 @@ class SimpleDatasetPipeline:
     def __init__(self, input_dir: str, output_dir: str, **kwargs):
         """
         Inicializa el pipeline
-        
+
         Args:
             input_dir: Directorio con archivos de audio
             output_dir: Directorio de salida
@@ -75,6 +75,17 @@ class SimpleDatasetPipeline:
         self.transcriber = AudioTranscriber(model_name=self.config['whisper_model'])
         self.text_embedder = TextEmbeddingGenerator(model_name=self.config['text_model'])
         self.audio_embedder = get_audio_embedding_generator()
+
+        # Loggear modelos utilizados
+        self.logger.info("=" * 60)
+        self.logger.info("CONFIGURACIÓN DE MODELOS")
+        self.logger.info("=" * 60)
+        self.logger.info(f"🤖 Modelo Whisper: {self.config['whisper_model']}")
+        self.logger.info(f"📝 Modelo de texto: {self.config['text_model']}")
+        self.logger.info(f"🎵 Modelo de audio: {getattr(self.audio_embedder, 'model_name', 'Desconocido')}")
+        self.logger.info(f"📊 Dimensión embeddings texto: {self.text_embedder.embedding_dim}")
+        self.logger.info(f"📊 Dimensión embeddings audio: {getattr(self.audio_embedder, 'embedding_dim', 'N/A')}")
+        self.logger.info("=" * 60)
 
         # Estadísticas
         self.stats = {
@@ -151,6 +162,8 @@ class SimpleDatasetPipeline:
     def transcribe_audio_files(self, wav_files: list[Path]) -> list[dict]:
         """Transcribe archivos WAV"""
         self.logger.info("=== PASO 2: Transcripción de Audio ===")
+        self.logger.info(f"Usando modelo Whisper: {self.config['whisper_model']}")
+        self.logger.info(f"Método de segmentación: {self.config['segmentation_method']}")
 
         transcriptions_dir = self.output_dir / "transcriptions"
         all_transcriptions = []
@@ -242,11 +255,12 @@ class SimpleDatasetPipeline:
         self.logger.info(f"Generando embeddings para {len(df)} segmentos")
 
         # Embeddings de texto
-        self.logger.info("Generando embeddings de texto...")
+        self.logger.info(f"Generando embeddings de texto usando modelo: {self.config['text_model']}")
         df_with_text = self.text_embedder.process_transcription_dataframe(df)
 
         # Embeddings de audio
-        self.logger.info("Generando embeddings de audio...")
+        audio_model_name = getattr(self.audio_embedder, 'model_name', 'Desconocido')
+        self.logger.info(f"Generando embeddings de audio usando modelo: {audio_model_name}")
         df_with_all = self.audio_embedder.process_transcription_dataframe(df_with_text)
 
         # Guardar embeddings
@@ -277,6 +291,9 @@ class SimpleDatasetPipeline:
         if text_success or audio_success:
             index_manager.save_indices(str(indices_dir))
 
+            # Obtener nombre real del modelo de audio
+            audio_model_name = getattr(self.audio_embedder, 'model_name', 'yamnet')
+
             # Guardar metadatos
             metadata = {
                 "creation_date": datetime.now().isoformat(),
@@ -285,7 +302,7 @@ class SimpleDatasetPipeline:
                 "text_index_created": text_success,
                 "audio_index_created": audio_success,
                 "text_model": self.config['text_model'],
-                "audio_model": "yamnet"
+                "audio_model": audio_model_name
             }
 
             metadata_file = indices_dir / "indices_metadata.json"
@@ -293,6 +310,7 @@ class SimpleDatasetPipeline:
                 json.dump(metadata, f, ensure_ascii=False, indent=2)
 
             self.logger.info(f"Índices creados - Texto: {text_success}, Audio: {audio_success}")
+            self.logger.info(f"Modelos utilizados - Texto: {self.config['text_model']}, Audio: {audio_model_name}")
             return metadata
         raise RuntimeError("No se pudo crear ningún índice")
 
@@ -322,6 +340,31 @@ class SimpleDatasetPipeline:
         if stats_dict.get('end_time'):
             stats_dict['end_time'] = stats_dict['end_time'].isoformat()
 
+        # Obtener información de modelos del DataFrame si está disponible
+        audio_model_name = getattr(self.audio_embedder, 'model_name', 'Desconocido')
+        audio_embedding_dim = getattr(self.audio_embedder, 'embedding_dim', None)
+
+        # Extraer información de modelos del DataFrame si existe
+        text_model_from_df = None
+        text_dim_from_df = None
+        audio_model_from_df = None
+        audio_dim_from_df = None
+
+        if 'embedding_model' in df.columns:
+            text_model_from_df = df['embedding_model'].iloc[0] if len(df) > 0 else None
+        if 'embedding_dim' in df.columns:
+            text_dim_from_df = int(df['embedding_dim'].iloc[0]) if len(df) > 0 else None
+        if 'audio_embedding_model' in df.columns:
+            audio_model_from_df = df['audio_embedding_model'].iloc[0] if len(df) > 0 else None
+        if 'audio_embedding_dim' in df.columns:
+            audio_dim_from_df = int(df['audio_embedding_dim'].iloc[0]) if len(df) > 0 else None
+
+        # Usar información del DataFrame si está disponible, sino usar la de los objetos
+        final_text_model = text_model_from_df or self.config['text_model']
+        final_text_dim = text_dim_from_df or self.text_embedder.embedding_dim
+        final_audio_model = audio_model_from_df or audio_model_name
+        final_audio_dim = audio_dim_from_df or audio_embedding_dim
+
         # Manifiesto
         manifest = {
             "dataset_info": {
@@ -332,6 +375,31 @@ class SimpleDatasetPipeline:
                 "processing_time": self.stats['processing_time']
             },
             "config": self.config,
+            "models_used": {
+                "transcription": {
+                    "model": self.config['whisper_model'],
+                    "language": self.config.get('language', 'es'),
+                    "segmentation_method": self.config['segmentation_method'],
+                    "segmentation_params": {
+                        "min_silence_len": self.config.get('min_silence_len'),
+                        "silence_thresh": self.config.get('silence_thresh'),
+                        "segment_duration": self.config.get('segment_duration')
+                    } if self.config['segmentation_method'] == 'time' else {
+                        "min_silence_len": self.config.get('min_silence_len'),
+                        "silence_thresh": self.config.get('silence_thresh')
+                    }
+                },
+                "text_embeddings": {
+                    "model": final_text_model,
+                    "embedding_dimension": final_text_dim,
+                    "model_type": "sentence-transformers"
+                },
+                "audio_embeddings": {
+                    "model": final_audio_model,
+                    "embedding_dimension": final_audio_dim,
+                    "model_type": "audio_embedding"
+                }
+            },
             "statistics": stats_dict,
             "files": {
                 "complete_dataset": str(dataset_file),

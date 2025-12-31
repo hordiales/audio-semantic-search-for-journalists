@@ -75,7 +75,7 @@ def test_sentiment_analyzer():
         results = analyzer.search_by_sentiment(df_with_sentiment, mood, threshold=0.3)
         print(f"\nSearching for '{mood}': {len(results)} results")
         if len(results) > 0:
-            for idx, row in results.head(2).iterrows():
+            for _idx, row in results.head(2).iterrows():
                 score = row.get('sentiment_score', 0)
                 print(f"  Score: {score:.2f} - '{row['text'][:60]}...'")
 
@@ -145,14 +145,14 @@ def test_semantic_search_with_sentiment():
         print("\n1. Regular text search for 'economía':")
         results = search_engine.search("economía", search_type="text", top_k=3)
         print(f"Found {len(results)} results")
-        for idx, row in results.iterrows():
+        for _idx, row in results.iterrows():
             print(f"  Score: {row.get('similarity_score', 0):.3f} - '{row['text'][:60]}...'")
 
         # Sentiment-only search
         print("\n2. Sentiment search for 'feliz':")
         results = search_engine.search("feliz", search_type="sentiment", top_k=3)
         print(f"Found {len(results)} results")
-        for idx, row in results.iterrows():
+        for _idx, row in results.iterrows():
             score = row.get('sentiment_score', 0)
             print(f"  Score: {score:.3f} - '{row['text'][:60]}...'")
 
@@ -160,7 +160,7 @@ def test_semantic_search_with_sentiment():
         print("\n3. Text search with sentiment filter (positive content):")
         results = search_engine.search("medidas", search_type="text", sentiment_filter="optimista", top_k=3)
         print(f"Found {len(results)} results")
-        for idx, row in results.iterrows():
+        for _idx, row in results.iterrows():
             score = row.get('similarity_score', 0)
             print(f"  Score: {score:.3f} - '{row['text'][:60]}...'")
 

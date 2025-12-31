@@ -178,7 +178,7 @@ def test_visualization_creation():
         scores = [0.75, 0.82, 0.78]
 
         # Crear gráfico simple
-        fig, ax = plt.subplots(figsize=(8, 5))
+        _fig, ax = plt.subplots(figsize=(8, 5))
         bars = ax.bar(models, scores, color=['skyblue', 'lightgreen', 'coral'])
         ax.set_title('Test Visualization')
         ax.set_ylabel('Score')

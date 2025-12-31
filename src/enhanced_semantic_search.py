@@ -229,9 +229,8 @@ class EnhancedSemanticSearch:
                     documents = []
 
             # Procesar lote final
-            if documents:
-                if not self._add_documents_batch(documents):
-                    return False
+            if documents and not self._add_documents_batch(documents):
+                return False
 
             logger.info(f"✅ {len(audio_data)} documentos de audio procesados exitosamente")
             return True
@@ -416,9 +415,8 @@ class EnhancedSemanticSearch:
         try:
             # Obtener documento de referencia
             doc = self.vector_db.get_document(document_id)
-            if not doc:
-                if self.fallback_db:
-                    doc = self.fallback_db.get_document(document_id)
+            if not doc and self.fallback_db:
+                doc = self.fallback_db.get_document(document_id)
 
             if not doc:
                 logger.error(f"❌ Documento no encontrado: {document_id}")

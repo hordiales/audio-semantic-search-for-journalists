@@ -50,14 +50,14 @@ class AudioConverter:
                 format: str = "wav") -> bool:
         """
         Convierte archivo de audio a formato específico
-        
+
         Args:
             input_path: Ruta del archivo de entrada
             output_path: Ruta del archivo de salida
             sample_rate: Frecuencia de muestreo objetivo
             channels: Número de canales (1=mono, 2=estéreo)
             format: Formato de salida
-            
+
         Returns:
             True si la conversión fue exitosa
         """
@@ -95,7 +95,7 @@ class AudioConverter:
         """Convierte usando librosa + soundfile"""
         try:
             # Cargar audio
-            audio, sr = librosa.load(str(input_path), sr=sample_rate, mono=(channels == 1))
+            audio, _sr = librosa.load(str(input_path), sr=sample_rate, mono=(channels == 1))
 
             # Ajustar canales si es necesario
             if channels == 2 and audio.ndim == 1:
@@ -149,10 +149,10 @@ class AudioConverter:
     def get_audio_info(self, file_path: str | Path) -> dict | None:
         """
         Obtiene información del archivo de audio
-        
+
         Args:
             file_path: Ruta del archivo de audio
-            
+
         Returns:
             Diccionario con información del audio o None si hay error
         """
@@ -202,10 +202,10 @@ class AudioConverter:
     def validate_audio_file(self, file_path: str | Path) -> bool:
         """
         Valida si un archivo es un audio válido
-        
+
         Args:
             file_path: Ruta del archivo a validar
-            
+
         Returns:
             True si el archivo es válido
         """
@@ -231,14 +231,14 @@ class AudioConverter:
                      format: str = "wav") -> dict:
         """
         Convierte múltiples archivos en lote
-        
+
         Args:
             input_dir: Directorio con archivos de entrada
             output_dir: Directorio de salida
             sample_rate: Frecuencia de muestreo objetivo
             channels: Número de canales
             format: Formato de salida
-            
+
         Returns:
             Diccionario con estadísticas de conversión
         """

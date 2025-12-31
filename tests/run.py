@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Iterable
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -16,7 +15,12 @@ PARENT_DIR = CURRENT_DIR.parent
 if str(PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(PARENT_DIR))
 
+from typing import TYPE_CHECKING
+
 from tests.common.path_utils import PROJECT_ROOT
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 CATALOG_PATH = Path(__file__).with_name("test_catalog.json")
 

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from pathlib import Path
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 def _find_project_root() -> Path:

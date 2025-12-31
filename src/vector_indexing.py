@@ -15,7 +15,7 @@ class VectorIndexManager:
     def __init__(self, embedding_dim: int = 384, index_type: str = "L2"):
         """
         Inicializa el gestor de índices vectoriales
-        
+
         Args:
             embedding_dim: Dimensión de los embeddings
             index_type: Tipo de índice ('L2', 'IP' para inner product, 'cosine')
@@ -32,11 +32,11 @@ class VectorIndexManager:
     def _create_index(self, embedding_dim: int, index_type: str = "L2") -> faiss.Index:
         """
         Crea un índice FAISS
-        
+
         Args:
             embedding_dim: Dimensión de los embeddings
             index_type: Tipo de índice
-            
+
         Returns:
             Índice FAISS
         """
@@ -52,10 +52,10 @@ class VectorIndexManager:
     def _normalize_embeddings(self, embeddings: np.ndarray) -> np.ndarray:
         """
         Normaliza embeddings para similitud coseno
-        
+
         Args:
             embeddings: Array de embeddings
-            
+
         Returns:
             Embeddings normalizados
         """
@@ -65,11 +65,11 @@ class VectorIndexManager:
     def create_text_index(self, df: pd.DataFrame, embedding_column: str = 'text_embedding') -> bool:
         """
         Crea índice para embeddings de texto
-        
+
         Args:
             df: DataFrame con embeddings de texto
             embedding_column: Nombre de la columna con embeddings
-            
+
         Returns:
             True si se creó exitosamente
         """
@@ -106,11 +106,11 @@ class VectorIndexManager:
     def create_audio_index(self, df: pd.DataFrame, embedding_column: str = 'audio_embedding') -> bool:
         """
         Crea índice para embeddings de audio
-        
+
         Args:
             df: DataFrame con embeddings de audio
             embedding_column: Nombre de la columna con embeddings
-            
+
         Returns:
             True si se creó exitosamente
         """
@@ -148,11 +148,11 @@ class VectorIndexManager:
     def search_text_index(self, query_embedding: np.ndarray, k: int = 5) -> tuple[np.ndarray, np.ndarray]:
         """
         Busca en el índice de texto
-        
+
         Args:
             query_embedding: Embedding de la consulta
             k: Número de resultados a retornar
-            
+
         Returns:
             Tupla con (distancias, índices)
         """
@@ -175,11 +175,11 @@ class VectorIndexManager:
     def search_audio_index(self, query_embedding: np.ndarray, k: int = 5) -> tuple[np.ndarray, np.ndarray]:
         """
         Busca en el índice de audio
-        
+
         Args:
             query_embedding: Embedding de la consulta
             k: Número de resultados a retornar
-            
+
         Returns:
             Tupla con (distancias, índices)
         """
@@ -202,11 +202,11 @@ class VectorIndexManager:
     def get_text_results(self, distances: np.ndarray, indices: np.ndarray) -> pd.DataFrame:
         """
         Obtiene resultados de búsqueda en texto con metadatos
-        
+
         Args:
             distances: Distancias retornadas por FAISS
             indices: Índices retornados por FAISS
-            
+
         Returns:
             DataFrame con resultados
         """
@@ -242,11 +242,11 @@ class VectorIndexManager:
     def get_audio_results(self, distances: np.ndarray, indices: np.ndarray) -> pd.DataFrame:
         """
         Obtiene resultados de búsqueda en audio con metadatos
-        
+
         Args:
             distances: Distancias retornadas por FAISS
             indices: Índices retornados por FAISS
-            
+
         Returns:
             DataFrame con resultados
         """
@@ -280,7 +280,7 @@ class VectorIndexManager:
     def save_indices(self, base_path: str):
         """
         Guarda los índices y metadatos en archivos
-        
+
         Args:
             base_path: Ruta base para guardar los archivos
         """
@@ -317,7 +317,7 @@ class VectorIndexManager:
     def load_indices(self, base_path: str):
         """
         Carga los índices y metadatos desde archivos
-        
+
         Args:
             base_path: Ruta base donde están los archivos
         """
@@ -353,7 +353,7 @@ class VectorIndexManager:
     def get_index_stats(self) -> dict:
         """
         Retorna estadísticas de los índices
-        
+
         Returns:
             Diccionario con estadísticas
         """

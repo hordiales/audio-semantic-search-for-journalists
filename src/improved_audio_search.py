@@ -129,12 +129,12 @@ class ImprovedAudioSearch:
     def search_by_keywords(self, df: pd.DataFrame, audio_class: str, k: int = 10) -> list[dict]:
         """
         Busca segmentos por palabras clave relacionadas con clases de audio
-        
+
         Args:
             df: DataFrame con transcripciones
             audio_class: Clase de audio a buscar
             k: Número de resultados
-            
+
         Returns:
             Lista de resultados ordenados por relevancia
         """
@@ -205,12 +205,12 @@ class ImprovedAudioSearch:
     def search_audio_by_text(self, df: pd.DataFrame, query: str, k: int = 10) -> list[dict]:
         """
         Busca audio basado en texto usando mapeo semántico + palabras clave + YAMNet detection
-        
+
         Args:
             df: DataFrame con transcripciones
             query: Consulta de texto
             k: Número de resultados
-            
+
         Returns:
             Lista de resultados combinados
         """
@@ -280,12 +280,12 @@ class ImprovedAudioSearch:
     def _search_by_yamnet_detection(self, df: pd.DataFrame, audio_class: str, k: int = 10) -> list[dict]:
         """
         Busca segmentos usando detección YAMNet (columnas has_* y *_confidence)
-        
+
         Args:
             df: DataFrame con datos
             audio_class: Clase de audio a buscar
             k: Número de resultados
-            
+
         Returns:
             Lista de resultados basados en detección YAMNet
         """
@@ -311,7 +311,7 @@ class ImprovedAudioSearch:
             return results
 
         # Obtener segmentos detectados
-        detected_segments = df[df[has_column] == True].copy()
+        detected_segments = df[df[has_column]].copy()
 
         if len(detected_segments) == 0:
             return results
@@ -326,8 +326,8 @@ class ImprovedAudioSearch:
             score_column = 'yamnet_score'
 
         # Formatear resultados
-        for i, (idx, row) in enumerate(detected_segments.head(k).iterrows()):
-            confidence_score = row[score_column] if score_column in row else 1.0
+        for i, (_idx, row) in enumerate(detected_segments.head(k).iterrows()):
+            confidence_score = row.get(score_column, 1.0)
 
             result = {
                 'rank': i + 1,
@@ -351,12 +351,12 @@ class ImprovedAudioSearch:
                                           audio_class: str) -> list[dict]:
         """
         Combina resultados de búsqueda por palabras clave y detección YAMNet
-        
+
         Args:
             keyword_results: Resultados de búsqueda por palabras clave
             yamnet_results: Resultados de detección YAMNet
             audio_class: Clase de audio
-            
+
         Returns:
             Lista combinada de resultados únicos
         """

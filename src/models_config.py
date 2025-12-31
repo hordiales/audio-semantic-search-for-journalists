@@ -133,14 +133,7 @@ class ModelsConfiguration:
             if model_type == ModelType.SPEECH_TO_TEXT and "whisper" in model_name:
                 import whisper
                 return True
-            if model_type == ModelType.AUDIO_EMBEDDING:
-                if model_name == "yamnet":
-                    import tensorflow_hub
-                    return True
-                if "clap" in model_name:
-                    import laion_clap
-                    return True
-            elif model_type == ModelType.AUDIO_EVENT_DETECTION:
+            if model_type == ModelType.AUDIO_EMBEDDING or model_type == ModelType.AUDIO_EVENT_DETECTION:
                 if model_name == "yamnet":
                     import tensorflow_hub
                     return True

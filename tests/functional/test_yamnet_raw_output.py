@@ -44,7 +44,7 @@ def analyze_segment_yamnet_output():
 
         try:
             # Cargar audio para el segmento específico
-            audio, sr = librosa.load(str(audio_file),
+            audio, _sr = librosa.load(str(audio_file),
                                    offset=row['start_time'],
                                    duration=row['end_time'] - row['start_time'],
                                    sr=16000)
@@ -52,7 +52,7 @@ def analyze_segment_yamnet_output():
             print(f"   🎧 Audio cargado: {len(audio)} samples, {len(audio)/16000:.1f}s")
 
             # Procesar con YAMNet
-            scores, embeddings, spectrogram = yamnet_model(audio)
+            scores, _embeddings, _spectrogram = yamnet_model(audio)
 
             # Obtener scores promedio
             mean_scores = tf.reduce_mean(scores, axis=0)
@@ -62,7 +62,7 @@ def analyze_segment_yamnet_output():
             top_scores = tf.nn.top_k(mean_scores, k=10).values
 
             print("   🏆 TOP 10 CLASES DETECTADAS:")
-            for i, (idx_class, score) in enumerate(zip(top_indices.numpy(), top_scores.numpy())):
+            for i, (idx_class, score) in enumerate(zip(top_indices.numpy(), top_scores.numpy(), strict=False)):
                 class_name = class_names[idx_class]
                 print(f"      {i+1:2d}. {class_name:30} {score:.4f}")
 

@@ -115,7 +115,7 @@ class CompleteModelTester:
             import tensorflow as tf
 
             # Cargar audio
-            audio, sr = librosa.load(audio_path, sr=16000, mono=True)
+            audio, _sr = librosa.load(audio_path, sr=16000, mono=True)
             audio_tensor = tf.convert_to_tensor(audio, dtype=tf.float32)
 
             # Generar embeddings

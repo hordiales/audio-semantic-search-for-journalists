@@ -14,7 +14,7 @@ class TextEmbeddingGenerator:
     def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
         """
         Inicializa el generador de embeddings
-        
+
         Args:
             model_name: Nombre del modelo de sentence-transformers
         """
@@ -25,11 +25,11 @@ class TextEmbeddingGenerator:
     def generate_embeddings(self, texts: list[str], batch_size: int = 32) -> np.ndarray:
         """
         Genera embeddings para una lista de textos
-        
+
         Args:
             texts: Lista de textos para generar embeddings
             batch_size: Tamaño del lote para procesamiento
-            
+
         Returns:
             Array numpy con los embeddings
         """
@@ -53,11 +53,11 @@ class TextEmbeddingGenerator:
                                       text_column: str = 'text') -> pd.DataFrame:
         """
         Procesa un DataFrame con transcripciones y añade embeddings
-        
+
         Args:
             df: DataFrame con transcripciones
             text_column: Nombre de la columna con el texto
-            
+
         Returns:
             DataFrame con embeddings añadidos
         """
@@ -90,10 +90,10 @@ class TextEmbeddingGenerator:
     def generate_query_embedding(self, query: str) -> np.ndarray:
         """
         Genera embedding para una consulta
-        
+
         Args:
             query: Texto de la consulta
-            
+
         Returns:
             Array numpy con el embedding de la consulta
         """
@@ -107,11 +107,11 @@ class TextEmbeddingGenerator:
                            text_embeddings: np.ndarray) -> np.ndarray:
         """
         Calcula la similitud coseno entre una consulta y un conjunto de embeddings
-        
+
         Args:
             query_embedding: Embedding de la consulta
             text_embeddings: Array con embeddings de texto
-            
+
         Returns:
             Array con las similitudes
         """
@@ -127,7 +127,7 @@ class TextEmbeddingGenerator:
     def save_embeddings(self, df: pd.DataFrame, file_path: str):
         """
         Guarda DataFrame con embeddings en un archivo
-        
+
         Args:
             df: DataFrame con embeddings
             file_path: Ruta donde guardar el archivo
@@ -139,10 +139,10 @@ class TextEmbeddingGenerator:
     def load_embeddings(self, file_path: str) -> pd.DataFrame:
         """
         Carga DataFrame con embeddings desde un archivo
-        
+
         Args:
             file_path: Ruta del archivo a cargar
-            
+
         Returns:
             DataFrame con embeddings
         """
@@ -155,12 +155,12 @@ class TextEmbeddingGenerator:
                            top_k: int = 5) -> pd.DataFrame:
         """
         Busca los textos más similares a una consulta
-        
+
         Args:
             query: Consulta en texto natural
             df: DataFrame con embeddings de texto
             top_k: Número de resultados a retornar
-            
+
         Returns:
             DataFrame con los resultados más similares
         """
@@ -199,10 +199,10 @@ class TextPreprocessor:
     def clean_text(text: str) -> str:
         """
         Limpia y normaliza un texto
-        
+
         Args:
             text: Texto a limpiar
-            
+
         Returns:
             Texto limpio
         """
@@ -223,11 +223,11 @@ class TextPreprocessor:
     def preprocess_dataframe(df: pd.DataFrame, text_column: str = 'text') -> pd.DataFrame:
         """
         Preprocesa un DataFrame con textos
-        
+
         Args:
             df: DataFrame con textos
             text_column: Nombre de la columna con texto
-            
+
         Returns:
             DataFrame con textos preprocesados
         """

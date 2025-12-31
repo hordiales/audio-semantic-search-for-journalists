@@ -209,7 +209,7 @@ class ChromaVectorDatabase(VectorDatabaseInterface):
                     results["distances"][0],
                     results["documents"][0],
                     results["metadatas"][0],
-                    results.get("embeddings", [[]] * len(results["ids"][0]))[0] if results.get("embeddings") else [None] * len(results["ids"][0])
+                    results.get("embeddings", [[]] * len(results["ids"][0]))[0] if results.get("embeddings") else [None] * len(results["ids"][0]), strict=False
                 )):
                     # Convertir distancia a similitud
                     if self.config.similarity_metric == "cosine":
@@ -438,7 +438,7 @@ class ChromaVectorDatabase(VectorDatabaseInterface):
                     results["ids"],
                     results["documents"] or [],
                     results["metadatas"] or [],
-                    results["embeddings"] or []
+                    results["embeddings"] or [], strict=False
                 ):
                     doc = VectorDocument(
                         id=doc_id,

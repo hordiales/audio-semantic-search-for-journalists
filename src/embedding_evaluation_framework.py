@@ -14,6 +14,7 @@ import pandas as pd
 warnings.filterwarnings('ignore')
 
 from collections import defaultdict
+import contextlib
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
@@ -70,39 +71,31 @@ def _import_with_fallback():
         # Intentar imports relativos primero
         from .audio_embeddings import get_audio_embedding_generator
         from .models_config import AudioEmbeddingModel, get_models_config
-        try:
+        with contextlib.suppress(ImportError):
             from .clap_audio_embeddings import (
                 CLAP_AVAILABLE,
                 get_clap_embedding_generator,
             )
-        except ImportError:
-            pass
-        try:
+        with contextlib.suppress(ImportError):
             from .speechdpr_audio_embeddings import (
                 SPEECHDPR_AVAILABLE,
                 get_speechdpr_embedding_generator,
             )
-        except ImportError:
-            pass
     except ImportError:
         # Fallback a imports absolutos
         try:
             from audio_embeddings import get_audio_embedding_generator
             from models_config import AudioEmbeddingModel, get_models_config
-            try:
+            with contextlib.suppress(ImportError):
                 from clap_audio_embeddings import (
                     CLAP_AVAILABLE,
                     get_clap_embedding_generator,
                 )
-            except ImportError:
-                pass
-            try:
+            with contextlib.suppress(ImportError):
                 from speechdpr_audio_embeddings import (
                     SPEECHDPR_AVAILABLE,
                     get_speechdpr_embedding_generator,
                 )
-            except ImportError:
-                pass
         except ImportError as e:
             logger.error(f"No se pudieron importar módulos locales: {e}")
             # Crear funciones dummy para evitar errores
@@ -529,7 +522,7 @@ class EmbeddingBenchmark:
             logger.error(f"❌ Error calculando similitud semántica: {e}")
             return 0.0
 
-    def evaluate_retrieval_metrics(self, results: pd.DataFrame, ground_truth: list[int], k_values: list[int] = [1, 3, 5, 10]) -> dict[str, dict[int, float]]:
+    def evaluate_retrieval_metrics(self, results: pd.DataFrame, ground_truth: list[int], k_values: list[int] | None = None) -> dict[str, dict[int, float]]:
         """
         Evalúa métricas de recuperación (precision@k, recall@k, etc.)
 
@@ -541,6 +534,8 @@ class EmbeddingBenchmark:
         Returns:
             Diccionario con métricas por k
         """
+        if k_values is None:
+            k_values = [1, 3, 5, 10]
         metrics = {
             "precision_at_k": {},
             "recall_at_k": {},
@@ -710,7 +705,7 @@ class EmbeddingBenchmark:
 
         return metrics
 
-    def run_comparative_benchmark(self, models: list[str] = None) -> dict[str, EvaluationMetrics]:
+    def run_comparative_benchmark(self, models: list[str] | None = None) -> dict[str, EvaluationMetrics]:
         """
         Ejecuta benchmark comparativo entre múltiples modelos
 
@@ -817,7 +812,7 @@ class EmbeddingBenchmark:
 
         logger.info(f"📋 Información de modelos guardada en: {model_info_file}")
 
-    def generate_semantic_heatmaps(self, models: list[str] = None,
+    def generate_semantic_heatmaps(self, models: list[str] | None = None,
                                  include_interactive: bool = True,
                                  include_clustering: bool = True) -> dict[str, str]:
         """

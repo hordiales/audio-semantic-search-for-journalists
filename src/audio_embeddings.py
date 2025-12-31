@@ -297,7 +297,7 @@ class YAMNetEmbedding(BaseAudioEmbedding):
             target_sr = self.sample_rate
 
         # Cargar audio
-        audio, sr = librosa.load(audio_path, sr=target_sr, mono=True)
+        audio, _sr = librosa.load(audio_path, sr=target_sr, mono=True)
 
         # YAMNet espera audio en el rango [-1, 1]
         audio = librosa.util.normalize(audio)
@@ -326,7 +326,7 @@ class YAMNetEmbedding(BaseAudioEmbedding):
 
             # Generar embedding con YAMNet
             # YAMNet retorna: (scores, embeddings, spectrogram)
-            scores, embeddings, spectrogram = self.model(audio)
+            _scores, embeddings, _spectrogram = self.model(audio)
 
             # Promediar embeddings a lo largo del tiempo
             embedding = tf.reduce_mean(embeddings, axis=0)

@@ -55,7 +55,7 @@ def test_clap_full():
             print("🔄 Probando método alternativo...")
 
             import librosa
-            audio_data, sample_rate = librosa.load(audio_path, sr=48000)
+            audio_data, _sample_rate = librosa.load(audio_path, sr=48000)
             audio_embed = model.get_audio_embedding_from_data(x=audio_data, use_tensor=False)
             embedding_np = audio_embed[0]
 

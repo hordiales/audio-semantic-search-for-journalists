@@ -17,10 +17,11 @@ Uso:
 """
 
 import argparse
+import contextlib
 import os
+from pathlib import Path
 import pickle
 import re
-from pathlib import Path
 import subprocess
 import sys
 import threading
@@ -91,7 +92,7 @@ class LocalAudioSearch:
                 elif isinstance(data, dict) and "dataframe" in data:
                     self.df = data["dataframe"]
                 else:
-                    print(f"❌ Formato de pickle no reconocido")
+                    print("❌ Formato de pickle no reconocido")
                     sys.exit(1)
         else:
             print(f"   📊 Cargando CSV: {dataset_file.name}")
@@ -210,7 +211,7 @@ class LocalAudioSearch:
             similarities, indices = self.faiss_index.search(query_embedding, k)
 
             results = []
-            for i, (sim, idx) in enumerate(zip(similarities[0], indices[0])):
+            for _i, (sim, idx) in enumerate(zip(similarities[0], indices[0], strict=False)):
                 if idx >= 0 and idx < len(self.df):
                     row = self.df.iloc[idx]
                     results.append({
@@ -222,7 +223,7 @@ class LocalAudioSearch:
             print(f"✅ Búsqueda FAISS completada: {len(results)} resultados")
             return results
 
-        elif self.embeddings is not None:
+        if self.embeddings is not None:
             # Búsqueda manual con numpy (más lenta pero funciona)
             print("   🐢 Usando búsqueda numpy (más lenta)...")
 
@@ -248,25 +249,24 @@ class LocalAudioSearch:
             print(f"✅ Búsqueda completada: {len(results)} resultados")
             return results
 
-        else:
-            # Generar embeddings en tiempo de ejecución (muy lento)
-            print("   🐌 Generando embeddings en tiempo real (muy lento)...")
+        # Generar embeddings en tiempo de ejecución (muy lento)
+        print("   🐌 Generando embeddings en tiempo real (muy lento)...")
 
-            results = []
-            for idx, row in self.df.iterrows():
-                text = str(row.get('text', ''))
-                if text:
-                    segment_embedding = self.generate_text_embedding(text)
-                    similarity = float(np.dot(query_embedding, segment_embedding))
-                    results.append({
-                        'segment': row.to_dict(),
-                        'similarity': similarity,
-                        'distance': 1.0 - similarity
-                    })
+        results = []
+        for idx, row in self.df.iterrows():
+            text = str(row.get('text', ''))
+            if text:
+                segment_embedding = self.generate_text_embedding(text)
+                similarity = float(np.dot(query_embedding, segment_embedding))
+                results.append({
+                    'segment': row.to_dict(),
+                    'similarity': similarity,
+                    'distance': 1.0 - similarity
+                })
 
-            # Ordenar por similitud
-            results.sort(key=lambda x: x['similarity'], reverse=True)
-            return results[:k]
+        # Ordenar por similitud
+        results.sort(key=lambda x: x['similarity'], reverse=True)
+        return results[:k]
 
     def display_results(self, results: list[dict], query_text: str):
         """Muestra los resultados de búsqueda"""
@@ -484,10 +484,8 @@ class LocalAudioSearch:
                             input("   Presiona Enter para continuar...")
 
                             # Limpiar archivo temporal
-                            try:
+                            with contextlib.suppress(OSError):
                                 os.remove(segment_file)
-                            except OSError:
-                                pass
                         else:
                             print("❌ Error en reproducción")
                     else:

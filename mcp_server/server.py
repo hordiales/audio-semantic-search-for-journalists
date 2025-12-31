@@ -714,7 +714,7 @@ class AudioSearchMCPServer:
                 response += f"  • {emotion}: {count} segmentos\n"
 
         response += "\n📈 **Otros sentimientos detectados:**\n"
-        other_sentiments = [s for s in sentiments.keys()
+        other_sentiments = [s for s in sentiments
                           if s not in basic_sentiments + emotions]
         for sentiment in sorted(other_sentiments):
             count = sentiments[sentiment]
@@ -955,7 +955,7 @@ class AudioSearchMCPServer:
                 response = "🎵 **Reproduciendo segmento de audio**\n\n"
             else:
                 # Wait for completion for command-line players
-                stdout, stderr = await process.communicate()
+                _stdout, _stderr = await process.communicate()
                 response = "🎵 **Segmento de audio reproducido**\n\n"
 
             response += f"📄 **Archivo:** {source_filename}\n"
@@ -1044,7 +1044,7 @@ class AudioSearchMCPServer:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await info_process.communicate()
+            stdout, _stderr = await info_process.communicate()
 
             if info_process.returncode != 0:
                 return "❌ Error obteniendo información del video de YouTube"
@@ -1094,7 +1094,7 @@ class AudioSearchMCPServer:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            clean_stdout, clean_stderr = await clean_process.communicate()
+            _clean_stdout, clean_stderr = await clean_process.communicate()
 
             if clean_process.returncode != 0:
                 self.processing_status[task_id].update({
@@ -1129,7 +1129,7 @@ class AudioSearchMCPServer:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            ytdlp_stdout, ytdlp_stderr = await ytdlp_process.communicate()
+            _ytdlp_stdout, ytdlp_stderr = await ytdlp_process.communicate()
 
             if ytdlp_process.returncode != 0:
                 self.processing_status[task_id].update({
@@ -1150,7 +1150,7 @@ class AudioSearchMCPServer:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            build_stdout, build_stderr = await build_process.communicate()
+            _build_stdout, build_stderr = await build_process.communicate()
 
             if build_process.returncode != 0:
                 self.processing_status[task_id].update({

@@ -145,7 +145,7 @@ def generate_test_queries(num_queries: int, embedding_dim: int) -> list[np.ndarr
     np.random.seed(123)  # Seed diferente para consultas
     queries = []
 
-    for i in range(num_queries):
+    for _i in range(num_queries):
         # Generar consulta con estructura similar a los documentos
         query_embedding = np.random.randn(embedding_dim)
         query_embedding = query_embedding / np.linalg.norm(query_embedding)

@@ -25,7 +25,7 @@ class DatasetSentimentProcessor:
     def __init__(self, dataset_dir: str, batch_size: int = 32):
         """
         Inicializa el procesador
-        
+
         Args:
             dataset_dir: Directorio del dataset
             batch_size: Tamaño de lote para procesamiento

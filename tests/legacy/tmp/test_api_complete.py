@@ -265,7 +265,7 @@ class APITestSuite:
         # Test empty query
         try:
             await self.client.search("")
-            assert False, "Should have raised an error for empty query"
+            raise AssertionError("Should have raised an error for empty query")
         except:
             pass  # Expected to fail
 
