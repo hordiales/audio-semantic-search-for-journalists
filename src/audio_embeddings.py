@@ -11,9 +11,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# TensorFlow imports requeridos
-import tensorflow as tf
-import tensorflow_hub as hub
+# TensorFlow imports (opcional - solo para YAMNet)
+try:
+    import tensorflow as tf
+    import tensorflow_hub as hub
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    tf = None
+    hub = None
+    logger.warning("⚠️  TensorFlow no disponible. YAMNet no estará disponible.")
+    logger.warning("   Para usar YAMNet: poetry install --extras yamnet")
 
 try:
     from .models_config import AudioEmbeddingModel, YAMNetConfig, get_models_config
@@ -34,7 +42,7 @@ except ImportError:
         class AudioEmbeddingModel:
             YAMNET = "yamnet"
             CLAP_LAION = "clap_laion"
-            SPEECHDPR = "speechdpr"
+            CLAP_MUSIC = "clap_music"
 
 
 class BaseAudioEmbedding(ABC):
@@ -239,6 +247,13 @@ class YAMNetEmbedding(BaseAudioEmbedding):
         Args:
             config: Configuración específica de YAMNet - usa configuración global si None
         """
+        if not TENSORFLOW_AVAILABLE:
+            raise ImportError(
+                "TensorFlow no está instalado. Para usar YAMNet:\n"
+                "  poetry install --extras yamnet\n"
+                "O usa CLAP como alternativa: poetry install"
+            )
+
         super().__init__()
 
         # Cargar configuración
@@ -323,6 +338,8 @@ class YAMNetEmbedding(BaseAudioEmbedding):
 
 
 # Alias para compatibilidad con código existente
+# Nota: Usa get_audio_embedding_generator() para obtener la instancia adecuada
+# Solo YAMNet si TensorFlow está disponible, de lo contrario lanzará error
 AudioEmbeddingGenerator = YAMNetEmbedding
 
 
@@ -331,13 +348,15 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
     """
     Factory function que retorna el generador de embeddings configurado
 
-    Soporta múltiples modelos:
-    - YAMNet: Embeddings generales de audio (1024 dim, 16kHz)
+    Soporta los siguientes modelos:
+    - YAMNet: Embeddings generales de audio (1024 dim, 16kHz) - requiere TensorFlow
     - CLAP: Embeddings alineados audio-texto (512 dim, 48kHz)
-    - SpeechDPR: Dense passage retrieval para audio (768 dim, 16kHz)
 
     Returns:
         Instancia de BaseAudioEmbedding con el modelo configurado
+
+    Raises:
+        ImportError: Si ningún modelo está disponible
     """
     # Usar configuración si está disponible
     models_config = get_models_config()
@@ -355,24 +374,30 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
                     from clap_audio_embeddings import CLAPEmbedding
                     return CLAPEmbedding()
                 except ImportError:
-                    logger.warning("⚠️  CLAP no disponible, usando YAMNet como fallback")
-                    return YAMNetEmbedding()
+                    logger.error("⚠️  CLAP no disponible")
+                    raise ImportError(
+                        "CLAP no está disponible. Instala laion-clap:\n"
+                        "  poetry install\n"
+                        "O usa YAMNet: poetry install --extras yamnet"
+                    )
 
-        # SpeechDPR
-        elif model_type == AudioEmbeddingModel.SPEECHDPR:
-            try:
-                from .speechdpr_audio_embeddings import SpeechDPREmbedding
-                return SpeechDPREmbedding()
-            except ImportError:
-                try:
-                    from speechdpr_audio_embeddings import SpeechDPREmbedding
-                    return SpeechDPREmbedding()
-                except ImportError:
-                    logger.warning("⚠️  SpeechDPR no disponible, usando YAMNet como fallback")
-                    return YAMNetEmbedding()
+    # Intentar usar YAMNet
+    if TENSORFLOW_AVAILABLE:
+        try:
+            return YAMNetEmbedding()
+        except Exception as e:
+            logger.error(f"⚠️  Error cargando YAMNet: {e}")
+            raise ImportError(
+                f"Error cargando YAMNet: {e}\n"
+                "Verifica la instalación de TensorFlow: poetry install --extras yamnet"
+            )
 
-    # Usar YAMNet por defecto
-    return YAMNetEmbedding()
+    raise ImportError(
+        "No hay generador de embeddings de audio disponible.\n"
+        "Opciones:\n"
+        "  - Instala TensorFlow para YAMNet: poetry install --extras yamnet\n"
+        "  - O usa CLAP (ya incluido): poetry install"
+    )
 
 
 # Ejemplo de uso

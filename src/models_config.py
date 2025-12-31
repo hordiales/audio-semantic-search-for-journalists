@@ -36,15 +36,12 @@ class AudioEmbeddingModel(Enum):
     YAMNET = "yamnet"
     CLAP_LAION = "clap_laion"
     CLAP_MUSIC = "clap_music"
-    SPEECHDPR = "speechdpr"
-    PANN = "pann"  # Opcional para el futuro
 
 
 class AudioEventDetectionModel(Enum):
     """Modelos disponibles para detección de eventos de audio"""
     YAMNET = "yamnet"
     CLAP_LAION = "clap_laion"
-    PANN = "pann"  # Opcional para el futuro
 
 
 @dataclass
@@ -84,31 +81,6 @@ class CLAPConfig:
 
 
 @dataclass
-class SpeechDPRConfig:
-    """Configuración específica para SpeechDPR"""
-    speech_encoder_model: str = "facebook/hubert-large-ls960-ft"
-    text_encoder_model: str = "roberta-base"
-    feature_layer: int = 22  # Capa 22 de HuBERT
-    embedding_dim: int = 768  # Dimensión de RoBERTa
-    cnn_stride_1: int = 4
-    cnn_stride_2: int = 3
-    sample_rate: int = 16000
-    device: str = "auto"
-    max_audio_length: int = 30  # segundos
-    normalize_embeddings: bool = True
-
-
-@dataclass
-class PANNConfig:
-    """Configuración específica para PANN (Pre-trained Audio Neural Networks)"""
-    model_name: str = "Cnn14"
-    sample_rate: int = 32000
-    window_size: int = 1024
-    hop_size: int = 320
-    mel_bins: int = 64
-
-
-@dataclass
 class ModelsConfiguration:
     """Configuración principal de todos los modelos"""
 
@@ -121,13 +93,11 @@ class ModelsConfiguration:
     whisper_config: WhisperConfig = field(default_factory=WhisperConfig)
     yamnet_config: YAMNetConfig = field(default_factory=YAMNetConfig)
     clap_config: CLAPConfig = field(default_factory=CLAPConfig)
-    speechdpr_config: SpeechDPRConfig = field(default_factory=SpeechDPRConfig)
-    pann_config: PANNConfig = field(default_factory=PANNConfig)
 
     # Configuraciones de fallback
     fallback_models: dict[ModelType, list[str]] = field(default_factory=lambda: {
         ModelType.SPEECH_TO_TEXT: ["whisper_base", "whisper_tiny"],
-        ModelType.AUDIO_EMBEDDING: ["yamnet", "clap_laion", "speechdpr"],
+        ModelType.AUDIO_EMBEDDING: ["yamnet", "clap_laion", "clap_music"],
         ModelType.AUDIO_EVENT_DETECTION: ["yamnet", "clap_laion"],
     })
 
@@ -170,10 +140,6 @@ class ModelsConfiguration:
                 if "clap" in model_name:
                     import laion_clap
                     return True
-                if model_name == "speechdpr":
-                    import torch
-                    import transformers
-                    return True
             elif model_type == ModelType.AUDIO_EVENT_DETECTION:
                 if model_name == "yamnet":
                     import tensorflow_hub
@@ -211,13 +177,6 @@ class ModelsConfiguration:
                 available.extend(["clap_laion", "clap_music"])
             except ImportError:
                 logger.warning("LAION CLAP no disponible")
-
-            try:
-                import torch
-                import transformers
-                available.append("speechdpr")
-            except ImportError:
-                logger.warning("SpeechDPR no disponible (torch/transformers)")
 
         elif model_type == ModelType.AUDIO_EVENT_DETECTION:
             # Similar a audio embedding
@@ -274,11 +233,11 @@ class ModelsConfiguration:
         audio_models = validation_report["available_models"].get(ModelType.AUDIO_EMBEDDING.value, [])
         if not any("clap" in model for model in audio_models):
             validation_report["recommended_changes"].append(
-                "Considera instalar LAION CLAP para mejores embeddings de audio: pip install laion-clap"
+                "Considera instalar LAION CLAP para mejores embeddings de audio: poetry install"
             )
-        if "speechdpr" not in audio_models:
+        if "yamnet" not in audio_models:
             validation_report["recommended_changes"].append(
-                "Considera instalar SpeechDPR para búsqueda semántica directa: pip install transformers torch"
+                "Considera instalar YAMNet para embeddings de audio: poetry install --extras yamnet"
             )
 
         return validation_report
@@ -346,16 +305,6 @@ class ModelsConfigLoader:
             hop_duration=float(os.getenv("CLAP_HOP_DURATION", "0")) or None,
         )
 
-        speechdpr_config = SpeechDPRConfig(
-            speech_encoder_model=os.getenv("SPEECHDPR_SPEECH_MODEL", "facebook/hubert-large-ls960-ft"),
-            text_encoder_model=os.getenv("SPEECHDPR_TEXT_MODEL", "roberta-base"),
-            feature_layer=int(os.getenv("SPEECHDPR_FEATURE_LAYER", "22")),
-            embedding_dim=int(os.getenv("SPEECHDPR_EMBEDDING_DIM", "768")),
-            device=os.getenv("SPEECHDPR_DEVICE", "auto"),
-            max_audio_length=int(os.getenv("SPEECHDPR_MAX_AUDIO_LENGTH", "30")),
-            normalize_embeddings=os.getenv("SPEECHDPR_NORMALIZE", "true").lower() == "true",
-        )
-
         return ModelsConfiguration(
             default_speech_to_text=speech_model,
             default_audio_embedding=embedding_model,
@@ -363,7 +312,6 @@ class ModelsConfigLoader:
             whisper_config=whisper_config,
             yamnet_config=yamnet_config,
             clap_config=clap_config,
-            speechdpr_config=speechdpr_config,
             cache_models=os.getenv("CACHE_MODELS", "true").lower() == "true",
             model_cache_dir=os.getenv("MODEL_CACHE_DIR", "./models_cache"),
         )
@@ -384,9 +332,6 @@ class ModelsConfigLoader:
             logger.info(f"   URL: {config.yamnet_config.model_url}")
         elif "clap" in config.default_audio_embedding.value:
             logger.info(f"   Modelo: {config.get_clap_model_name()}")
-        elif config.default_audio_embedding == AudioEmbeddingModel.SPEECHDPR:
-            logger.info(f"   Speech Encoder: {config.speechdpr_config.speech_encoder_model}")
-            logger.info(f"   Text Encoder: {config.speechdpr_config.text_encoder_model}")
 
         logger.info(f"\n🎯 Event Detection: {config.default_audio_event_detection.value}")
 
@@ -419,7 +364,7 @@ class ModelsConfigLoader:
 # Opciones para speech-to-text: whisper_tiny, whisper_base, whisper_small, whisper_medium, whisper_large, whisper_large_v2, whisper_large_v3
 DEFAULT_SPEECH_TO_TEXT_MODEL=whisper_base
 
-# Opciones para audio embedding: yamnet, clap_laion, clap_music, speechdpr
+# Opciones para audio embedding: yamnet, clap_laion, clap_music
 DEFAULT_AUDIO_EMBEDDING_MODEL=yamnet
 
 # Opciones para detección de eventos: yamnet, clap_laion
@@ -449,17 +394,6 @@ CLAP_ENABLE_FUSION=false
 CLAP_CHUNK_DURATION=6.0
 CLAP_OVERLAP_DURATION=2.0
 CLAP_HOP_DURATION=4.0
-
-# ================================
-# Configuración SpeechDPR
-# ================================
-SPEECHDPR_SPEECH_MODEL=facebook/hubert-large-ls960-ft
-SPEECHDPR_TEXT_MODEL=roberta-base
-SPEECHDPR_FEATURE_LAYER=22
-SPEECHDPR_EMBEDDING_DIM=768
-SPEECHDPR_DEVICE=auto
-SPEECHDPR_MAX_AUDIO_LENGTH=30
-SPEECHDPR_NORMALIZE=true
 
 # ================================
 # Configuraciones Generales

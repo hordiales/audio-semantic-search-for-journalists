@@ -118,7 +118,7 @@ def _import_with_fallback():
             class AudioEmbeddingModel:
                 YAMNET = "yamnet"
                 CLAP_LAION = "clap_laion"
-                SPEECHDPR = "speechdpr"
+                CLAP_MUSIC = "clap_music"
 
 # Ejecutar imports
 _import_with_fallback()
