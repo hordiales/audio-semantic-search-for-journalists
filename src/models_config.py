@@ -86,8 +86,8 @@ class ModelsConfiguration:
 
     # Modelos activos por defecto
     default_speech_to_text: SpeechToTextModel = SpeechToTextModel.WHISPER_BASE
-    default_audio_embedding: AudioEmbeddingModel = AudioEmbeddingModel.YAMNET
-    default_audio_event_detection: AudioEventDetectionModel = AudioEventDetectionModel.YAMNET
+    default_audio_embedding: AudioEmbeddingModel = AudioEmbeddingModel.CLAP_LAION
+    default_audio_event_detection: AudioEventDetectionModel = AudioEventDetectionModel.CLAP_LAION
 
     # Configuraciones específicas
     whisper_config: WhisperConfig = field(default_factory=WhisperConfig)
@@ -97,8 +97,8 @@ class ModelsConfiguration:
     # Configuraciones de fallback
     fallback_models: dict[ModelType, list[str]] = field(default_factory=lambda: {
         ModelType.SPEECH_TO_TEXT: ["whisper_base", "whisper_tiny"],
-        ModelType.AUDIO_EMBEDDING: ["yamnet", "clap_laion", "clap_music"],
-        ModelType.AUDIO_EVENT_DETECTION: ["yamnet", "clap_laion"],
+        ModelType.AUDIO_EMBEDDING: ["clap_laion", "clap_music", "yamnet"],
+        ModelType.AUDIO_EVENT_DETECTION: ["clap_laion", "yamnet"],
     })
 
     # Configuraciones generales
@@ -254,8 +254,8 @@ class ModelsConfigLoader:
 
         # Modelos por defecto desde variables de entorno
         speech_to_text = os.getenv("DEFAULT_SPEECH_TO_TEXT_MODEL", "whisper_base")
-        audio_embedding = os.getenv("DEFAULT_AUDIO_EMBEDDING_MODEL", "yamnet")
-        audio_event_detection = os.getenv("DEFAULT_AUDIO_EVENT_DETECTION_MODEL", "yamnet")
+        audio_embedding = os.getenv("DEFAULT_AUDIO_EMBEDDING_MODEL", "clap_laion")
+        audio_event_detection = os.getenv("DEFAULT_AUDIO_EVENT_DETECTION_MODEL", "clap_laion")
 
         # Mapear strings a enums
         try:
@@ -267,14 +267,14 @@ class ModelsConfigLoader:
         try:
             embedding_model = AudioEmbeddingModel(audio_embedding)
         except ValueError:
-            logger.warning(f"Modelo audio embedding inválido: {audio_embedding}, usando yamnet")
-            embedding_model = AudioEmbeddingModel.YAMNET
+            logger.warning(f"Modelo audio embedding inválido: {audio_embedding}, usando clap_laion")
+            embedding_model = AudioEmbeddingModel.CLAP_LAION
 
         try:
             event_model = AudioEventDetectionModel(audio_event_detection)
         except ValueError:
-            logger.warning(f"Modelo event detection inválido: {audio_event_detection}, usando yamnet")
-            event_model = AudioEventDetectionModel.YAMNET
+            logger.warning(f"Modelo event detection inválido: {audio_event_detection}, usando clap_laion")
+            event_model = AudioEventDetectionModel.CLAP_LAION
 
         # Configuraciones específicas
         whisper_config = WhisperConfig(
@@ -357,11 +357,11 @@ class ModelsConfigLoader:
 # Opciones para speech-to-text: whisper_tiny, whisper_base, whisper_small, whisper_medium, whisper_large, whisper_large_v2, whisper_large_v3
 DEFAULT_SPEECH_TO_TEXT_MODEL=whisper_base
 
-# Opciones para audio embedding: yamnet, clap_laion, clap_music
-DEFAULT_AUDIO_EMBEDDING_MODEL=yamnet
+# Opciones para audio embedding: clap_laion (recomendado), clap_music, yamnet
+DEFAULT_AUDIO_EMBEDDING_MODEL=clap_laion
 
-# Opciones para detección de eventos: yamnet, clap_laion
-DEFAULT_AUDIO_EVENT_DETECTION_MODEL=yamnet
+# Opciones para detección de eventos: clap_laion (recomendado), yamnet
+DEFAULT_AUDIO_EVENT_DETECTION_MODEL=clap_laion
 
 # ================================
 # Configuración Whisper
