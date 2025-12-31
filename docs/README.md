@@ -5,84 +5,51 @@
 ## 📚 Guías Principales
 
 ### Para Empezar
-- **[INSTALLATION.md](INSTALLATION.md)** - Guía completa de instalación (Poetry, pip, requisitos)
-- **[QUICK_START.md](QUICK_START.md)** - Inicio rápido en 5 minutos
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Solución de problemas comunes
+- **[INSTALL.md](INSTALL.md)** - Guía completa de instalación (Poetry, pyenv, requisitos)
+- **[GUIA_DATASET_Y_BUSQUEDA.md](GUIA_DATASET_Y_BUSQUEDA.md)** - Guía completa: Generar dataset y usar CLI de búsqueda
+- **[comandos-útiles.md](comandos-útiles.md)** - Comandos rápidos de referencia
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - 🔧 Solución de problemas comunes (MPS, GPU, instalación)
 
-### Uso y Configuración
+### Datasets
 - **[DATASET.md](DATASET.md)** - Crear y procesar datasets de audio
-- **[README_APPS.md](README_APPS.md)** - Guía de todas las interfaces (API, CLI, MCP)
-- **[QUICK_START.md](QUICK_START.md)** - Ejemplos de uso rápido
-
-## 🏗️ Arquitectura y Diseño
-
-- **[ARCHITECTURE_long.md](ARCHITECTURE_long.md)** - Arquitectura completa del sistema
-- **[AUDIO_EMBEDDINGS_ARCHITECTURE.md](AUDIO_EMBEDDINGS_ARCHITECTURE.md)** - Arquitectura de embeddings de audio
-- **[ESTRATEGIA_CHUNKING.md](ESTRATEGIA_CHUNKING.md)** - Estrategia de segmentación de audio
-
-## 🔌 APIs e Interfaces
-
-- **[API_README.md](API_README.md)** - Documentación completa de la API REST (FastAPI)
-- **[MCP.md](MCP.md)** - Configuración del servidor MCP para LLMs (consolidado de MCP_SETUP.md)
-- **[MCP_SERVER_TROUBLESHOOTING.md](MCP_SERVER_TROUBLESHOOTING.md)** - Troubleshooting del servidor MCP
 
 ## 🔬 Documentación Técnica
 
-- **[EMBEDDING_EVALUATION_SYSTEM.md](EMBEDDING_EVALUATION_SYSTEM.md)** - Framework de evaluación de modelos
-- **[EMBEDDING_COMPARISON_GUIDE.md](EMBEDDING_COMPARISON_GUIDE.md)** - Guía de comparación de embeddings
-- **[YAMNet_Documentation.md](YAMNet_Documentation.md)** - Documentación de YAMNet
-- **[YOUTUBE_PROCESSING_TOOL.md](YOUTUBE_PROCESSING_TOOL.md)** - Herramienta de procesamiento de YouTube
-
-## 📝 Guías Específicas
-
-- **[SENTIMENT_SEARCH_README.md](SENTIMENT_SEARCH_README.md)** - Búsqueda por sentimiento
-- **[README_DATASET.md](README_DATASET.md)** - Guía detallada de datasets
-- **[README_NLQ.md](README_NLQ.md)** - Consultas en lenguaje natural
-- **[PROCESO_AUDIO_REAL.md](PROCESO_AUDIO_REAL.md)** - Proceso de audio real
-- **[workflow-demo.md](workflow-demo.md)** - Demo del workflow
-- **[workflow-analysis-programa-radio.md](workflow-analysis-programa-radio.md)** - Análisis de workflow
-- **[guia-completa-busquedas.md](guia-completa-busquedas.md)** - Guía completa de búsquedas
-
-## 🛠️ Desarrollo
-
-- **[BUGFIXES.md](BUGFIXES.md)** - Historial de correcciones
-- **[test_suite_overview.md](test_suite_overview.md)** - Overview de la suite de tests
-- **[RECOMMENDATIONS.md](RECOMMENDATIONS.md)** - Recomendaciones de mejora
-
-## 📦 Configuración y Referencia
-
-- **[REQUIREMENTS_PYTHON.md](REQUIREMENTS_PYTHON.md)** - Requisitos de versión de Python (3.11.13 exactamente)
-- **[CHANGELOG_POETRY.md](CHANGELOG_POETRY.md)** - Changelog de migración a Poetry
+- **[PYTHON_VERSION.md](PYTHON_VERSION.md)** - Por qué Python 3.11.13 (compatibilidad de dependencias)
+- **[GPU_CONSIDERATIONS.md](GPU_CONSIDERATIONS.md)** - Consideraciones sobre GPU (CUDA, MPS, Triton)
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Solución de problemas comunes
 - **[ORGANIZACION.md](ORGANIZACION.md)** - Explicación de la organización de documentación
 
 ## 📂 Archivos Archivados
 
-Los archivos obsoletos, temporales o de referencia histórica están en [archive/](archive/):
-- Análisis y planes de limpieza
-- Resultados de benchmarks
-- Configuraciones de modelos obsoletas
-- Resúmenes de implementación históricos
+Los archivos de logs y pruebas están en [archive/](archive/):
+- **[archive/log-pruebas/](archive/log-pruebas/)** - Logs de pruebas realizadas
 
-## 🗂️ Estructura de Documentación
+## 🗂️ Estructura Actual
 
 ```
-doc/
+docs/
 ├── README.md                    # Este índice
-├── INSTALLATION.md              # Instalación
-├── QUICK_START.md               # Inicio rápido
-├── TROUBLESHOOTING.md           # Solución de problemas
+├── INSTALL.md                   # Instalación
 ├── DATASET.md                   # Datasets
-├── ARCHITECTURE_long.md         # Arquitectura
-├── API_README.md                # API REST
-├── MCP.md                       # Servidor MCP
+├── GUIA_DATASET_Y_BUSQUEDA.md   # Guía completa de workflow
+├── comandos-útiles.md           # Comandos rápidos
+├── TROUBLESHOOTING.md           # Solución de problemas
+├── PYTHON_VERSION.md            # Versión de Python
+├── GPU_CONSIDERATIONS.md        # GPU y Triton
+├── ORGANIZACION.md              # Organización docs
 └── archive/                     # Archivos archivados
+    └── log-pruebas/             # Logs de pruebas
 ```
 
 ## 🔍 Búsqueda Rápida
 
-**¿Cómo instalo el proyecto?** → [INSTALLATION.md](INSTALLATION.md)  
-**¿Cómo empiezo a usarlo?** → [QUICK_START.md](QUICK_START.md)  
-**¿Tengo un error?** → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)  
-**¿Cómo uso la API?** → [API_README.md](API_README.md)  
-**¿Cómo creo un dataset?** → [DATASET.md](DATASET.md)  
-**¿Cómo funciona internamente?** → [ARCHITECTURE_long.md](ARCHITECTURE_long.md)
+| Pregunta | Documento |
+|----------|-----------|
+| ¿Cómo instalo el proyecto? | [INSTALL.md](INSTALL.md) |
+| ¿Cómo creo un dataset? | [GUIA_DATASET_Y_BUSQUEDA.md](GUIA_DATASET_Y_BUSQUEDA.md) |
+| ¿Por qué Python 3.11? | [PYTHON_VERSION.md](PYTHON_VERSION.md) |
+| ¿Problemas con GPU/Triton? | [GPU_CONSIDERATIONS.md](GPU_CONSIDERATIONS.md) |
+| ¿Error MPS/Whisper en macOS? | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
+| ¿Comandos rápidos? | [comandos-útiles.md](comandos-útiles.md) |
+| ¿Tengo un error? | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
