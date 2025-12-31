@@ -52,13 +52,17 @@ class LocalAudioSearch:
     def __init__(self, dataset_path: str):
         self.dataset_path = Path(dataset_path)
         self.text_model = None
+        self.audio_model = None
         self.df = None
-        self.faiss_index = None
-        self.embeddings = None
+        self.faiss_index = None  # Índice de texto
+        self.faiss_audio_index = None  # Índice de audio
+        self.embeddings = None  # Embeddings de texto
+        self.audio_embeddings = None  # Embeddings de audio
         self.dataset_config = None
 
         self._load_dataset()
         self._load_text_model()
+        self._load_audio_model()  # Cargar antes de audio_embeddings para tener dimensión
         self._load_dataset_config()
 
     def _load_dataset(self):
@@ -102,8 +106,9 @@ class LocalAudioSearch:
 
         print(f"✅ Dataset cargado: {len(self.df)} segmentos")
 
-        # Cargar embeddings de texto
+        # Cargar embeddings de texto y audio
         self._load_embeddings()
+        self._load_audio_embeddings()
 
     def _load_embeddings(self):
         """Carga los embeddings de texto"""
@@ -164,6 +169,103 @@ class LocalAudioSearch:
         print("⚠️  No se encontraron embeddings pre-calculados")
         print("   Se generarán embeddings en tiempo de búsqueda (más lento)")
 
+    def _load_audio_embeddings(self):
+        """Carga los embeddings de audio"""
+        print("🎵 Cargando embeddings de audio...")
+
+        # Primero intentar cargar desde columna del DataFrame
+        if 'audio_embedding' in self.df.columns:
+            print("   📊 Usando embeddings de audio del DataFrame")
+            embeddings_list = []
+
+            for idx, row in self.df.iterrows():
+                emb = row['audio_embedding']
+                if isinstance(emb, str):
+                    # Parsear string a array
+                    import ast
+                    emb = np.array(ast.literal_eval(emb), dtype=np.float32)
+                elif isinstance(emb, (list, np.ndarray)):
+                    emb = np.array(emb, dtype=np.float32)
+                else:
+                    # Embedding vacío si no existe
+                    audio_dim = getattr(self.audio_model, 'embedding_dim', 512) if self.audio_model else 512
+                    emb = np.zeros(audio_dim, dtype=np.float32)
+                embeddings_list.append(emb)
+
+            if embeddings_list:
+                self.audio_embeddings = np.vstack(embeddings_list)
+                print(f"   ✅ Embeddings de audio cargados: {self.audio_embeddings.shape}")
+                self._build_audio_faiss_index()
+                return
+
+        # Buscar índice FAISS de audio existente
+        audio_faiss_path = self.dataset_path / "indices" / "audio_index.faiss"
+        if audio_faiss_path.exists() and FAISS_AVAILABLE:
+            print(f"   📁 Cargando índice FAISS de audio: {audio_faiss_path}")
+            self.faiss_audio_index = faiss.read_index(str(audio_faiss_path))
+            print(f"   ✅ Índice FAISS de audio cargado: {self.faiss_audio_index.ntotal} vectores")
+            return
+
+        # Buscar archivos de embeddings individuales
+        audio_embeddings_dir = self.dataset_path / "embeddings" / "audio_embeddings"
+        if audio_embeddings_dir.exists():
+            print(f"   📁 Cargando embeddings desde: {audio_embeddings_dir}")
+            embeddings_list = []
+
+            for idx in range(len(self.df)):
+                emb_file = audio_embeddings_dir / f"segment_{idx}_audio_embedding.npy"
+                if emb_file.exists():
+                    emb = np.load(emb_file)
+                    embeddings_list.append(emb)
+                else:
+                    # Embedding vacío si no existe
+                    audio_dim = getattr(self.audio_model, 'embedding_dim', 512) if self.audio_model else 512
+                    embeddings_list.append(np.zeros(audio_dim, dtype=np.float32))
+
+            if embeddings_list:
+                self.audio_embeddings = np.vstack(embeddings_list)
+                print(f"   ✅ Embeddings de audio cargados: {self.audio_embeddings.shape}")
+                self._build_audio_faiss_index()
+                return
+
+        print("⚠️  No se encontraron embeddings de audio pre-calculados")
+        print("   La búsqueda de audio no estará disponible")
+
+    def _build_audio_faiss_index(self):
+        """Construye índice FAISS de audio desde embeddings"""
+        if self.audio_embeddings is None or not FAISS_AVAILABLE:
+            return
+
+        print("   🔧 Construyendo índice FAISS de audio...")
+        dimension = self.audio_embeddings.shape[1]
+
+        # Normalizar para similitud coseno
+        normalized = self.audio_embeddings / np.linalg.norm(self.audio_embeddings, axis=1, keepdims=True)
+        normalized = np.nan_to_num(normalized, nan=0.0)  # Manejar NaN
+
+        # Crear índice con producto interno (equivalente a coseno con vectores normalizados)
+        self.faiss_audio_index = faiss.IndexFlatIP(dimension)
+        self.faiss_audio_index.add(normalized.astype(np.float32))
+        print(f"   ✅ Índice FAISS de audio construido: {self.faiss_audio_index.ntotal} vectores")
+
+    def _load_audio_model(self):
+        """Carga el modelo de embeddings de audio"""
+        try:
+            print("🎵 Cargando modelo de embeddings de audio...")
+            # Intentar importar y cargar el generador de embeddings de audio
+            try:
+                from src.audio_embeddings import get_audio_embedding_generator
+            except ImportError:
+                from audio_embeddings import get_audio_embedding_generator
+
+            self.audio_model = get_audio_embedding_generator()
+            model_name = getattr(self.audio_model, 'model_name', 'Desconocido')
+            print(f"✅ Modelo de audio cargado: {model_name}")
+        except Exception as e:
+            print(f"⚠️  Error cargando modelo de audio: {e}")
+            print("   La búsqueda de audio no estará disponible")
+            self.audio_model = None
+
     def _load_dataset_config(self):
         """Carga la configuración del dataset desde el manifest"""
         manifest_file = self.dataset_path / "final" / "dataset_manifest.json"
@@ -214,9 +316,47 @@ class LocalAudioSearch:
         embedding = embedding / np.linalg.norm(embedding)
         return embedding.astype(np.float32)
 
-    def search_semantic(self, query_text: str, k: int = 5) -> list[dict]:
-        """Realiza búsqueda semántica vectorial"""
-        print(f"🔍 Búsqueda semántica: '{query_text}'")
+    def generate_audio_embedding(self, text: str) -> np.ndarray | None:
+        """Genera embedding vectorial de audio para el texto de búsqueda"""
+        if self.audio_model is None:
+            return None
+
+        try:
+            # CLAP puede generar embeddings de texto que se alinean con audio
+            if hasattr(self.audio_model, 'generate_text_embedding'):
+                embedding = self.audio_model.generate_text_embedding(text)
+            elif hasattr(self.audio_model, 'encode_text'):
+                embedding = self.audio_model.encode_text(text)
+            else:
+                # Fallback: usar embedding de texto como proxy
+                return None
+
+            # Normalizar para similitud coseno
+            embedding = embedding / np.linalg.norm(embedding)
+            return embedding.astype(np.float32)
+        except Exception as e:
+            print(f"⚠️  Error generando embedding de audio: {e}")
+            return None
+
+    def search_semantic(self, query_text: str, k: int = 5, search_type: str = "text") -> list[dict]:
+        """
+        Realiza búsqueda semántica vectorial
+
+        Args:
+            query_text: Texto de búsqueda
+            k: Número de resultados
+            search_type: Tipo de búsqueda ("text", "audio", "both")
+        """
+        if search_type == "audio":
+            return self._search_audio_semantic(query_text, k)
+        elif search_type == "both":
+            return self._search_combined(query_text, k)
+        else:
+            return self._search_text_semantic(query_text, k)
+
+    def _search_text_semantic(self, query_text: str, k: int = 5) -> list[dict]:
+        """Realiza búsqueda semántica en texto"""
+        print(f"🔍 Búsqueda semántica en texto: '{query_text}'")
         print("-" * 50)
 
         # Generar embedding de la consulta
@@ -237,7 +377,7 @@ class LocalAudioSearch:
                         'distance': 1.0 - float(sim)
                     })
 
-            print(f"✅ Búsqueda FAISS completada: {len(results)} resultados")
+            print(f"✅ Búsqueda FAISS de texto completada: {len(results)} resultados")
             return results
 
         if self.embeddings is not None:
@@ -263,7 +403,7 @@ class LocalAudioSearch:
                     'distance': 1.0 - float(similarities[idx])
                 })
 
-            print(f"✅ Búsqueda completada: {len(results)} resultados")
+            print(f"✅ Búsqueda de texto completada: {len(results)} resultados")
             return results
 
         # Generar embeddings en tiempo de ejecución (muy lento)
@@ -278,12 +418,134 @@ class LocalAudioSearch:
                 results.append({
                     'segment': row.to_dict(),
                     'similarity': similarity,
-                    'distance': 1.0 - similarity
+                    'distance': 1.0 - similarity,
+                    'index_type': 'text'
                 })
 
         # Ordenar por similitud
         results.sort(key=lambda x: x['similarity'], reverse=True)
         return results[:k]
+
+    def _search_audio_semantic(self, query_text: str, k: int = 5) -> list[dict]:
+        """Realiza búsqueda semántica en audio"""
+        print(f"🎵 Búsqueda semántica en audio: '{query_text}'")
+        print("-" * 50)
+
+        if self.audio_model is None:
+            print("❌ Modelo de audio no disponible")
+            return []
+
+        # Generar embedding de audio para la consulta
+        query_embedding = self.generate_audio_embedding(query_text)
+        if query_embedding is None:
+            print("❌ No se pudo generar embedding de audio para la consulta")
+            return []
+
+        if self.faiss_audio_index is not None and FAISS_AVAILABLE:
+            # Búsqueda con FAISS (rápida)
+            query_embedding = query_embedding.reshape(1, -1)
+            similarities, indices = self.faiss_audio_index.search(query_embedding, k)
+
+            results = []
+            for _i, (sim, idx) in enumerate(zip(similarities[0], indices[0], strict=False)):
+                if idx >= 0 and idx < len(self.df):
+                    row = self.df.iloc[idx]
+                    results.append({
+                        'segment': row.to_dict(),
+                        'similarity': float(sim),
+                        'distance': 1.0 - float(sim),
+                        'index_type': 'audio'
+                    })
+
+            print(f"✅ Búsqueda FAISS de audio completada: {len(results)} resultados")
+            return results
+
+        if self.audio_embeddings is not None:
+            # Búsqueda manual con numpy (más lenta pero funciona)
+            print("   🐢 Usando búsqueda numpy de audio (más lenta)...")
+
+            # Normalizar embeddings
+            normalized = self.audio_embeddings / np.linalg.norm(self.audio_embeddings, axis=1, keepdims=True)
+            normalized = np.nan_to_num(normalized, nan=0.0)
+
+            # Calcular similitudes
+            similarities = np.dot(normalized, query_embedding)
+
+            # Obtener top-k
+            top_indices = np.argsort(similarities)[::-1][:k]
+
+            results = []
+            for idx in top_indices:
+                row = self.df.iloc[idx]
+                results.append({
+                    'segment': row.to_dict(),
+                    'similarity': float(similarities[idx]),
+                    'distance': 1.0 - float(similarities[idx]),
+                    'index_type': 'audio'
+                })
+
+            print(f"✅ Búsqueda de audio completada: {len(results)} resultados")
+            return results
+
+        print("❌ No hay embeddings de audio disponibles")
+        return []
+
+    def _search_combined(self, query_text: str, k: int = 5) -> list[dict]:
+        """Búsqueda combinada de texto y audio"""
+        print(f"🔄 Búsqueda combinada (texto + audio): '{query_text}'")
+        print("-" * 50)
+
+        # Obtener resultados de ambos índices
+        text_results = self._search_text_semantic(query_text, k * 2)
+        audio_results = self._search_audio_semantic(query_text, k * 2)
+
+        # Combinar y rankear
+        combined_scores = {}
+
+        for result in text_results:
+            segment = result['segment']
+            key = f"{segment.get('segment_id', '')}_{segment.get('start_time', 0)}"
+            combined_scores[key] = {
+                'segment': segment,
+                'text_score': result['similarity'],
+                'audio_score': 0.0,
+                'combined_score': result['similarity'] * 0.7  # Peso 70% texto
+            }
+
+        for result in audio_results:
+            segment = result['segment']
+            key = f"{segment.get('segment_id', '')}_{segment.get('start_time', 0)}"
+            if key in combined_scores:
+                combined_scores[key]['audio_score'] = result['similarity']
+                combined_scores[key]['combined_score'] = (
+                    combined_scores[key]['text_score'] * 0.7 +
+                    result['similarity'] * 0.3
+                )
+            else:
+                combined_scores[key] = {
+                    'segment': segment,
+                    'text_score': 0.0,
+                    'audio_score': result['similarity'],
+                    'combined_score': result['similarity'] * 0.3  # Peso 30% audio
+                }
+
+        # Ordenar por score combinado
+        final_results = sorted(combined_scores.values(), key=lambda x: x['combined_score'], reverse=True)[:k]
+
+        # Formatear resultados
+        formatted_results = []
+        for r in final_results:
+            formatted_results.append({
+                'segment': r['segment'],
+                'similarity': r['combined_score'],
+                'distance': 1.0 - r['combined_score'],
+                'index_type': 'combined',
+                'text_score': r['text_score'],
+                'audio_score': r['audio_score']
+            })
+
+        print(f"✅ Búsqueda combinada completada: {len(formatted_results)} resultados")
+        return formatted_results
 
     def display_results(self, results: list[dict], query_text: str):
         """Muestra los resultados de búsqueda"""
@@ -316,7 +578,17 @@ class LocalAudioSearch:
             score_percent = score * 100
             score_bar = "█" * int(score_percent / 5)  # Barra visual
             print(f"   📊 Score: {score:.4f} ({score_percent:.1f}%) {score_bar}")
-            print(f"   🔍 Índice: 📝 Texto (transcripción)")
+
+            # Mostrar tipo de índice
+            index_type = result.get('index_type', 'text')
+            if index_type == 'audio':
+                print(f"   🔍 Índice: 🎵 Audio")
+            elif index_type == 'combined':
+                text_score = result.get('text_score', 0)
+                audio_score = result.get('audio_score', 0)
+                print(f"   🔍 Índice: 🔄 Combinado (texto: {text_score:.3f}, audio: {audio_score:.3f})")
+            else:
+                print(f"   🔍 Índice: 📝 Texto (transcripción)")
             print(f"   ⏱️  Tiempo: {start_time:.1f}s - {end_time:.1f}s ({duration:.1f}s)")
             print(f"   📁 Archivo: {original_file}")
 
@@ -435,13 +707,13 @@ class LocalAudioSearch:
             print(f"❌ Error reproduciendo audio: {e}")
             return False
 
-    def search_and_play(self, query_text: str, k: int = 5):
+    def search_and_play(self, query_text: str, k: int = 5, search_type: str = "text"):
         """Función principal: busca y reproduce resultados"""
         print("\n🎵 BÚSQUEDA SEMÁNTICA DE AUDIO")
         print("=" * 70)
 
         # Realizar búsqueda
-        results = self.search_semantic(query_text, k)
+        results = self.search_semantic(query_text, k, search_type)
 
         if not results:
             return
@@ -598,13 +870,17 @@ class LocalAudioSearch:
         print("=" * 70)
         print(f"📂 Dataset: {self.dataset_path}")
         print(f"📊 Segmentos: {len(self.df)}")
-        print(f"🔧 Backend: {'FAISS' if self.faiss_index else 'NumPy'}")
+        print(f"🔧 Backend texto: {'FAISS' if self.faiss_index else 'NumPy'}")
+        print(f"🔧 Backend audio: {'FAISS' if self.faiss_audio_index else ('NumPy' if self.audio_embeddings is not None else 'No disponible')}")
 
         # Mostrar configuración del dataset
         self._print_dataset_config()
 
         print("💡 Ejemplos: 'política económica', 'entrevista', 'música de fondo'")
-        print("💡 Esta búsqueda usa el índice de texto (transcripciones)")
+        print("💡 Tipos de búsqueda disponibles:")
+        print("   - 'texto' o 't': Búsqueda en transcripciones (por defecto)")
+        print("   - 'audio' o 'a': Búsqueda en embeddings de audio")
+        print("   - 'ambos' o 'b': Búsqueda combinada (texto + audio)")
         print()
 
         while True:
@@ -619,7 +895,16 @@ class LocalAudioSearch:
                     print("⚠️  Búsqueda muy corta, intenta con al menos 2 caracteres")
                     continue
 
-                self.search_and_play(query)
+                # Preguntar tipo de búsqueda
+                search_type_input = input("   Tipo de búsqueda [t]exto/[a]udio/[b]oth (default: texto): ").strip().lower()
+                if search_type_input in ['a', 'audio']:
+                    search_type = "audio"
+                elif search_type_input in ['b', 'both', 'ambos']:
+                    search_type = "both"
+                else:
+                    search_type = "text"
+
+                self.search_and_play(query, search_type=search_type)
                 print("\n" + "="*70 + "\n")
 
             except KeyboardInterrupt:
