@@ -1,0 +1,35 @@
+# Pre-commit hooks configuration
+# Instalar con: poetry run pre-commit install
+# O manualmente: poetry add --group dev pre-commit && poetry run pre-commit install
+
+repos:
+  # Ruff para linting y formateo
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0  # Usar la misma versión que en pyproject.toml
+    hooks:
+      # Ruff linting (verifica errores)
+      - id: ruff
+        name: ruff (linter)
+        args: [--fix]
+        types_or: [python, pyi]
+      
+      # Ruff formateo (formatea código)
+      - id: ruff-format
+        name: ruff (formatter)
+        types_or: [python, pyi]
+
+  # Verificar que no se suban archivos grandes
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+        args: [--safe]
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-case-conflict
+

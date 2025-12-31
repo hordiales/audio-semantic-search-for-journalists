@@ -77,6 +77,10 @@ class CLAPConfig:
     amodel: str = "HTSAT-tiny"  # Arquitectura de audio
     tmodel: str = "roberta"     # Arquitectura de texto
     cache_dir: str | None = None
+    # Parámetros de chunking con overlapping
+    chunk_duration: float = 6.0  # Duración del chunk en segundos
+    overlap_duration: float = 2.0  # Solapamiento entre chunks en segundos
+    hop_duration: float | None = None  # Paso entre chunks (chunk_duration - overlap_duration si None)
 
 
 @dataclass
@@ -337,6 +341,9 @@ class ModelsConfigLoader:
             model_name=os.getenv("CLAP_MODEL_NAME", "laion/clap-htsat-unfused"),
             device=os.getenv("CLAP_DEVICE", "auto"),
             enable_fusion=os.getenv("CLAP_ENABLE_FUSION", "false").lower() == "true",
+            chunk_duration=float(os.getenv("CLAP_CHUNK_DURATION", "6.0")),
+            overlap_duration=float(os.getenv("CLAP_OVERLAP_DURATION", "2.0")),
+            hop_duration=float(os.getenv("CLAP_HOP_DURATION", "0")) or None,
         )
 
         speechdpr_config = SpeechDPRConfig(
@@ -438,6 +445,10 @@ YAMNET_SAMPLE_RATE=16000
 CLAP_MODEL_NAME=laion/clap-htsat-unfused
 CLAP_DEVICE=auto
 CLAP_ENABLE_FUSION=false
+# Parámetros de chunking con overlapping (en segundos)
+CLAP_CHUNK_DURATION=6.0
+CLAP_OVERLAP_DURATION=2.0
+CLAP_HOP_DURATION=4.0
 
 # ================================
 # Configuración SpeechDPR
