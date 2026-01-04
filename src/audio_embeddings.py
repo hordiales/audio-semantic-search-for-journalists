@@ -376,8 +376,8 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
             except (ImportError, ValueError):
                 try:
                     # Intentar import absoluto (cuando se ejecuta como script)
-                    import sys
                     import os
+                    import sys
                     # Añadir el directorio src al path si no está
                     src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                     if src_dir not in sys.path:
@@ -423,8 +423,8 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
                     return CLAPEmbedding()
                 except (ImportError, ValueError):
                     try:
-                        import sys
                         import os
+                        import sys
                         src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                         if src_dir not in sys.path:
                             sys.path.insert(0, src_dir)
@@ -447,8 +447,8 @@ def get_audio_embedding_generator() -> BaseAudioEmbedding:
         return CLAPEmbedding()
     except (ImportError, ValueError):
         try:
-            import sys
             import os
+            import sys
             src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             if src_dir not in sys.path:
                 sys.path.insert(0, src_dir)

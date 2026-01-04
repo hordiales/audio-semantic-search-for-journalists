@@ -51,9 +51,14 @@ class SimpleDatasetPipeline:
             'save_intermediate': kwargs.get('save_intermediate', True),
             # Configuración de overlapping para CLAP
             'use_clap_overlapping': kwargs.get('use_clap_overlapping', False),
-            'clap_chunk_duration': kwargs.get('clap_chunk_duration', None),
-            'clap_overlap_duration': kwargs.get('clap_overlap_duration', None),
-            'clap_hop_duration': kwargs.get('clap_hop_duration', None)
+            'clap_chunk_duration': kwargs.get('clap_chunk_duration'),
+            'clap_overlap_duration': kwargs.get('clap_overlap_duration'),
+            'clap_hop_duration': kwargs.get('clap_hop_duration'),
+            # Configuración de detección de escenas con LLM
+            'detect_blocks': kwargs.get('detect_blocks', False),
+            'block_min_duration': kwargs.get('block_min_duration', 10.0),
+            'block_max_blocks': kwargs.get('block_max_blocks'),
+            'block_model': kwargs.get('block_model', 'gpt-4o-mini')
         }
 
         # Crear directorios
@@ -384,6 +389,61 @@ class SimpleDatasetPipeline:
             return metadata
         raise RuntimeError("No se pudo crear ningún índice")
 
+    def detect_audio_blocks(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Detecta bloques temáticos usando LLM (opcional)
+
+        Args:
+            df: DataFrame con segmentos transcritos
+
+        Returns:
+            DataFrame con bloques detectados
+        """
+        if not self.config.get('detect_blocks', False):
+            return pd.DataFrame()
+
+        self.logger.info("=== PASO 4.5: Detección de Bloques Temáticos ===")
+
+        try:
+            try:
+                from .audio_block_detector import AudioBlockDetector
+            except ImportError:
+                from audio_block_detector import AudioBlockDetector
+
+            detector = AudioBlockDetector(
+                model_name=self.config.get('block_model', 'gpt-4o-mini')
+            )
+
+            blocks_df = detector.detect_blocks(
+                df,
+                min_block_duration=self.config.get('block_min_duration', 10.0),
+                max_blocks=self.config.get('block_max_blocks', None)
+            )
+
+            if len(blocks_df) > 0:
+                # Guardar bloques
+                blocks_dir = self.output_dir / "blocks"
+                blocks_dir.mkdir(exist_ok=True)
+
+                blocks_file = blocks_dir / "detected_blocks.csv"
+                blocks_df.to_csv(blocks_file, index=False)
+
+                blocks_json = blocks_dir / "detected_blocks.json"
+                blocks_df.to_json(blocks_json, orient='records', indent=2)
+
+                self.logger.info(f"✅ {len(blocks_df)} bloques detectados y guardados")
+                return blocks_df
+            self.logger.warning("No se detectaron bloques")
+            return pd.DataFrame()
+
+        except ImportError as e:
+            self.logger.error(f"Error importando AudioBlockDetector: {e}")
+            self.logger.error("Instala langchain: pip install langchain langchain-openai")
+            return pd.DataFrame()
+        except Exception as e:
+            self.logger.error(f"Error detectando bloques: {e}")
+            return pd.DataFrame()
+
     def create_final_dataset(self, df: pd.DataFrame) -> dict:
         """Crea el dataset final"""
         self.logger.info("=== PASO 5: Creación de Dataset Final ===")
@@ -507,6 +567,15 @@ class SimpleDatasetPipeline:
                     )
                 }
 
+        # Agregar información de detección de bloques si se usó
+        if self.config.get('detect_blocks', False):
+            manifest["block_detection"] = {
+                "enabled": True,
+                "model": self.config.get('block_model', 'gpt-4o-mini'),
+                "min_block_duration": self.config.get('block_min_duration', 10.0),
+                "max_blocks": self.config.get('block_max_blocks', None)
+            }
+
         manifest_file = final_dir / "dataset_manifest.json"
         with open(manifest_file, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, ensure_ascii=False, indent=2)
@@ -533,6 +602,9 @@ class SimpleDatasetPipeline:
 
             # Paso 4: Embeddings
             df_with_embeddings = self.generate_embeddings(transcriptions)
+
+            # Paso 4.5: Detección de bloques (opcional)
+            blocks_df = self.detect_audio_blocks(df_with_embeddings)
 
             # Paso 5: Índices
             indices_metadata = self.create_vector_indices(df_with_embeddings)
@@ -575,6 +647,14 @@ if __name__ == "__main__":
     parser.add_argument("--clap-chunk-duration", type=float, help="Duración del chunk CLAP en segundos (default: 6.0)")
     parser.add_argument("--clap-overlap-duration", type=float, help="Solapamiento CLAP en segundos (default: 2.0)")
     parser.add_argument("--clap-hop-duration", type=float, help="Paso CLAP en segundos (default: chunk - overlap)")
+    parser.add_argument(
+        "--detect-blocks",
+        action="store_true",
+        help="Detectar bloques temáticos usando LLM (requiere OPENAI_API_KEY)"
+    )
+    parser.add_argument("--block-min-duration", type=float, default=10.0, help="Duración mínima de bloque en segundos (default: 10.0)")
+    parser.add_argument("--block-max-blocks", type=int, help="Número máximo de bloques a detectar (default: automático)")
+    parser.add_argument("--block-model", default="gpt-4o-mini", help="Modelo de OpenAI para detección de bloques (default: gpt-4o-mini)")
 
     args = parser.parse_args()
 
@@ -592,6 +672,13 @@ if __name__ == "__main__":
             pipeline_kwargs['clap_overlap_duration'] = args.clap_overlap_duration
         if args.clap_hop_duration:
             pipeline_kwargs['clap_hop_duration'] = args.clap_hop_duration
+
+    if args.detect_blocks:
+        pipeline_kwargs['detect_blocks'] = True
+        pipeline_kwargs['block_min_duration'] = args.block_min_duration
+        if args.block_max_blocks:
+            pipeline_kwargs['block_max_blocks'] = args.block_max_blocks
+        pipeline_kwargs['block_model'] = args.block_model
 
     pipeline = SimpleDatasetPipeline(
         input_dir=args.input,

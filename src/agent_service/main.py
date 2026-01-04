@@ -1,8 +1,8 @@
 """Servicio FastAPI con agente LangChain para búsqueda semántica de audio"""
 
+from contextlib import asynccontextmanager
 import logging
 import os
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -199,7 +199,7 @@ async def query_audio(request: QueryRequest):
         logger.error(f"Error procesando consulta: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error procesando consulta: {str(e)}",
+            detail=f"Error procesando consulta: {e!s}",
         )
 
 
@@ -243,7 +243,7 @@ async def query_audio_sync(query: str, max_results: int = 5):
         logger.error(f"Error procesando consulta: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error procesando consulta: {str(e)}",
+            detail=f"Error procesando consulta: {e!s}",
         )
 
 

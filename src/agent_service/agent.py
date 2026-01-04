@@ -159,3 +159,6 @@ EJEMPLOS DE CONSULTAS:
         except Exception as e:
             logger.error(f"Error procesando consulta: {e}")
             raise
+
+
+

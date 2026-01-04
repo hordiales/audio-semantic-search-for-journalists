@@ -154,3 +154,6 @@ pyenv versions        # Ver instaladas
 pyenv install 3.11.13 # Instalar
 pyenv local 3.11.13   # Usar en este directorio
 ```
+
+
+

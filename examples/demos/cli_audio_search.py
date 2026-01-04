@@ -266,8 +266,8 @@ class LocalAudioSearch:
             print("🎵 Cargando modelo CLAP (para generar embeddings de audio)...")
             # Intentar importar y cargar el generador de embeddings de audio
             # Usar la misma estrategia que otros módulos del proyecto
-            import sys
             import os
+            import sys
 
             # Obtener el directorio del proyecto desde __file__
             current_file = os.path.abspath(__file__)
@@ -383,10 +383,9 @@ class LocalAudioSearch:
         """
         if search_type == "audio":
             return self._search_audio_semantic(query_text, k)
-        elif search_type == "both":
+        if search_type == "both":
             return self._search_combined(query_text, k)
-        else:
-            return self._search_text_semantic(query_text, k)
+        return self._search_text_semantic(query_text, k)
 
     def _search_text_semantic(self, query_text: str, k: int = 5) -> list[dict]:
         """Realiza búsqueda semántica en texto"""
@@ -636,18 +635,18 @@ class LocalAudioSearch:
             score_bar = "█" * score_bar_length
             print(f"   📊 Score: {score:.4f} ({score*100:.1f}%) {score_bar}")
             if score < 0:
-                print(f"      ⚠️  Score negativo: baja similitud (vectores en direcciones opuestas)")
+                print("      ⚠️  Score negativo: baja similitud (vectores en direcciones opuestas)")
 
             # Mostrar tipo de índice
             index_type = result.get('index_type', 'text')
             if index_type == 'audio':
-                print(f"   🔍 Índice: 🎵 Audio")
+                print("   🔍 Índice: 🎵 Audio")
             elif index_type == 'combined':
                 text_score = result.get('text_score', 0)
                 audio_score = result.get('audio_score', 0)
                 print(f"   🔍 Índice: 🔄 Combinado (texto: {text_score:.3f}, audio: {audio_score:.3f})")
             else:
-                print(f"   🔍 Índice: 📝 Texto (transcripción)")
+                print("   🔍 Índice: 📝 Texto (transcripción)")
             print(f"   ⏱️  Tiempo: {start_time:.1f}s - {end_time:.1f}s ({duration:.1f}s)")
             print(f"   📁 Archivo: {original_file}")
 
@@ -939,7 +938,7 @@ class LocalAudioSearch:
         elif self.audio_model:
             print(f"🔧 Backend audio: Modelo cargado ({getattr(self.audio_model, 'model_name', 'N/A')}) pero sin datos")
         else:
-            print(f"🔧 Backend audio: No disponible (modelo no cargado)")
+            print("🔧 Backend audio: No disponible (modelo no cargado)")
 
         # Mostrar configuración del dataset
         self._print_dataset_config()

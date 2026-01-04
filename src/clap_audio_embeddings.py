@@ -22,8 +22,8 @@ try:
     from .models_config import CLAPConfig, get_models_config
 except (ImportError, ValueError):
     # Fallback para cuando se ejecuta como script
-    import sys
     import os
+    import sys
     src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if src_dir not in sys.path:
         sys.path.insert(0, src_dir)

@@ -129,3 +129,6 @@ def get_tools(search_engine) -> list:
             return json.dumps({"error": str(e)})
 
     return [buscar_audio_impl, obtener_info_segmento_impl]
+
+
+
