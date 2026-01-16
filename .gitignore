@@ -4,8 +4,6 @@ docs/archive/*.md
 old/*
 
 # development files
-.cursorignore
-.cursorindexingignore
 .cursorrules
 .vscode/*
 .supabase
@@ -231,3 +229,17 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Resultados y outputs generados del proyecto
+chunking_analysis_current_chunking.png
+demo_semantic_heatmap_complete_output/
+local_audio_embeddings_demo.json
+quick_yamnet_results.json
+
+# Configuración local (valores reales, no templates)
+.claude/
+.env.models
+.env.models.clap
+
+# Logs históricos
+docs/archive/log-pruebas/
