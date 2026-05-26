@@ -1,21 +1,12 @@
-# tmp
-#*.md
-docs/archive/*.md
-old/*
-
 # development files
 .cursorrules
 .vscode/*
-.supabase
 
 #custom files
 data/*
 dataset/*
 results/*
-activate-conda-env.sh
 tmp/*
-TODO.md
-BUGS-SOLVED/*
 
 # tools files, and binary data
 *.lock
