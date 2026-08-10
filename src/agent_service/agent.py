@@ -1,154 +1,98 @@
-"""AudioAgent: LangChain agent for semantic audio search."""
+"""Google ADK agent for journalist-oriented semantic audio search."""
 
 import logging
 import os
+from uuid import uuid4
 
-from langchain.agents import AgentExecutor, create_openai_functions_agent
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_openai import ChatOpenAI
+from google.adk.agents import Agent
+from google.adk.apps import App
+from google.adk.models.lite_llm import LiteLlm
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
 
-from src.agent_service.search_engine import AudioSearchEngine
-from src.agent_service.tools import get_all_tools, set_search_engine
+from src.agent_service.tools import get_all_tools, initialize_search_engine
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """Eres un asistente especializado en búsqueda semántica de contenido de audio.
+SYSTEM_PROMPT = """Eres un asistente especializado en búsqueda semántica de contenido de audio para periodistas.
 
-Tu función es ayudar a los usuarios a encontrar segmentos de audio relevantes
-basándote en sus consultas en lenguaje natural.
+Reglas:
+1. Usa buscar_audio para contenido dicho o escrito en las transcripciones.
+2. Usa buscar_evento_acustico para sonidos como aplausos, música, gritos o risas.
+3. Usa obtener_info_segmento cuando se pidan detalles de un segmento identificado.
+4. Responde en español, salvo que el usuario pida otro idioma.
+5. No inventes información: limita todas las afirmaciones a los resultados de las tools.
+6. Para cada hallazgo, cita archivo de origen y timestamp de inicio y fin.
+7. Si no hay resultados, dilo claramente y sugiere una reformulación.
+"""
 
-INSTRUCCIONES:
-1. Usa la herramienta 'buscar_audio' para realizar búsquedas semánticas cuando
-   el usuario solicite buscar contenido
-2. Analiza los resultados y presenta la información de manera clara y organizada
-3. Si el usuario pregunta sobre detalles específicos de un segmento, usa
-   'obtener_info_segmento'
-4. Responde siempre en español
-5. Sé conciso pero informativo
-6. Si no encuentras resultados, sugiere alternativas o reformulación de la consulta
 
-FORMATO DE RESPUESTAS:
-- Menciona el número de resultados encontrados
-- Para cada resultado relevante, muestra:
-  * ID del segmento
-  * Texto transcrito (resumen si es muy largo)
-  * Similitud porcentual
-  * Tiempo (inicio - fin)
-  * Archivo de origen
-  * Idioma"""
+def _configured_model() -> LiteLlm:
+    """Keep the existing OpenAI model configuration through LiteLLM."""
+    model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    return LiteLlm(model=f"openai/{model_name}")
+
+
+root_agent = Agent(
+    name="audio_search_agent",
+    model=_configured_model(),
+    instruction=SYSTEM_PROMPT,
+    tools=get_all_tools(),
+)
+
+# The name must match the agents-cli configured agent directory (`src`).
+app = App(root_agent=root_agent, name="src")
 
 
 class AudioAgent:
-    """Agente LangChain para búsqueda semántica de audio."""
+    """Compatibility wrapper that executes the ADK root agent through a Runner."""
 
-    def __init__(
-        self,
-        dataset_path: str,
-        model_name: str = "gpt-4o-mini",
-        temperature: float = 0.0,
-        max_iterations: int = 5,
-    ):
+    def __init__(self, dataset_path: str, model_name: str = "gpt-4o-mini"):
         self.dataset_path = dataset_path
         self.model_name = model_name
-        self.temperature = temperature
-        self.max_iterations = max_iterations
+        self._session_service = InMemorySessionService()
+        self._runner: Runner | None = None
 
-        self._search_engine: AudioSearchEngine | None = None
-        self._agent_executor: AgentExecutor | None = None
-
-    def initialize(self):
-        """Initialize the agent with search engine and LLM."""
-        logger.info("Initializing AudioAgent...")
-
-        # Initialize search engine
-        self._search_engine = AudioSearchEngine(self.dataset_path)
-        set_search_engine(self._search_engine)
-
-        # Initialize LLM
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
+    def initialize(self) -> None:
+        """Load retrieval data and prepare the in-memory local ADK runner."""
+        if not os.getenv("OPENAI_API_KEY"):
             raise ValueError("OPENAI_API_KEY environment variable is required")
 
-        llm = ChatOpenAI(
-            model=self.model_name,
-            temperature=self.temperature,
-            api_key=api_key,
+        initialize_search_engine(self.dataset_path)
+        self._runner = Runner(
+            app=app,
+            session_service=self._session_service,
+            auto_create_session=True,
         )
-
-        # Create prompt
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", SYSTEM_PROMPT),
-            MessagesPlaceholder(variable_name="chat_history", optional=True),
-            ("human", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ])
-
-        # Create agent
-        tools = get_all_tools()
-        agent = create_openai_functions_agent(llm, tools, prompt)
-
-        self._agent_executor = AgentExecutor(
-            agent=agent,
-            tools=tools,
-            max_iterations=self.max_iterations,
-            handle_parsing_errors=True,
-            verbose=True,
-        )
-
-        logger.info(
-            "AudioAgent initialized (model=%s, dataset=%s, segments=%d)",
-            self.model_name,
-            self.dataset_path,
-            self._search_engine.total_segments,
-        )
+        logger.info("ADK AudioAgent initialized (dataset=%s)", self.dataset_path)
 
     @property
     def is_initialized(self) -> bool:
-        return self._agent_executor is not None
+        return self._runner is not None
 
-    async def query(self, user_query: str, callbacks=None) -> str:
-        """
-        Process a user query through the agent.
-
-        Args:
-            user_query: Natural language query from the user
-            callbacks: Optional LangChain callbacks
-
-        Returns:
-            Agent's response string
-        """
-        if not self.is_initialized:
+    async def query(self, user_query: str, max_results: int = 5) -> str:
+        """Run an ADK session and return its final response text."""
+        if self._runner is None:
             raise RuntimeError("Agent not initialized. Call initialize() first.")
 
-        logger.info("Processing query: %s", user_query[:100])
-
-        try:
-            result = await self._agent_executor.ainvoke(
-                {"input": user_query},
-                config={"callbacks": callbacks} if callbacks else None,
-            )
-            response = result.get("output", "No pude procesar tu consulta.")
-        except Exception as e:
-            logger.error("Agent query failed: %s", e)
-            response = f"Error procesando la consulta: {str(e)}"
-
-        return response
-
-    def query_sync(self, user_query: str, callbacks=None) -> str:
-        """Synchronous version of query."""
-        if not self.is_initialized:
-            raise RuntimeError("Agent not initialized. Call initialize() first.")
-
-        logger.info("Processing query (sync): %s", user_query[:100])
-
-        try:
-            result = self._agent_executor.invoke(
-                {"input": user_query},
-                config={"callbacks": callbacks} if callbacks else None,
-            )
-            response = result.get("output", "No pude procesar tu consulta.")
-        except Exception as e:
-            logger.error("Agent query failed: %s", e)
-            response = f"Error procesando la consulta: {str(e)}"
-
-        return response
+        session_id = str(uuid4())
+        await self._session_service.create_session(
+            app_name=app.name,
+            user_id="api-user",
+            session_id=session_id,
+            state={"max_results": max_results},
+        )
+        message = types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=user_query)],
+        )
+        final_response = "No pude procesar tu consulta."
+        async for event in self._runner.run_async(
+            user_id="api-user", session_id=session_id, new_message=message
+        ):
+            if event.is_final_response() and event.content and event.content.parts:
+                text_parts = [part.text for part in event.content.parts if part.text]
+                if text_parts:
+                    final_response = "\n".join(text_parts)
+        return final_response

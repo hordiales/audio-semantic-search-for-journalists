@@ -108,7 +108,7 @@ async def query_agent(request: QueryRequest):
             detail="Agent not initialized. Check dataset and configuration.",
         )
 
-    response = await agent.query(request.query)
+    response = await agent.query(request.query, max_results=request.max_results)
     return QueryResponse(response=response, query=request.query)
 
 
@@ -124,5 +124,5 @@ async def query_agent_sync(q: str, max_results: int = 5):
     if not q or not q.strip():
         raise HTTPException(status_code=400, detail="Query parameter 'q' is required")
 
-    response = agent.query_sync(q)
+    response = await agent.query(q, max_results=max_results)
     return {"response": response, "query": q}

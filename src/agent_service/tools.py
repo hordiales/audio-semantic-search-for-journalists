@@ -1,10 +1,10 @@
-"""Agent tools for audio semantic search."""
+"""Function tools exposed by the ADK audio-search agent."""
 
-import json
 import logging
-from typing import Annotated
+import os
+from pathlib import Path
 
-from langchain_core.tools import tool
+from google.adk.tools import ToolContext
 
 from src.agent_service.search_engine import AudioSearchEngine
 
@@ -13,98 +13,132 @@ logger = logging.getLogger(__name__)
 _search_engine: AudioSearchEngine | None = None
 
 
-def set_search_engine(engine: AudioSearchEngine):
-    """Set the global search engine instance for tools."""
+def set_search_engine(engine: AudioSearchEngine) -> None:
+    """Set the process-wide search engine used by the agent tools."""
     global _search_engine
     _search_engine = engine
 
 
-def get_search_engine() -> AudioSearchEngine:
-    """Get the global search engine instance."""
+def initialize_search_engine(dataset_path: str | None = None) -> AudioSearchEngine:
+    """Initialize the search engine once from the configured processed dataset."""
+    global _search_engine
     if _search_engine is None:
-        raise RuntimeError("Search engine not initialized. Call set_search_engine() first.")
+        configured_path = dataset_path or os.getenv("DATASET_PATH", "./dataset")
+        _search_engine = AudioSearchEngine(configured_path)
+        logger.info("Search engine initialized from %s", Path(configured_path))
     return _search_engine
 
 
-@tool
-def buscar_audio(
-    query: Annotated[str, "Texto de búsqueda en lenguaje natural"],
-    k: Annotated[int, "Número de resultados a retornar (default: 5)"] = 5,
-) -> str:
-    """
-    Busca segmentos de audio usando búsqueda semántica.
+def get_search_engine() -> AudioSearchEngine:
+    """Return the initialized search engine, creating it lazily if needed."""
+    return initialize_search_engine()
 
-    Esta herramienta permite buscar contenido en audios transcritos usando
-    embeddings semánticos. Retorna los segmentos más relevantes según la consulta.
+
+def _serialize_results(results: list[dict]) -> list[dict]:
+    """Return JSON-compatible search results with journalist-facing metadata."""
+    serialized: list[dict] = []
+    for result in results:
+        segment = result["segment"]
+        serialized.append(
+            {
+                "segment_id": segment["segment_id"],
+                "text": segment["text"],
+                "similarity": round(result["similarity"], 4),
+                "similarity_percent": round(result["similarity"] * 100, 1),
+                "start_time": segment["start_time"],
+                "end_time": segment["end_time"],
+                "duration": round(segment["end_time"] - segment["start_time"], 1),
+                "original_file_name": segment["original_file_name"],
+                "language": segment["language"],
+                "confidence": segment["confidence"],
+            }
+        )
+    return serialized
+
+
+def buscar_audio(query: str, k: int = 5, tool_context: ToolContext | None = None) -> dict:
+    """Busca texto semánticamente en las transcripciones del corpus de audio.
 
     Args:
-        query: Texto de búsqueda en lenguaje natural (ej: "política económica",
-               "entrevista sobre tecnología", "música de fondo")
-        k: Número de resultados a retornar (por defecto 5)
+        query: Consulta del periodista en lenguaje natural.
+        k: Cantidad máxima de segmentos a devolver, entre 1 y 20.
 
     Returns:
-        String JSON con los resultados de búsqueda, incluyendo:
-        - segment_id: ID del segmento
-        - text: Texto transcrito
-        - similarity: Similitud con la consulta (0-1)
-        - start_time: Tiempo de inicio en segundos
-        - end_time: Tiempo de fin en segundos
-        - original_file_name: Nombre del archivo de audio original
-        - language: Idioma detectado
+        Un objeto con resultados, fuente, timestamps y similitud.
     """
-    engine = get_search_engine()
+    if tool_context is not None:
+        k = int(tool_context.state.get("max_results", k))
+    if not query.strip():
+        return {"status": "error", "error": "La consulta no puede estar vacía.", "results": []}
+    if not 1 <= k <= 20:
+        return {"status": "error", "error": "k debe estar entre 1 y 20.", "results": []}
 
     try:
-        results = engine.search_semantic(query, k=k)
-    except Exception as e:
-        logger.error("Search failed: %s", e)
-        return json.dumps({"error": str(e), "results": []})
-
-    formatted = []
-    for r in results:
-        seg = r["segment"]
-        formatted.append({
-            "segment_id": seg["segment_id"],
-            "text": seg["text"],
-            "similarity": round(r["similarity"], 4),
-            "similarity_percent": round(r["similarity"] * 100, 1),
-            "start_time": seg["start_time"],
-            "end_time": seg["end_time"],
-            "duration": round(seg["end_time"] - seg["start_time"], 1),
-            "original_file_name": seg["original_file_name"],
-            "language": seg["language"],
-            "confidence": seg["confidence"],
-        })
-
-    return json.dumps(formatted, ensure_ascii=False)
+        return {
+            "status": "success",
+            "modality": "text",
+            "results": _serialize_results(get_search_engine().search_semantic(query, k=k)),
+        }
+    except Exception as error:
+        logger.exception("Text search failed")
+        return {"status": "error", "error": str(error), "results": []}
 
 
-@tool
-def obtener_info_segmento(
-    segment_id: Annotated[int, "ID del segmento a consultar"],
-) -> str:
-    """
-    Obtiene información detallada de un segmento específico.
+def buscar_evento_acustico(
+    query: str, k: int = 5, tool_context: ToolContext | None = None
+) -> dict:
+    """Busca eventos acústicos con CLAP a partir de una descripción textual.
 
-    Usa esta herramienta cuando necesites información completa sobre un
-    segmento de audio, incluyendo metadatos, transcripción completa y
-    características del audio.
+    Úsala para aplausos, música, gritos, risas u otros sonidos que pueden no
+    estar presentes en la transcripción.
 
     Args:
-        segment_id: ID numérico del segmento
+        query: Descripción textual del evento acústico.
+        k: Cantidad máxima de segmentos a devolver, entre 1 y 20.
 
     Returns:
-        String JSON con toda la información del segmento
+        Un objeto con resultados acústicos, fuente, timestamps y similitud.
     """
-    engine = get_search_engine()
+    if tool_context is not None:
+        k = int(tool_context.state.get("max_results", k))
+    if not query.strip():
+        return {"status": "error", "error": "La consulta no puede estar vacía.", "results": []}
+    if not 1 <= k <= 20:
+        return {"status": "error", "error": "k debe estar entre 1 y 20.", "results": []}
 
-    info = engine.get_segment_info(segment_id)
-    if info is None:
-        return json.dumps({"error": f"Segmento {segment_id} no encontrado"})
+    try:
+        return {
+            "status": "success",
+            "modality": "audio",
+            "results": _serialize_results(
+                get_search_engine().search_audio_by_text(query, k=k)
+            ),
+        }
+    except Exception as error:
+        logger.exception("Audio-event search failed")
+        return {"status": "error", "error": str(error), "results": []}
 
-    return json.dumps(info, ensure_ascii=False)
+
+def obtener_info_segmento(segment_id: int) -> dict:
+    """Obtiene los metadatos completos de un segmento recuperado previamente.
+
+    Args:
+        segment_id: Identificador estable del segmento.
+
+    Returns:
+        Los metadatos del segmento o un error si no existe.
+    """
+    try:
+        result = get_search_engine().get_segment_info(segment_id)
+    except Exception as error:
+        logger.exception("Segment lookup failed")
+        return {"status": "error", "error": str(error)}
+
+    if result is None:
+        return {"status": "error", "error": f"Segmento {segment_id} no encontrado."}
+    return {"status": "success", "segment": result}
 
 
 def get_all_tools() -> list:
-    """Return all available tools for the agent."""
-    return [buscar_audio, obtener_info_segmento]
+    """Return plain Python functions that ADK converts to FunctionTools."""
+    return [buscar_audio, buscar_evento_acustico, obtener_info_segmento]
