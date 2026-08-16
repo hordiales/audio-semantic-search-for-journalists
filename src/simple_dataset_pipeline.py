@@ -5,20 +5,31 @@ import json
 import logging
 import sys
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from src.audio_conversion import convert_directory
+from src.audio_segmenting import build_audio_windows, extract_wav_window
 from src.audio_transcription import transcribe_directory
 from src.clap_audio_embeddings import CLAPConfig, CLAPEmbedding
+from src.embedding_config import load_embedding_config
+from src.gemini_multimodal_embeddings import GeminiEmbeddingConfig, GeminiMultimodalEmbedding
 from src.sentiment_analysis import SentimentAnalyzer
 from src.text_embeddings import TextEmbeddingModel
 from src.vector_indexing import build_faiss_index
 
 logger = logging.getLogger(__name__)
+
+
+def _pool_audio_embeddings(window_embeddings: list[np.ndarray], dimension: int) -> np.ndarray:
+    if not window_embeddings:
+        return np.zeros(dimension, dtype=np.float32)
+    pooled = np.mean(window_embeddings, axis=0)
+    norm = np.linalg.norm(pooled)
+    return (pooled / norm if norm > 0 else pooled).astype(np.float32)
 
 
 def setup_logging(verbose: bool = False):
@@ -36,6 +47,9 @@ def run_pipeline(
     whisper_model: str = "base",
     batch_size: int = 8,
     language: str | None = None,
+    embeddings_config_path: str = "config/embeddings.toml",
+    audio_window_duration_sec: float = 10.0,
+    audio_window_overlap_sec: float = 2.0,
     mock_audio: bool = False,
     verbose: bool = False,
 ):
@@ -51,17 +65,30 @@ def run_pipeline(
     6. Indexación vectorial FAISS
     7. Serialización del dataset final
     """
+    if audio_window_duration_sec <= 0:
+        raise ValueError("audio_window_duration_sec must be greater than zero")
+    if not 0 <= audio_window_overlap_sec < audio_window_duration_sec:
+        raise ValueError(
+            "audio_window_overlap_sec must be non-negative and smaller than "
+            "audio_window_duration_sec"
+        )
+
     setup_logging(verbose)
+    embedding_config = load_embedding_config(embeddings_config_path)
+    logger.info("Active embeddings: %s", ", ".join(sorted(embedding_config.active)))
 
     output = Path(output_dir)
     converted_dir = output / "converted"
     transcriptions_dir = output / "transcriptions"
-    text_emb_dir = output / "embeddings" / "text_embeddings"
-    audio_emb_dir = output / "embeddings" / "audio_embeddings"
+    embeddings_dir = output / "embeddings"
+    audio_segments_dir = output / "audio_segments"
     indices_dir = output / "indices"
     final_dir = output / "final"
 
-    for d in [converted_dir, transcriptions_dir, text_emb_dir, audio_emb_dir, indices_dir, final_dir]:
+    for d in [
+        converted_dir, transcriptions_dir, embeddings_dir,
+        audio_segments_dir, indices_dir, final_dir,
+    ]:
         d.mkdir(parents=True, exist_ok=True)
 
     # --- Etapa 1: Conversión ---
@@ -94,54 +121,68 @@ def run_pipeline(
     df.to_csv(csv_path, index=False)
     logger.info("Saved transcription metadata to %s", csv_path)
 
-    # --- Etapa 3: Embeddings de texto ---
-    logger.info("=" * 60)
-    logger.info("ETAPA 3: Embeddings de texto (Sentence Transformers)")
-    logger.info("=" * 60)
-    text_model = TextEmbeddingModel()
     texts = df["text"].tolist()
-    text_embeddings = text_model.generate_embeddings(texts, batch_size=batch_size)
+    embeddings: dict[str, np.ndarray] = {}
+    if embedding_config.is_active("text"):
+        logger.info("Generating text embeddings (%s)", embedding_config.text_model)
+        text_model = TextEmbeddingModel(embedding_config.text_model)
+        embeddings["text"] = text_model.generate_embeddings(texts, batch_size=batch_size)
 
-    # Save individual embeddings
-    for i, emb in enumerate(text_embeddings):
-        np.save(text_emb_dir / f"segment_{i}_embedding.npy", emb)
+    audio_windows: dict[int, list[Path]] = {}
+    if embedding_config.active & {"clap", "gemini"}:
+        for _, row in df.iterrows():
+            source_path = converted_dir / row["original_file_name"]
+            if not source_path.exists():
+                audio_windows[int(row["segment_id"])] = []
+                continue
+            import soundfile as sf
 
-    df["text_embedding"] = list(text_embeddings)
-    logger.info("Generated %d text embeddings (dim=%d)", len(text_embeddings), text_embeddings.shape[1])
+            windows = build_audio_windows(
+                row["start_time"], row["end_time"], sf.info(source_path).duration,
+                window_duration_sec=audio_window_duration_sec,
+                overlap_sec=audio_window_overlap_sec,
+            )
+            paths = []
+            for window_number, (window_start, window_end) in enumerate(windows):
+                clip_path = audio_segments_dir / f"segment_{row['segment_id']}_window_{window_number}.wav"
+                extract_wav_window(source_path, clip_path, window_start, window_end)
+                paths.append(clip_path)
+            audio_windows[int(row["segment_id"])] = paths
+        df["audio_window_count"] = [len(audio_windows[int(segment_id)]) for segment_id in df["segment_id"]]
 
-    # --- Etapa 4: Embeddings de audio (CLAP) ---
-    logger.info("=" * 60)
-    logger.info("ETAPA 4: Embeddings de audio (CLAP)")
-    logger.info("=" * 60)
-
-    if mock_audio:
+    if embedding_config.is_active("clap") and mock_audio:
         logger.warning("Using MOCK audio embeddings (testing mode)")
-        audio_embeddings = np.random.randn(len(df), 512).astype(np.float32)
-        norms = np.linalg.norm(audio_embeddings, axis=1, keepdims=True)
-        audio_embeddings = audio_embeddings / norms
-    else:
-        clap = CLAPEmbedding(CLAPConfig())
-        audio_paths = [str(converted_dir / row["original_file_name"]) for _, row in df.iterrows()]
-        # For CLAP we need the actual segment audio - use full file as approximation
-        # In production, segment audio extraction would be needed
-        unique_files = list(set(audio_paths))
-        file_to_embedding = {}
-        for fpath in unique_files:
-            if Path(fpath).exists():
-                file_to_embedding[fpath] = clap.generate_embedding(fpath)
-            else:
-                file_to_embedding[fpath] = np.zeros(512, dtype=np.float32)
+        clap_embeddings = np.random.randn(len(df), 512).astype(np.float32)
+        clap_embeddings /= np.linalg.norm(clap_embeddings, axis=1, keepdims=True)
+    elif embedding_config.is_active("clap"):
+        logger.info("Generating CLAP audio embeddings (%s)", embedding_config.clap_model)
+        clap = CLAPEmbedding(CLAPConfig(model_name=embedding_config.clap_model))
+        clap_embeddings = []
+        for _, row in df.iterrows():
+            window_embeddings = [clap.generate_embedding(str(path)) for path in audio_windows[int(row["segment_id"])]]
+            clap_embeddings.append(_pool_audio_embeddings(window_embeddings, 512))
+        clap_embeddings = np.asarray(clap_embeddings, dtype=np.float32)
+    if embedding_config.is_active("clap"):
+        embeddings["clap"] = clap_embeddings
 
-        audio_embeddings = np.array(
-            [file_to_embedding.get(p, np.zeros(512, dtype=np.float32)) for p in audio_paths],
-            dtype=np.float32,
-        )
+    if embedding_config.is_active("gemini"):
+        logger.info("Generating Gemini native audio embeddings (%s)", embedding_config.gemini_model)
+        gemini = GeminiMultimodalEmbedding(GeminiEmbeddingConfig(
+            model_name=embedding_config.gemini_model,
+            output_dimensionality=embedding_config.gemini_output_dimensionality,
+        ))
+        gemini_embeddings = []
+        for _, row in df.iterrows():
+            window_embeddings = [gemini.generate_audio_embedding(path) for path in audio_windows[int(row["segment_id"])]]
+            gemini_embeddings.append(_pool_audio_embeddings(window_embeddings, embedding_config.gemini_output_dimensionality))
+        embeddings["gemini"] = np.asarray(gemini_embeddings, dtype=np.float32)
 
-    for i, emb in enumerate(audio_embeddings):
-        np.save(audio_emb_dir / f"segment_{i}_clap.npy", emb)
-
-    df["audio_embedding"] = list(audio_embeddings)
-    logger.info("Generated %d audio embeddings (dim=512)", len(audio_embeddings))
+    for name, values in embeddings.items():
+        embedding_dir = embeddings_dir / name
+        embedding_dir.mkdir(exist_ok=True)
+        for segment_id, embedding in zip(df["segment_id"], values, strict=True):
+            np.save(embedding_dir / f"segment_{segment_id}.npy", embedding)
+        df[f"{name}_embedding"] = list(values)
 
     # --- Etapa 5: Análisis de sentimiento ---
     logger.info("=" * 60)
@@ -160,11 +201,18 @@ def run_pipeline(
     logger.info("=" * 60)
     logger.info("ETAPA 6: Indexación FAISS")
     logger.info("=" * 60)
-    text_index_path = str(indices_dir / "text_index.faiss")
-    audio_index_path = str(indices_dir / "audio_index.faiss")
-
-    build_faiss_index(text_embeddings, text_index_path)
-    build_faiss_index(audio_embeddings, audio_index_path)
+    index_files = {
+        "text": "text_index.faiss",
+        "clap": "audio_index.faiss",
+        "gemini": "gemini_audio_index.faiss",
+    }
+    for name, filename in index_files.items():
+        stale_index = indices_dir / filename
+        if name not in embedding_config.active and stale_index.exists():
+            stale_index.unlink()
+            logger.info("Removed stale disabled index: %s", stale_index)
+    for name, values in embeddings.items():
+        build_faiss_index(values, str(indices_dir / index_files[name]))
 
     # --- Etapa 7: Dataset final ---
     logger.info("=" * 60)
@@ -183,14 +231,14 @@ def run_pipeline(
     # Save manifest
     manifest = {
         "version": "1.0",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "total_segments": len(df),
         "total_audio_files": df["original_file_name"].nunique(),
         "whisper_model": whisper_model,
-        "text_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-        "text_embedding_dim": 384,
-        "audio_embedding_model": "laion/clap-htsat-unfused",
-        "audio_embedding_dim": 512,
+        "active_embeddings": sorted(embedding_config.active),
+        "embeddings": {name: {"model": getattr(embedding_config, f"{name}_model"), "dimension": int(values.shape[1]), "index": index_files[name]} for name, values in embeddings.items()},
+        "audio_window_duration_sec": audio_window_duration_sec,
+        "audio_window_overlap_sec": audio_window_overlap_sec,
         "languages": df["language"].value_counts().to_dict(),
     }
     manifest_path = final_dir / "dataset_manifest.json"
@@ -211,6 +259,12 @@ def main():
     parser.add_argument("--whisper-model", default="base", choices=["tiny", "base", "small", "medium", "large"])
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--language", default=None, help="Forzar idioma (ej: es, en)")
+    parser.add_argument("--embeddings-config", default="config/embeddings.toml",
+                        help="TOML con los embeddings activos durante la ingesta")
+    parser.add_argument("--audio-window-duration", type=float, default=10.0,
+                        help="Duración máxima (s) de cada ventana acústica")
+    parser.add_argument("--audio-window-overlap", type=float, default=2.0,
+                        help="Solapamiento (s) entre ventanas de un segmento largo")
     parser.add_argument("--mock-audio", action="store_true", help="Usar embeddings mock para CLAP")
     parser.add_argument("--verbose", action="store_true")
 
@@ -222,6 +276,9 @@ def main():
         whisper_model=args.whisper_model,
         batch_size=args.batch_size,
         language=args.language,
+        embeddings_config_path=args.embeddings_config,
+        audio_window_duration_sec=args.audio_window_duration,
+        audio_window_overlap_sec=args.audio_window_overlap,
         mock_audio=args.mock_audio,
         verbose=args.verbose,
     )

@@ -5,7 +5,6 @@ import logging
 from pathlib import Path
 
 import faiss
-import numpy as np
 import pandas as pd
 
 from src.clap_audio_embeddings import CLAPEmbedding
@@ -31,6 +30,7 @@ class AudioSearchEngine:
         self._audio_index: faiss.IndexFlatIP | None = None
         self._text_model: TextEmbeddingModel | None = None
         self._clap_model: CLAPEmbedding | None = None
+        self._active_embeddings: set[str] | None = None
 
         self._load_dataset()
         self._load_indices()
@@ -41,6 +41,12 @@ class AudioSearchEngine:
         if pkl_path.exists():
             self._df = pd.read_pickle(pkl_path)
             logger.info("Loaded dataset: %d segments from %s", len(self._df), pkl_path)
+            manifest_path = self.dataset_path / "final" / "dataset_manifest.json"
+            if manifest_path.exists():
+                manifest = json.loads(manifest_path.read_text())
+                active_embeddings = manifest.get("active_embeddings")
+                if active_embeddings is not None:
+                    self._active_embeddings = set(active_embeddings)
         else:
             raise FileNotFoundError(
                 f"Dataset not found at {pkl_path}. Run the ingestion pipeline first."
@@ -51,14 +57,18 @@ class AudioSearchEngine:
         indices_dir = self.dataset_path / "indices"
 
         text_index_path = indices_dir / "text_index.faiss"
-        if text_index_path.exists():
+        if self._is_embedding_active("text") and text_index_path.exists():
             self._text_index = load_faiss_index(str(text_index_path))
             logger.info("Loaded text index: %d vectors", self._text_index.ntotal)
 
         audio_index_path = indices_dir / "audio_index.faiss"
-        if audio_index_path.exists():
+        if self._is_embedding_active("clap") and audio_index_path.exists():
             self._audio_index = load_faiss_index(str(audio_index_path))
             logger.info("Loaded audio index: %d vectors", self._audio_index.ntotal)
+
+    def _is_embedding_active(self, embedding_name: str) -> bool:
+        """Respect manifest configuration while retaining legacy dataset support."""
+        return self._active_embeddings is None or embedding_name in self._active_embeddings
 
     @property
     def text_model(self) -> TextEmbeddingModel:
@@ -94,7 +104,7 @@ class AudioSearchEngine:
         similarities, indices = search_faiss_index(self._text_index, query_embedding, k=k)
 
         results = []
-        for sim, idx in zip(similarities[0], indices[0]):
+        for sim, idx in zip(similarities[0], indices[0], strict=True):
             if idx < 0 or idx >= len(self._df):
                 continue
             row = self._df.iloc[idx]
@@ -124,7 +134,7 @@ class AudioSearchEngine:
         similarities, indices = search_faiss_index(self._audio_index, query_embedding, k=k)
 
         results = []
-        for sim, idx in zip(similarities[0], indices[0]):
+        for sim, idx in zip(similarities[0], indices[0], strict=True):
             if idx < 0 or idx >= len(self._df):
                 continue
             row = self._df.iloc[idx]

@@ -48,6 +48,25 @@ poetry run pre-commit install
 
 ## Uso
 
+### Configurar embeddings activos
+
+El pipeline lee [config/embeddings.toml](config/embeddings.toml). La lista
+`[embeddings].active` define qué modelos se procesan y qué índices se crean:
+
+```toml
+[embeddings]
+active = ["text", "clap", "gemini"]
+```
+
+- `text`: MiniLM para consulta↔transcripción (`text_index.faiss`).
+- `clap`: CLAP para consulta↔audio (`audio_index.faiss`).
+- `gemini`: Gemini Embedding 2 nativo para consulta↔audio
+  (`gemini_audio_index.faiss`); requiere `GEMINI_API_KEY`.
+
+Para usar otro archivo, pasa `--embeddings-config ruta/al/archivo.toml`. El
+manifiesto final registra los embeddings efectivamente generados, sus modelos,
+dimensiones e índices.
+
 ### 1. Pipeline de Ingesta
 
 Procesa archivos de audio y genera un dataset indexado:
@@ -94,6 +113,21 @@ curl http://localhost:8000/health
 ```
 
 ## Evaluación
+
+### Comparativa: esquema actual vs. Gemini Embedding 2
+
+El benchmark no modifica el servicio de producción. Evalúa por separado `minilm_text`
+(consulta↔transcripción), `clap_audio` (consulta↔audio) y
+`gemini_embedding_2_audio` (consulta↔WAV) sobre los mismos segmentos y queries
+anotadas. Requiere ventanas acústicas y `relevant_segment_ids` no vacíos.
+
+```bash
+export GEMINI_API_KEY="..."
+uv run python -m benchmarks.compare_retrieval_with_gemini \
+    --dataset-path ./dataset \
+    --queries evaluation/test_datasets/retrieval_eval_dataset.json \
+    --output evaluation/results/gemini_comparison.json
+```
 
 ### Retrieval (RAG aislado)
 
