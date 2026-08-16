@@ -66,6 +66,33 @@ Las tres variables no son equivalentes:
 que `DATASET_OUTPUT` después de terminar una ingesta. Los flags `--input` y
 `--output` tienen prioridad sobre las variables de entorno.
 
+La diferencia es el momento de uso:
+
+```text
+Audios originales → AUDIO_INPUT_DIR
+                       │
+                       ▼ ingesta
+                 DATASET_OUTPUT
+                       │
+                       ▼ búsqueda, API y evaluación
+                  DATASET_PATH
+```
+
+En una instalación simple ambas rutas de dataset son iguales. Se mantienen
+separadas para poder construir una versión nueva sin cambiar el corpus que el
+agente está usando:
+
+```dotenv
+# El agente continúa consultando el corpus validado.
+DATASET_PATH=./dataset-produccion
+
+# La próxima ejecución del pipeline crea una versión candidata.
+DATASET_OUTPUT=./dataset-v2
+```
+
+Después de validar `dataset-v2`, cambiar `DATASET_PATH=./dataset-v2` promueve
+esa versión para el agente, la API y las evaluaciones.
+
 ## 4. Elegir embeddings y clasificación acústica
 
 El archivo [config/embeddings.toml](../config/embeddings.toml) define qué

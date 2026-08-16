@@ -7,14 +7,14 @@ Sistema de **búsqueda agéntica multimodal** (texto y audio) diseñado para per
 | Componente | Tecnología |
 |---|---|
 | Lenguaje | Python 3.11 |
-| Gestión de dependencias | Poetry |
+| Gestión de dependencias | uv |
 | Transcripción | OpenAI Whisper |
 | Embeddings de texto | Sentence Transformers (all-MiniLM-L6-v2) |
 | Embeddings de audio | CLAP (LAION) |
 | Indexación vectorial | FAISS |
 | Agente | Google ADK + LiteLLM/OpenAI GPT-4o-mini |
 | API REST | FastAPI + Uvicorn |
-| Evaluación | RAGAS + métricas IR custom |
+| Evaluación | RAGAS o DeepEval + métricas IR custom |
 
 ## Setup
 
@@ -25,8 +25,8 @@ Sistema de **búsqueda agéntica multimodal** (texto y audio) diseñado para per
 pyenv install 3.11.13
 pyenv local 3.11.13
 
-# Poetry
-curl -sSL https://install.python-poetry.org | python3 -
+# uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # ffmpeg (macOS)
 brew install ffmpeg
@@ -35,18 +35,25 @@ brew install ffmpeg
 ### Instalación
 
 ```bash
-# Instalar dependencias
-poetry install
+# Instalar dependencias base
+uv sync
 
 # Configurar variables de entorno
 cp .env.example .env
 # Editar .env con tu OPENAI_API_KEY
 
 # Instalar pre-commit hooks
-poetry run pre-commit install
+uv run pre-commit install
+
+# Dependencias opcionales de evaluación
+uv sync --group eval          # RAGAS
+uv sync --extra eval-deepeval # DeepEval
 ```
 
 ## Uso
+
+Para procesar WAV, OPUS u otros audios reales, seguí la guía operativa
+[Crear un dataset con audios reales](docs/guia-dataset-real.md).
 
 ### Configurar embeddings activos
 
@@ -78,7 +85,7 @@ dimensiones e índices.
 Procesa archivos de audio y genera un dataset indexado:
 
 ```bash
-poetry run python -m src.simple_dataset_pipeline \
+uv run python -m src.simple_dataset_pipeline \
     --input data/ \
     --output ./dataset \
     --whisper-model base \
@@ -89,7 +96,7 @@ poetry run python -m src.simple_dataset_pipeline \
 Para testing sin CLAP (más rápido):
 
 ```bash
-poetry run python -m src.simple_dataset_pipeline \
+uv run python -m src.simple_dataset_pipeline \
     --input data/ \
     --output ./dataset \
     --mock-audio \
@@ -138,7 +145,7 @@ uv run python -m benchmarks.compare_retrieval_with_gemini \
 ### Retrieval (RAG aislado)
 
 ```bash
-poetry run python -m evaluation.retrieval_evaluation \
+uv run python -m evaluation.retrieval_evaluation \
     --dataset evaluation/test_datasets/retrieval_eval_dataset.json \
     --dataset-path ./dataset \
     --output evaluation/results/retrieval_results.json
@@ -159,22 +166,25 @@ uv run python -m evaluation.run_agent_evaluation \
 ## Tests
 
 ```bash
-poetry run pytest tests/ -v
+uv run pytest tests/ -v
 ```
 
 ## Estructura del Proyecto
 
 ```
 ├── src/                           # Código fuente
-│   ├── agent_service/             # Agente + API
-│   │   ├── main.py                # FastAPI app
-│   │   ├── agent.py               # AudioAgent (LangChain)
+│   ├── agent_service/             # Agente ADK y tools de retrieval
+│   │   ├── agent.py               # root_agent ADK + Runner compatible
 │   │   ├── search_engine.py       # Motor FAISS
 │   │   └── tools.py               # Tools del agente
+│   ├── fast_api_app.py            # Superficie ADK de producción
+│   ├── embedding_config.py        # Modalidades activas de ingesta
 │   ├── audio_conversion.py        # ffmpeg conversion
 │   ├── audio_transcription.py     # Whisper
-│   ├── text_embeddings.py         # Sentence Transformers
+│   ├── text_embeddings.py         # MiniLM / Sentence Transformers
 │   ├── clap_audio_embeddings.py   # CLAP
+│   ├── gemini_multimodal_embeddings.py # Gemini Embedding 2 opcional
+│   ├── yamnet_audio_classifier.py # Clasificador YAMNet opcional
 │   ├── sentiment_analysis.py      # Sentiment analysis
 │   ├── vector_indexing.py         # FAISS indexing
 │   └── simple_dataset_pipeline.py # Pipeline orchestrator
@@ -186,6 +196,7 @@ poetry run pytest tests/ -v
 ├── data/                          # Audio source (not versioned)
 ├── dataset/                       # Processed dataset (not versioned)
 ├── spec/                          # Specification documents
-├── pyproject.toml                 # Poetry dependencies
+├── pyproject.toml                 # Dependencias del proyecto
+├── uv.lock                        # Lockfile reproducible de uv
 └── .env.example                   # Environment template
 ```
