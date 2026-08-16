@@ -164,9 +164,53 @@ class AudioSearchEngine:
             return None
 
         row = matches.iloc[0]
-        return self._row_to_segment_dict(row, include_sentiment=True)
+        return self._row_to_segment_dict(row, include_sentiment=True, include_audio_classes=True)
 
-    def _row_to_segment_dict(self, row: pd.Series, include_sentiment: bool = False) -> dict:
+    def get_audio_classes(self, segment_id: int) -> list[dict] | None:
+        """Return YAMNet AudioSet labels stored for one processed segment.
+
+        ``None`` means the segment does not exist; an empty list means that the
+        dataset was created without YAMNet classification enabled.
+        """
+        if self._df is None:
+            return None
+        matches = self._df[self._df["segment_id"] == segment_id]
+        if matches.empty:
+            return None
+        return self._parse_audio_classes(matches.iloc[0].get("yamnet_top_classes", []))
+
+    @staticmethod
+    def _parse_audio_classes(value: object) -> list[dict]:
+        """Read current list values and CSV-compatible JSON values safely."""
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                return []
+        if not isinstance(value, list):
+            return []
+        classes: list[dict] = []
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            try:
+                classes.append(
+                    {
+                        "class_id": str(item["class_id"]),
+                        "class_name": str(item["class_name"]),
+                        "score": float(item["score"]),
+                    }
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+        return classes
+
+    def _row_to_segment_dict(
+        self,
+        row: pd.Series,
+        include_sentiment: bool = False,
+        include_audio_classes: bool = False,
+    ) -> dict:
         """Convert a DataFrame row to a segment dict."""
         result = {
             "segment_id": int(row.get("segment_id", 0)),
@@ -185,5 +229,10 @@ class AudioSearchEngine:
                 "sentiment_neutral": float(row.get("sentiment_neutral", 0.0)),
                 "dominant_sentiment": str(row.get("dominant_sentiment", "neutral")),
             })
+
+        if include_audio_classes:
+            result["yamnet_audio_classes"] = self._parse_audio_classes(
+                row.get("yamnet_top_classes", [])
+            )
 
         return result

@@ -12,7 +12,7 @@ Sistema de **búsqueda agéntica multimodal** (texto y audio) diseñado para per
 | Embeddings de texto | Sentence Transformers (all-MiniLM-L6-v2) |
 | Embeddings de audio | CLAP (LAION) |
 | Indexación vectorial | FAISS |
-| Agente | LangChain + OpenAI GPT-4o-mini |
+| Agente | Google ADK + LiteLLM/OpenAI GPT-4o-mini |
 | API REST | FastAPI + Uvicorn |
 | Evaluación | RAGAS + métricas IR custom |
 
@@ -62,6 +62,12 @@ active = ["text", "clap", "gemini"]
 - `clap`: CLAP para consulta↔audio (`audio_index.faiss`).
 - `gemini`: Gemini Embedding 2 nativo para consulta↔audio
   (`gemini_audio_index.faiss`); requiere `GEMINI_API_KEY`.
+- `yamnet`: clasificador AudioSet por segmento. Guarda etiquetas y scores de
+  eventos acústicos, pero no crea un índice FAISS. Requiere `uv sync --extra yamnet`.
+
+Para habilitarlo, agregar `"yamnet"` a `active` y volver a procesar el corpus.
+Las clases se consultan mediante `obtener_clases_audio` después de recuperar un
+segmento. YAMNet usa etiquetas AudioSet en inglés y es complementario a CLAP.
 
 Para usar otro archivo, pasa `--embeddings-config ruta/al/archivo.toml`. El
 manifiesto final registra los embeddings efectivamente generados, sus modelos,
@@ -94,7 +100,7 @@ poetry run python -m src.simple_dataset_pipeline \
 
 ```bash
 # Iniciar API
-poetry run uvicorn src.agent_service.main:app \
+uv run uvicorn src.fast_api_app:app \
     --host 0.0.0.0 \
     --port 8000 \
     --reload
@@ -138,14 +144,16 @@ poetry run python -m evaluation.retrieval_evaluation \
     --output evaluation/results/retrieval_results.json
 ```
 
-### RAGAS (calidad del agente)
+### Evaluación RAG del agente (RAGAS o DeepEval)
 
 ```bash
 # Requiere servicio corriendo
-poetry run python -m evaluation.ragas_evaluation \
+# En .env: EVALUATION_FRAMEWORK=ragas (default) o deepeval
+# Instalar: uv sync --group eval (RAGAS) o uv sync --extra eval-deepeval (DeepEval)
+uv run python -m evaluation.run_agent_evaluation \
     --dataset evaluation/test_datasets/ragas_eval_dataset.json \
     --agent-url http://localhost:8000 \
-    --output evaluation/results/ragas_results.json
+    --output evaluation/results/agent_evaluation.json
 ```
 
 ## Tests

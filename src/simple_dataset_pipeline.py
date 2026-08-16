@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 import sys
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -10,16 +11,22 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
 
 from src.audio_conversion import convert_directory
 from src.audio_segmenting import build_audio_windows, extract_wav_window
-from src.audio_transcription import transcribe_directory
+from src.audio_transcription import ChunkingConfig, ChunkingProcessor, transcribe_directory
 from src.clap_audio_embeddings import CLAPConfig, CLAPEmbedding
 from src.embedding_config import load_embedding_config
 from src.gemini_multimodal_embeddings import GeminiEmbeddingConfig, GeminiMultimodalEmbedding
 from src.sentiment_analysis import SentimentAnalyzer
 from src.text_embeddings import TextEmbeddingModel
 from src.vector_indexing import build_faiss_index
+from src.yamnet_audio_classifier import (
+    YAMNetAudioClassifier,
+    YAMNetConfig,
+    aggregate_yamnet_classes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +54,10 @@ def run_pipeline(
     whisper_model: str = "base",
     batch_size: int = 8,
     language: str | None = None,
+    chunk_strategy: str = "whisper",
+    chunk_duration_sec: float = 30.0,
+    chunk_overlap_sec: float = 5.0,
+    max_chunk_text_chars: int = 500,
     embeddings_config_path: str = "config/embeddings.toml",
     audio_window_duration_sec: float = 10.0,
     audio_window_overlap_sec: float = 2.0,
@@ -61,9 +72,10 @@ def run_pipeline(
     2. Transcripción con Whisper
     3. Generación de embeddings de texto
     4. Generación de embeddings de audio (CLAP)
-    5. Análisis de sentimiento
-    6. Indexación vectorial FAISS
-    7. Serialización del dataset final
+    5. Clasificación opcional de eventos acústicos con YAMNet
+    6. Análisis de sentimiento
+    7. Indexación vectorial FAISS
+    8. Serialización del dataset final
     """
     if audio_window_duration_sec <= 0:
         raise ValueError("audio_window_duration_sec must be greater than zero")
@@ -111,7 +123,13 @@ def run_pipeline(
         logger.error("No segments transcribed. Aborting.")
         sys.exit(1)
 
-    logger.info("Total segments: %d", len(segments))
+    segments = ChunkingProcessor(ChunkingConfig(
+        strategy=chunk_strategy,
+        duration_sec=chunk_duration_sec,
+        overlap_sec=chunk_overlap_sec,
+        max_text_chars=max_chunk_text_chars,
+    )).process_segments(segments)
+    logger.info("Total segments after %s chunking: %d", chunk_strategy, len(segments))
 
     # Build DataFrame from segments
     df = pd.DataFrame([asdict(s) for s in segments])
@@ -129,7 +147,7 @@ def run_pipeline(
         embeddings["text"] = text_model.generate_embeddings(texts, batch_size=batch_size)
 
     audio_windows: dict[int, list[Path]] = {}
-    if embedding_config.active & {"clap", "gemini"}:
+    if embedding_config.active & {"clap", "gemini", "yamnet"}:
         for _, row in df.iterrows():
             source_path = converted_dir / row["original_file_name"]
             if not source_path.exists():
@@ -177,6 +195,22 @@ def run_pipeline(
             gemini_embeddings.append(_pool_audio_embeddings(window_embeddings, embedding_config.gemini_output_dimensionality))
         embeddings["gemini"] = np.asarray(gemini_embeddings, dtype=np.float32)
 
+    if embedding_config.is_active("yamnet"):
+        logger.info("Classifying acoustic events with YAMNet (%s)", embedding_config.yamnet_model)
+        yamnet = YAMNetAudioClassifier(
+            YAMNetConfig(
+                model_url=embedding_config.yamnet_model,
+                top_k=embedding_config.yamnet_top_k,
+            )
+        )
+        df["yamnet_top_classes"] = [
+            aggregate_yamnet_classes(
+                [yamnet.classify(path) for path in audio_windows[int(segment_id)]],
+                top_k=embedding_config.yamnet_top_k,
+            )
+            for segment_id in df["segment_id"]
+        ]
+
     for name, values in embeddings.items():
         embedding_dir = embeddings_dir / name
         embedding_dir.mkdir(exist_ok=True)
@@ -184,9 +218,9 @@ def run_pipeline(
             np.save(embedding_dir / f"segment_{segment_id}.npy", embedding)
         df[f"{name}_embedding"] = list(values)
 
-    # --- Etapa 5: Análisis de sentimiento ---
+    # --- Etapa 6: Análisis de sentimiento ---
     logger.info("=" * 60)
-    logger.info("ETAPA 5: Análisis de sentimiento")
+    logger.info("ETAPA 6: Análisis de sentimiento")
     logger.info("=" * 60)
     sentiment_analyzer = SentimentAnalyzer()
     sentiments = sentiment_analyzer.analyze_batch(texts, batch_size=batch_size)
@@ -197,9 +231,9 @@ def run_pipeline(
     df["dominant_sentiment"] = [s.dominant for s in sentiments]
     logger.info("Sentiment analysis complete")
 
-    # --- Etapa 6: Indexación vectorial ---
+    # --- Etapa 7: Indexación vectorial ---
     logger.info("=" * 60)
-    logger.info("ETAPA 6: Indexación FAISS")
+    logger.info("ETAPA 7: Indexación FAISS")
     logger.info("=" * 60)
     index_files = {
         "text": "text_index.faiss",
@@ -214,9 +248,9 @@ def run_pipeline(
     for name, values in embeddings.items():
         build_faiss_index(values, str(indices_dir / index_files[name]))
 
-    # --- Etapa 7: Dataset final ---
+    # --- Etapa 8: Dataset final ---
     logger.info("=" * 60)
-    logger.info("ETAPA 7: Serialización del dataset final")
+    logger.info("ETAPA 8: Serialización del dataset final")
     logger.info("=" * 60)
 
     # Save complete dataset
@@ -226,7 +260,12 @@ def run_pipeline(
 
     # Save metadata CSV (without embeddings for inspection)
     meta_cols = [c for c in df.columns if "embedding" not in c]
-    df[meta_cols].to_csv(final_dir / "dataset_metadata.csv", index=False)
+    metadata_df = df[meta_cols].copy()
+    if "yamnet_top_classes" in metadata_df:
+        metadata_df["yamnet_top_classes"] = metadata_df["yamnet_top_classes"].map(
+            lambda classes: json.dumps(classes, ensure_ascii=False)
+        )
+    metadata_df.to_csv(final_dir / "dataset_metadata.csv", index=False)
 
     # Save manifest
     manifest = {
@@ -235,8 +274,25 @@ def run_pipeline(
         "total_segments": len(df),
         "total_audio_files": df["original_file_name"].nunique(),
         "whisper_model": whisper_model,
+        "chunking": {
+            "strategy": chunk_strategy,
+            "duration_sec": chunk_duration_sec,
+            "overlap_sec": chunk_overlap_sec,
+            "max_text_chars": max_chunk_text_chars,
+        },
         "active_embeddings": sorted(embedding_config.active),
         "embeddings": {name: {"model": getattr(embedding_config, f"{name}_model"), "dimension": int(values.shape[1]), "index": index_files[name]} for name, values in embeddings.items()},
+        "classifiers": (
+            {
+                "yamnet": {
+                    "model": embedding_config.yamnet_model,
+                    "top_k": embedding_config.yamnet_top_k,
+                    "window_aggregation": "max_score",
+                }
+            }
+            if embedding_config.is_active("yamnet")
+            else {}
+        ),
         "audio_window_duration_sec": audio_window_duration_sec,
         "audio_window_overlap_sec": audio_window_overlap_sec,
         "languages": df["language"].value_counts().to_dict(),
@@ -253,12 +309,28 @@ def run_pipeline(
 
 
 def main():
+    load_dotenv()
+
     parser = argparse.ArgumentParser(description="Pipeline de ingesta de audio")
-    parser.add_argument("--input", required=True, help="Directorio con archivos de audio")
-    parser.add_argument("--output", required=True, help="Directorio de salida del dataset")
+    parser.add_argument(
+        "--input",
+        default=os.getenv("AUDIO_INPUT_DIR"),
+        required=os.getenv("AUDIO_INPUT_DIR") is None,
+        help="Directorio con archivos de audio (default: variable de entorno AUDIO_INPUT_DIR)",
+    )
+    parser.add_argument(
+        "--output",
+        default=os.getenv("DATASET_OUTPUT"),
+        required=os.getenv("DATASET_OUTPUT") is None,
+        help="Directorio de salida del dataset (default: variable de entorno DATASET_OUTPUT)",
+    )
     parser.add_argument("--whisper-model", default="base", choices=["tiny", "base", "small", "medium", "large"])
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--language", default=None, help="Forzar idioma (ej: es, en)")
+    parser.add_argument("--chunk-strategy", default="whisper", choices=["whisper", "fixed", "sentence", "paragraph"])
+    parser.add_argument("--chunk-duration", type=float, default=30.0)
+    parser.add_argument("--chunk-overlap", type=float, default=5.0)
+    parser.add_argument("--max-chunk-text-chars", type=int, default=500)
     parser.add_argument("--embeddings-config", default="config/embeddings.toml",
                         help="TOML con los embeddings activos durante la ingesta")
     parser.add_argument("--audio-window-duration", type=float, default=10.0,
@@ -276,6 +348,10 @@ def main():
         whisper_model=args.whisper_model,
         batch_size=args.batch_size,
         language=args.language,
+        chunk_strategy=args.chunk_strategy,
+        chunk_duration_sec=args.chunk_duration,
+        chunk_overlap_sec=args.chunk_overlap,
+        max_chunk_text_chars=args.max_chunk_text_chars,
         embeddings_config_path=args.embeddings_config,
         audio_window_duration_sec=args.audio_window_duration,
         audio_window_overlap_sec=args.audio_window_overlap,

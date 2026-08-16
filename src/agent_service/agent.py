@@ -20,11 +20,12 @@ SYSTEM_PROMPT = """Eres un asistente especializado en búsqueda semántica de co
 Reglas:
 1. Usa buscar_audio para contenido dicho o escrito en las transcripciones.
 2. Usa buscar_evento_acustico para sonidos como aplausos, música, gritos o risas.
-3. Usa obtener_info_segmento cuando se pidan detalles de un segmento identificado.
-4. Responde en español, salvo que el usuario pida otro idioma.
-5. No inventes información: limita todas las afirmaciones a los resultados de las tools.
-6. Para cada hallazgo, cita archivo de origen y timestamp de inicio y fin.
-7. Si no hay resultados, dilo claramente y sugiere una reformulación.
+3. Usa obtener_clases_audio para identificar las clases AudioSet detectadas por YAMNet en un segmento recuperado. Explica que son etiquetas en inglés y scores del clasificador.
+4. Usa obtener_info_segmento cuando se pidan detalles de un segmento identificado.
+5. Responde en español, salvo que el usuario pida otro idioma.
+6. No inventes información: limita todas las afirmaciones a los resultados de las tools.
+7. Para cada hallazgo, cita archivo de origen y timestamp de inicio y fin.
+8. Si no hay resultados, dilo claramente y sugiere una reformulación.
 """
 
 
@@ -71,8 +72,48 @@ class AudioAgent:
     def is_initialized(self) -> bool:
         return self._runner is not None
 
-    async def query(self, user_query: str, max_results: int = 5) -> str:
-        """Run an ADK session and return its final response text."""
+    @staticmethod
+    def _extract_evidence(payload: object) -> tuple[list[str], list[dict]]:
+        """Extract retrieved text and segment metadata from FunctionTool output."""
+        if not isinstance(payload, dict):
+            return [], []
+        candidates = payload.get("results", [])
+        if "segment" in payload:
+            candidates = [payload["segment"]]
+        if not isinstance(candidates, list):
+            return [], []
+
+        contexts: list[str] = []
+        segments: list[dict] = []
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            segment = candidate.get("segment", candidate)
+            if not isinstance(segment, dict):
+                continue
+            text = segment.get("text")
+            if isinstance(text, str) and text:
+                contexts.append(text)
+            if {"segment_id", "original_file_name", "start_time", "end_time"} <= segment.keys():
+                segments.append(
+                    {
+                        key: segment[key]
+                        for key in (
+                            "segment_id",
+                            "original_file_name",
+                            "start_time",
+                            "end_time",
+                            "text",
+                        )
+                        if key in segment
+                    }
+                )
+        return contexts, segments
+
+    async def query_with_evidence(
+        self, user_query: str, max_results: int = 5
+    ) -> tuple[str, list[str], list[dict]]:
+        """Run ADK and return its answer plus evidence emitted by retrieval tools."""
         if self._runner is None:
             raise RuntimeError("Agent not initialized. Call initialize() first.")
 
@@ -88,11 +129,26 @@ class AudioAgent:
             parts=[types.Part.from_text(text=user_query)],
         )
         final_response = "No pude procesar tu consulta."
+        contexts: list[str] = []
+        retrieved_segments: list[dict] = []
         async for event in self._runner.run_async(
             user_id="api-user", session_id=session_id, new_message=message
         ):
-            if event.is_final_response() and event.content and event.content.parts:
+            if not event.content or not event.content.parts:
+                continue
+            for part in event.content.parts:
+                function_response = getattr(part, "function_response", None)
+                payload = getattr(function_response, "response", None)
+                tool_contexts, tool_segments = self._extract_evidence(payload)
+                contexts.extend(tool_contexts)
+                retrieved_segments.extend(tool_segments)
+            if event.is_final_response():
                 text_parts = [part.text for part in event.content.parts if part.text]
                 if text_parts:
                     final_response = "\n".join(text_parts)
-        return final_response
+        return final_response, contexts, retrieved_segments
+
+    async def query(self, user_query: str, max_results: int = 5) -> str:
+        """Run an ADK session and return its final response text."""
+        response, _, _ = await self.query_with_evidence(user_query, max_results)
+        return response

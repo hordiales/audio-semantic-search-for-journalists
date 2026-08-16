@@ -3,10 +3,12 @@
 import argparse
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+
+from evaluation.evaluation_config import EvaluationSettings
 
 logger = logging.getLogger(__name__)
 
@@ -39,15 +41,15 @@ def load_eval_dataset(path: str) -> list[dict]:
 
 async def query_agent_with_context(
     service_url: str, question: str
-) -> tuple[str, list[str]]:
+) -> tuple[str, list[str], list[dict]]:
     """
     Query the agent service and capture response + contexts.
 
-    Uses the /query endpoint and parses tool outputs from the response.
+    Uses the evaluation endpoint, which returns evidence emitted by retrieval tools.
     """
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
-            f"{service_url}/query",
+            f"{service_url}/evaluate/query",
             json={"query": question, "max_results": 5},
         )
         response.raise_for_status()
@@ -56,7 +58,7 @@ async def query_agent_with_context(
     answer = data.get("response", "")
     contexts = data.get("contexts", [])
 
-    return answer, contexts
+    return answer, contexts, data.get("retrieved_segments", [])
 
 
 async def run_ragas_evaluation(
@@ -75,6 +77,9 @@ async def run_ragas_evaluation(
     Returns:
         Dict con scores por métrica
     """
+    settings = EvaluationSettings.from_environment()
+    if settings.framework != "ragas":
+        raise ValueError("EVALUATION_FRAMEWORK must be 'ragas' for this command")
     from datasets import Dataset
     from ragas import evaluate
     from ragas.metrics import (
@@ -93,22 +98,21 @@ async def run_ragas_evaluation(
         logger.info("Evaluating %d/%d: %s", i + 1, len(eval_samples), sample["question"][:50])
 
         try:
-            answer, contexts = await query_agent_with_context(
+            answer, contexts, retrieved_segments = await query_agent_with_context(
                 agent_service_url, sample["question"]
             )
         except Exception as e:
             logger.error("Failed to query agent: %s", e)
             answer = f"Error: {e}"
             contexts = []
-
-        if not contexts:
-            contexts = sample.get("ground_truth_contexts", [""])
+            retrieved_segments = []
 
         results.append({
             "question": sample["question"],
             "answer": answer,
             "contexts": contexts,
             "ground_truth": sample.get("ground_truth", ""),
+            "retrieved_segments": retrieved_segments,
         })
 
     dataset = Dataset.from_list(results)
@@ -126,12 +130,15 @@ async def run_ragas_evaluation(
     )
 
     output = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "framework": "ragas",
         "metrics": {k: float(v) for k, v in scores.items() if isinstance(v, (int, float))},
         "per_question": results,
         "config": {
             "agent_url": agent_service_url,
             "dataset_size": len(eval_samples),
+            "judge_model": settings.judge_model,
+            "judge_temperature": settings.judge_temperature,
         },
     }
 
@@ -146,6 +153,10 @@ async def run_ragas_evaluation(
 
 def main():
     import asyncio
+
+    from dotenv import load_dotenv
+
+    load_dotenv()
 
     parser = argparse.ArgumentParser(description="Evaluación RAGAS del agente")
     parser.add_argument("--dataset", required=True, help="JSON con preguntas de evaluación")

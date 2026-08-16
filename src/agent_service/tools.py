@@ -139,6 +139,37 @@ def obtener_info_segmento(segment_id: int) -> dict:
     return {"status": "success", "segment": result}
 
 
+def obtener_clases_audio(segment_id: int) -> dict:
+    """Obtiene las clases de AudioSet detectadas por YAMNet para un segmento.
+
+    Úsala después de recuperar un segmento para identificar eventos acústicos
+    estandarizados. Las etiquetas de YAMNet están en inglés y sus scores son
+    probabilidades del clasificador, no porcentajes de similitud de CLAP.
+
+    Args:
+        segment_id: Identificador estable del segmento.
+
+    Returns:
+        Las clases acústicas detectadas, o información para reprocesar el dataset.
+    """
+    try:
+        classes = get_search_engine().get_audio_classes(segment_id)
+    except Exception as error:
+        logger.exception("YAMNet class lookup failed")
+        return {"status": "error", "error": str(error)}
+
+    if classes is None:
+        return {"status": "error", "error": f"Segmento {segment_id} no encontrado."}
+    if not classes:
+        return {
+            "status": "not_available",
+            "error": "El dataset no contiene clases YAMNet para este segmento. "
+            "Reprocésalo habilitando yamnet en config/embeddings.toml.",
+            "classes": [],
+        }
+    return {"status": "success", "classifier": "yamnet", "classes": classes}
+
+
 def get_all_tools() -> list:
     """Return plain Python functions that ADK converts to FunctionTools."""
-    return [buscar_audio, buscar_evento_acustico, obtener_info_segmento]
+    return [buscar_audio, buscar_evento_acustico, obtener_info_segmento, obtener_clases_audio]
