@@ -1,0 +1,144 @@
+[tool.poetry]
+name = "audio-semantic-search"
+version = "0.1.0"
+description = "Búsqueda agéntica multimodal de audio para periodistas"
+authors = ["dev"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[project]
+name = "audio-semantic-search"
+version = "0.1.0"
+description = "Búsqueda agéntica multimodal de audio para periodistas"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "openai-whisper>=20231117",
+    "sentence-transformers>=2.2",
+    "transformers>=4.30",
+    "librosa>=0.10",
+    "soundfile>=0.12",
+    "pydub>=0.25",
+    "faiss-cpu>=1.7",
+    "google-adk[eval,gcp]>=2.0,<3.0",
+    "google-genai>=2.17.0",
+    "litellm>=1.0",
+    "a2a-sdk~=0.3.22",
+    "aiohttp>=3.13.4",
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.20",
+    "pandas>=2.0",
+    "numpy>=1.24,<2.0",
+    "laion-clap>=1.1",
+    "torchvision>=0.15",
+    "pysentimiento>=0.7",
+    "python-dotenv>=1.0",
+    "pydantic>=2.0",
+    "google-cloud-aiplatform[evaluation,agent-engines]>=1.156.0",
+    "google-cloud-logging>=3.12.0,<4.0.0",
+    "opentelemetry-instrumentation-google-genai>=0.1.0,<1.0.0",
+    "gcsfs>=2024.11.0",
+    "protobuf>=6.31.1,<7.0.0",
+]
+
+[project.optional-dependencies]
+# YAMNet is optional because TensorFlow substantially increases the local runtime.
+# Install it only in ingestion environments that classify acoustic events.
+yamnet = [
+    "tensorflow>=2.16,<2.21",
+    "tensorflow-hub>=0.16,<0.17",
+]
+eval-deepeval = [
+    "deepeval>=4.1,<5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "httpx>=0.24",
+    "ruff>=0.8.0",
+    "pre-commit>=3.0",
+]
+eval = [
+    "ragas>=0.1",
+    "datasets>=3.0",
+]
+
+[tool.poetry.dependencies]
+python = "~3.11"
+# Transcripción
+openai-whisper = ">=20231117"
+# Embeddings de texto
+sentence-transformers = ">=2.2"
+transformers = ">=4.30"
+# Audio processing
+librosa = ">=0.10"
+soundfile = ">=0.12"
+pydub = ">=0.25"
+# Búsqueda vectorial
+faiss-cpu = ">=1.7"
+# Agente (Google ADK con OpenAI vía LiteLLM)
+google-adk = {version = ">=2.0,<3.0", extras = ["eval", "gcp"]}
+google-genai = ">=2.17.0"
+litellm = ">=1.0"
+a2a-sdk = "~=0.3.22"
+aiohttp = ">=3.13.4"
+# API
+fastapi = ">=0.100"
+uvicorn = {version = ">=0.20", extras = ["standard"]}
+# Datos
+pandas = ">=2.0"
+numpy = ">=1.24,<2.0"
+# Audio embeddings (CLAP)
+laion-clap = ">=1.1"
+torchvision = ">=0.15"
+# Sentiment analysis
+pysentimiento = ">=0.7"
+# Utilities
+python-dotenv = ">=1.0"
+pydantic = ">=2.0"
+# Runtime administrado de Agent Platform
+google-cloud-aiplatform = {version = ">=1.156.0", extras = ["evaluation", "agent-engines"]}
+google-cloud-logging = ">=3.12.0,<4.0.0"
+opentelemetry-instrumentation-google-genai = ">=0.1.0,<1.0.0"
+gcsfs = ">=2024.11.0"
+protobuf = ">=6.31.1,<7.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=7.0"
+pytest-asyncio = ">=0.21"
+httpx = ">=0.24"
+ruff = ">=0.8.0"
+pre-commit = ">=3.0"
+
+[tool.poetry.group.eval.dependencies]
+ragas = ">=0.1"
+datasets = ">=3.0"
+
+[tool.poetry.group.deepeval.dependencies]
+deepeval = ">=4.1,<5"
+
+[tool.poetry.group.yamnet.dependencies]
+tensorflow = ">=2.16,<2.21"
+tensorflow-hub = ">=0.16,<0.17"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "evaluation", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

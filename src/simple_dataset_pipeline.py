@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import os
+import shlex
 import sys
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -17,7 +18,7 @@ from src.audio_conversion import convert_directory
 from src.audio_segmenting import build_audio_windows, extract_wav_window
 from src.audio_transcription import ChunkingConfig, ChunkingProcessor, transcribe_directory
 from src.clap_audio_embeddings import CLAPConfig, CLAPEmbedding
-from src.embedding_config import load_embedding_config
+from src.embedding_config import load_embedding_config, write_embedding_config_from_env
 from src.gemini_multimodal_embeddings import GeminiEmbeddingConfig, GeminiMultimodalEmbedding
 from src.sentiment_analysis import SentimentAnalyzer
 from src.text_embeddings import TextEmbeddingModel
@@ -37,6 +38,35 @@ def _pool_audio_embeddings(window_embeddings: list[np.ndarray], dimension: int) 
     pooled = np.mean(window_embeddings, axis=0)
     norm = np.linalg.norm(pooled)
     return (pooled / norm if norm > 0 else pooled).astype(np.float32)
+
+
+def _write_process_run_log(
+    output_path: Path,
+    *,
+    parameters: dict,
+    embedding_config,
+    command_argv: list[str] | None,
+) -> None:
+    """Persist the effective ingestion invocation next to its output dataset."""
+    recorded_argv = command_argv or []
+    log = {
+        "version": "1.0",
+        "completed_at": datetime.now(UTC).isoformat(),
+        "working_directory": str(Path.cwd()),
+        "command_argv": recorded_argv,
+        "command_display": shlex.join(recorded_argv) if recorded_argv else None,
+        "parameters": parameters,
+        "embedding_configuration": {
+            "active": sorted(embedding_config.active),
+            "text_model": embedding_config.text_model,
+            "clap_model": embedding_config.clap_model,
+            "gemini_model": embedding_config.gemini_model,
+            "gemini_output_dimensionality": embedding_config.gemini_output_dimensionality,
+            "yamnet_model": embedding_config.yamnet_model,
+            "yamnet_top_k": embedding_config.yamnet_top_k,
+        },
+    }
+    output_path.write_text(json.dumps(log, indent=2, ensure_ascii=False) + "\n")
 
 
 def setup_logging(verbose: bool = False):
@@ -63,6 +93,7 @@ def run_pipeline(
     audio_window_overlap_sec: float = 2.0,
     mock_audio: bool = False,
     verbose: bool = False,
+    command_argv: list[str] | None = None,
 ):
     """
     Ejecuta el pipeline completo de ingesta.
@@ -301,6 +332,28 @@ def run_pipeline(
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
     logger.info("Saved manifest: %s", manifest_path)
 
+    _write_process_run_log(
+        final_dir / "process_run.json",
+        parameters={
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "whisper_model": whisper_model,
+            "batch_size": batch_size,
+            "language": language,
+            "chunk_strategy": chunk_strategy,
+            "chunk_duration_sec": chunk_duration_sec,
+            "chunk_overlap_sec": chunk_overlap_sec,
+            "max_chunk_text_chars": max_chunk_text_chars,
+            "embeddings_config_path": str(embeddings_config_path),
+            "audio_window_duration_sec": audio_window_duration_sec,
+            "audio_window_overlap_sec": audio_window_overlap_sec,
+            "mock_audio": mock_audio,
+            "verbose": verbose,
+        },
+        embedding_config=embedding_config,
+        command_argv=command_argv,
+    )
+
     logger.info("=" * 60)
     logger.info("PIPELINE COMPLETE")
     logger.info("Dataset: %s", output_dir)
@@ -331,8 +384,11 @@ def main():
     parser.add_argument("--chunk-duration", type=float, default=30.0)
     parser.add_argument("--chunk-overlap", type=float, default=5.0)
     parser.add_argument("--max-chunk-text-chars", type=int, default=500)
-    parser.add_argument("--embeddings-config", default="config/embeddings.toml",
-                        help="TOML con los embeddings activos durante la ingesta")
+    parser.add_argument(
+        "--embeddings-config",
+        default=os.getenv("EMBEDDINGS_CONFIG_PATH", "config/embeddings.toml"),
+        help="Ruta del TOML generado desde .env (default: EMBEDDINGS_CONFIG_PATH)",
+    )
     parser.add_argument("--audio-window-duration", type=float, default=10.0,
                         help="Duración máxima (s) de cada ventana acústica")
     parser.add_argument("--audio-window-overlap", type=float, default=2.0,
@@ -341,6 +397,7 @@ def main():
     parser.add_argument("--verbose", action="store_true")
 
     args = parser.parse_args()
+    write_embedding_config_from_env(args.embeddings_config)
 
     run_pipeline(
         input_dir=args.input,
@@ -357,6 +414,7 @@ def main():
         audio_window_overlap_sec=args.audio_window_overlap,
         mock_audio=args.mock_audio,
         verbose=args.verbose,
+        command_argv=[sys.executable, *sys.argv],
     )
 
 

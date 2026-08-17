@@ -95,12 +95,23 @@ esa versión para el agente, la API y las evaluaciones.
 
 ## 4. Elegir embeddings y clasificación acústica
 
-El archivo [config/embeddings.toml](../config/embeddings.toml) define qué
-modalidades se generan. La configuración inicial es:
+La fuente de verdad de embeddings es el archivo `.env`. En cada ejecución de
+`src.simple_dataset_pipeline`, el pipeline genera
+[config/embeddings.toml](../config/embeddings.toml) desde esas variables. El
+TOML es un artefacto reproducible: no editarlo manualmente, porque la próxima
+ejecución lo reemplaza.
 
-```toml
-[embeddings]
-active = ["text", "clap"]
+La configuración inicial en `.env` es:
+
+```dotenv
+EMBEDDINGS_ACTIVE=text,clap
+EMBEDDINGS_CONFIG_PATH=./config/embeddings.toml
+TEXT_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+CLAP_EMBEDDING_MODEL=laion/clap-htsat-unfused
+GEMINI_EMBEDDING_MODEL=gemini-embedding-2
+GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY=1536
+YAMNET_MODEL=https://tfhub.dev/google/yamnet/1
+YAMNET_TOP_K=5
 ```
 
 | Modalidad | Qué representa | Artefacto |
@@ -110,26 +121,34 @@ active = ["text", "clap"]
 | `gemini` | Audio nativo de Gemini Embedding 2; requiere `GEMINI_API_KEY`. | `embeddings/gemini/`, `gemini_audio_index.faiss` |
 | `yamnet` | Etiquetas AudioSet como `Applause` o `Music`; no crea índice FAISS. | Columna `yamnet_top_classes` |
 
-Por ejemplo, para producir los tres índices vectoriales:
+Para producir los tres índices vectoriales, configurar en `.env`:
 
-```toml
-[embeddings]
-active = ["text", "clap", "gemini"]
+```dotenv
+GEMINI_API_KEY=tu-clave
+EMBEDDINGS_ACTIVE=text,clap,gemini
 ```
+
+Gemini recibe las ventanas WAV reales de cada segmento (por defecto, 10 s con
+2 s de solapamiento), no la transcripción. `GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY=1536`
+es la dimensión recomendada. Mantené `text` y `clap` activos: las herramientas
+de búsqueda actuales del agente consultan sus índices; Gemini se genera para
+comparación y evaluación, y su índice queda disponible como artefacto.
 
 Para añadir clasificación de eventos:
 
-```toml
-[embeddings]
-active = ["text", "clap", "yamnet"]
+```dotenv
+EMBEDDINGS_ACTIVE=text,clap,yamnet
 ```
 
-Usar un archivo alternativo sin modificar el versionado:
+Si necesitás conservar el TOML generado en otra ubicación, cambiar la ruta:
 
-```bash
-cp config/embeddings.toml config/embeddings-local.toml
-# editar config/embeddings-local.toml
+```dotenv
+EMBEDDINGS_CONFIG_PATH=./config/embeddings-local.toml
 ```
+
+También se puede sobrescribir sólo para una corrida con
+`--embeddings-config ./config/embeddings-local.toml`; el archivo indicado se
+genera desde el mismo `.env`.
 
 ## 5. Elegir la granularidad de los segmentos
 
@@ -207,17 +226,22 @@ dataset-real/
 └── final/
     ├── complete_dataset.pkl            # tabla completa, incluyendo vectores
     ├── dataset_metadata.csv            # tabla inspeccionable sin vectores
-    └── dataset_manifest.json           # modelos, dimensiones, chunking y ventanas
+    ├── dataset_manifest.json           # modelos, dimensiones, chunking y ventanas
+    └── process_run.json                # fecha, comando y parámetros efectivos
 ```
 
 Los índices sólo aparecen para modalidades activas. `dataset_manifest.json` es
 la fuente de verdad de una ejecución: registra `active_embeddings`, el modelo y
 dimensión de cada índice, la estrategia de chunking y las ventanas acústicas.
+`process_run.json` complementa ese manifiesto con la fecha UTC, directorio de
+trabajo, argumentos del comando y todos los parámetros efectivos de esa
+ejecución. Se escribe únicamente cuando el pipeline termina correctamente.
 
 ## 8. Validar y usar el dataset
 
 ```bash
 cat "$DATASET_OUTPUT/final/dataset_manifest.json"
+cat "$DATASET_OUTPUT/final/process_run.json"
 
 uv run python - <<'PY'
 import os

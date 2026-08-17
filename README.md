@@ -57,12 +57,16 @@ Para procesar WAV, OPUS u otros audios reales, seguí la guía operativa
 
 ### Configurar embeddings activos
 
-El pipeline lee [config/embeddings.toml](config/embeddings.toml). La lista
-`[embeddings].active` define qué modelos se procesan y qué índices se crean:
+La fuente de verdad es `.env`. Antes de cada ejecución de la CLI, el pipeline
+genera [config/embeddings.toml](config/embeddings.toml) a partir de las
+variables `EMBEDDINGS_*`; no edites el TOML manualmente. Por ejemplo, para
+habilitar Gemini junto con los índices actuales:
 
-```toml
-[embeddings]
-active = ["text", "clap", "gemini"]
+```dotenv
+GEMINI_API_KEY=tu-clave
+EMBEDDINGS_ACTIVE=text,clap,gemini
+GEMINI_EMBEDDING_MODEL=gemini-embedding-2
+GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY=1536
 ```
 
 - `text`: MiniLM para consulta↔transcripción (`text_index.faiss`).
@@ -72,13 +76,17 @@ active = ["text", "clap", "gemini"]
 - `yamnet`: clasificador AudioSet por segmento. Guarda etiquetas y scores de
   eventos acústicos, pero no crea un índice FAISS. Requiere `uv sync --extra yamnet`.
 
-Para habilitarlo, agregar `"yamnet"` a `active` y volver a procesar el corpus.
+Para habilitar YAMNet, usar `EMBEDDINGS_ACTIVE=text,clap,yamnet` y volver a
+procesar el corpus. Las demás variables disponibles son
+`TEXT_EMBEDDING_MODEL`, `CLAP_EMBEDDING_MODEL`, `YAMNET_MODEL` y `YAMNET_TOP_K`;
+están documentadas en `.env.example`.
 Las clases se consultan mediante `obtener_clases_audio` después de recuperar un
 segmento. YAMNet usa etiquetas AudioSet en inglés y es complementario a CLAP.
 
-Para usar otro archivo, pasa `--embeddings-config ruta/al/archivo.toml`. El
-manifiesto final registra los embeddings efectivamente generados, sus modelos,
-dimensiones e índices.
+`EMBEDDINGS_CONFIG_PATH` define dónde se escribe el TOML generado (por defecto,
+`./config/embeddings.toml`); `--embeddings-config` permite cambiar esa ruta por
+ejecución. El manifiesto final registra los embeddings efectivamente generados,
+sus modelos, dimensiones e índices.
 
 ### 1. Pipeline de Ingesta
 
