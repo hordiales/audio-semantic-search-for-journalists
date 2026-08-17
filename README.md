@@ -165,12 +165,83 @@ uv run python -m evaluation.retrieval_evaluation \
     --output evaluation/results/retrieval_results.json
 ```
 
+### Datasets de evaluación
+
+Existen tres fuentes de preguntas, controlables desde `.env`:
+
+- `manual`: preguntas escritas a mano.
+- `synthetic`: preguntas generadas por RAGAS a partir del corpus procesado.
+- `hybrid`: unión del manual y el sintético, sin duplicados.
+
+Variables relevantes en `.env`:
+
+```dotenv
+EVALUATION_DATASET_SOURCE=manual
+EVALUATION_DATASET_SIZE=20
+EVALUATION_DATASET_MAX_SEGMENTS=0
+EVALUATION_MANUAL_DATASET_PATH=./evaluation/test_datasets/ragas_eval_dataset_unlabeled.json
+EVALUATION_SYNTHETIC_DATASET_PATH=./evaluation/test_datasets/synthetic/ragas_synthetic_questions.json
+EVALUATION_HYBRID_DATASET_PATH=./evaluation/test_datasets/synthetic/ragas_hybrid_questions.json
+```
+
+Para generar preguntas sintéticas (requiere `OPENAI_API_KEY` y el corpus en `DATASET_PATH`):
+
+```bash
+# 20 preguntas sobre todo el corpus
+uv run python -m evaluation.generate_synthetic_questions \
+    --dataset-path ./dataset \
+    --size 20
+
+# También se puede definir cantidad y límite de segmentos por env:
+# EVALUATION_DATASET_SIZE=30
+# EVALUATION_DATASET_MAX_SEGMENTS=50
+
+# Si hay problemas de memoria/segfault en MPS (Apple Silicon), usar 1 worker
+# y embeddings en CPU:
+# EVALUATION_GENERATION_MAX_WORKERS=1
+# uv run python -m evaluation.generate_synthetic_questions --size 5
+```
+
+El resultado se escribe en `EVALUATION_SYNTHETIC_DATASET_PATH` y contiene una
+lista de `question` (y opcionalmente `ground_truth`/`ground_truth_contexts`,
+generados por RAGAS).
+
+### Dataset híbrido
+
+Para combinar el manual y el sintético en la misma evaluación:
+
+```dotenv
+EVALUATION_DATASET_SOURCE=hybrid
+```
+
+```bash
+# Primero generar las sintéticas si aún no existen
+uv run python -m evaluation.generate_synthetic_questions --size 20
+
+# Evaluar con la unión (el runner elimina duplicados, prioriza el manual)
+uv run python -m evaluation.run_agent_evaluation \
+    --agent-url http://localhost:8000 \
+    --output evaluation/results/hybrid_evaluation.json
+```
+
+El resultado combinado se guarda en `EVALUATION_HYBRID_DATASET_PATH`. Notá que
+las métricas con `ground_truth` (Context Precision, Context Recall y Answer
+Correctness) sólo se activan cuando **todas** las muestras del híbrido traen
+`ground_truth`.
+
 ### Evaluación RAG del agente (RAGAS o DeepEval)
 
 ```bash
 # Requiere servicio corriendo
 # En .env: EVALUATION_FRAMEWORK=ragas (default) o deepeval
 # Instalar: uv sync --group eval (RAGAS) o uv sync --extra eval-deepeval (DeepEval)
+
+# Usa el dataset definido por EVALUATION_DATASET_SOURCE
+uv run python -m evaluation.run_agent_evaluation \
+    --agent-url http://localhost:8000 \
+    --output evaluation/results/agent_evaluation.json
+
+# Sobrescribir el dataset por línea de comandos
 uv run python -m evaluation.run_agent_evaluation \
     --dataset evaluation/test_datasets/ragas_eval_dataset.json \
     --agent-url http://localhost:8000 \

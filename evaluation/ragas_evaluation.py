@@ -61,6 +61,37 @@ async def query_agent_with_context(
     return answer, contexts, data.get("retrieved_segments", [])
 
 
+def _select_ragas_metrics(has_ground_truth: bool) -> tuple[list, list[str]]:
+    """
+    Elige el set de métricas RAGAS según si el dataset trae `ground_truth`.
+
+    RAGAS no requiere, por definición, un dataset etiquetado: Faithfulness,
+    Answer Relevancy y Context Utilization se calculan exclusivamente a
+    partir de (pregunta, contexto recuperado, respuesta generada), sin
+    comparar contra una referencia humana. Solo se agregan Context Precision,
+    Context Recall y Answer Correctness cuando *todas* las muestras traen
+    `ground_truth`, porque esas tres sí lo requieren para funcionar
+    (comparan la respuesta/contexto recuperado contra la referencia).
+    """
+    from ragas.metrics import (
+        ContextUtilization,
+        answer_relevancy,
+        faithfulness,
+    )
+
+    # Reference-free: no necesitan ground_truth ni ground_truth_contexts.
+    metrics: list = [faithfulness, answer_relevancy, ContextUtilization()]
+    metric_names = ["faithfulness", "answer_relevancy", "context_utilization"]
+
+    if has_ground_truth:
+        from ragas.metrics import answer_correctness, context_precision, context_recall
+
+        metrics += [context_precision, context_recall, answer_correctness]
+        metric_names += ["context_precision", "context_recall", "answer_correctness"]
+
+    return metrics, metric_names
+
+
 async def run_ragas_evaluation(
     eval_dataset_path: str,
     agent_service_url: str = "http://localhost:8000",
@@ -69,8 +100,14 @@ async def run_ragas_evaluation(
     """
     Ejecuta evaluación RAGAS contra el servicio del agente.
 
+    No requiere un dataset etiquetado: si las muestras no incluyen
+    `ground_truth`, se calculan únicamente las métricas reference-free
+    (Faithfulness, Answer Relevancy, Context Utilization). Si todas las
+    muestras incluyen `ground_truth`, se agregan también Context Precision,
+    Context Recall y Answer Correctness.
+
     Args:
-        eval_dataset_path: Ruta al JSON con preguntas y ground truth
+        eval_dataset_path: Ruta al JSON con preguntas (y opcionalmente ground truth)
         agent_service_url: URL del servicio del agente
         output_path: Optional path to save results
 
@@ -82,13 +119,6 @@ async def run_ragas_evaluation(
         raise ValueError("EVALUATION_FRAMEWORK must be 'ragas' for this command")
     from datasets import Dataset
     from ragas import evaluate
-    from ragas.metrics import (
-        answer_correctness,
-        answer_relevancy,
-        context_precision,
-        context_recall,
-        faithfulness,
-    )
 
     eval_samples = load_eval_dataset(eval_dataset_path)
     logger.info("Loaded %d evaluation samples", len(eval_samples))
@@ -115,24 +145,27 @@ async def run_ragas_evaluation(
             "retrieved_segments": retrieved_segments,
         })
 
+    has_ground_truth = all(r["ground_truth"] for r in results)
+    metrics, metric_names = _select_ragas_metrics(has_ground_truth)
+    logger.info(
+        "Dataset %s ground_truth; usando métricas: %s",
+        "incluye" if has_ground_truth else "no incluye",
+        ", ".join(metric_names),
+    )
+
     dataset = Dataset.from_list(results)
 
     logger.info("Running RAGAS evaluation...")
-    scores = evaluate(
-        dataset,
-        metrics=[
-            faithfulness,
-            answer_relevancy,
-            context_precision,
-            context_recall,
-            answer_correctness,
-        ],
-    )
+    scores = evaluate(dataset, metrics=metrics)
 
     output = {
         "timestamp": datetime.now(UTC).isoformat(),
         "framework": "ragas",
+        "dataset_source": settings.dataset_source,
+        "dataset_path": str(eval_dataset_path),
         "metrics": {k: float(v) for k, v in scores.items() if isinstance(v, (int, float))},
+        "metrics_used": metric_names,
+        "reference_free": not has_ground_truth,
         "per_question": results,
         "config": {
             "agent_url": agent_service_url,
@@ -158,8 +191,16 @@ def main():
 
     load_dotenv()
 
+    settings = EvaluationSettings.from_environment()
+    if settings.framework != "ragas":
+        raise ValueError("EVALUATION_FRAMEWORK must be 'ragas' for this command")
+
     parser = argparse.ArgumentParser(description="Evaluación RAGAS del agente")
-    parser.add_argument("--dataset", required=True, help="JSON con preguntas de evaluación")
+    parser.add_argument(
+        "--dataset",
+        default=settings.dataset_path,
+        help="JSON con preguntas de evaluación (por defecto: EVALUATION_DATASET_SOURCE)",
+    )
     parser.add_argument("--agent-url", default="http://localhost:8000")
     parser.add_argument("--output", required=True, help="Path para resultados JSON")
     args = parser.parse_args()

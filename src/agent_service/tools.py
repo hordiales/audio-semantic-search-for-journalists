@@ -34,7 +34,7 @@ def get_search_engine() -> AudioSearchEngine:
     return initialize_search_engine()
 
 
-def _serialize_results(results: list[dict]) -> list[dict]:
+def _serialize_results(results: list[dict], search_index: str, search_index_label: str) -> list[dict]:
     """Return JSON-compatible search results with journalist-facing metadata."""
     serialized: list[dict] = []
     for result in results:
@@ -42,6 +42,8 @@ def _serialize_results(results: list[dict]) -> list[dict]:
         serialized.append(
             {
                 "segment_id": segment["segment_id"],
+                "search_index": search_index,
+                "search_index_label": search_index_label,
                 "text": segment["text"],
                 "similarity": round(result["similarity"], 4),
                 "similarity_percent": round(result["similarity"] * 100, 1),
@@ -77,7 +79,11 @@ def buscar_audio(query: str, k: int = 5, tool_context: ToolContext | None = None
         return {
             "status": "success",
             "modality": "text",
-            "results": _serialize_results(get_search_engine().search_semantic(query, k=k)),
+            "results": _serialize_results(
+                get_search_engine().search_semantic(query, k=k),
+                search_index="text",
+                search_index_label="Índice de texto (transcripciones)",
+            ),
         }
     except Exception as error:
         logger.exception("Text search failed")
@@ -111,7 +117,9 @@ def buscar_evento_acustico(
             "status": "success",
             "modality": "audio",
             "results": _serialize_results(
-                get_search_engine().search_audio_by_text(query, k=k)
+                get_search_engine().search_audio_by_text(query, k=k),
+                search_index="audio",
+                search_index_label="Índice de audio (CLAP)",
             ),
         }
     except Exception as error:

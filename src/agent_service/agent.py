@@ -24,7 +24,9 @@ Reglas:
 4. Usa obtener_info_segmento cuando se pidan detalles de un segmento identificado.
 5. Responde en español, salvo que el usuario pida otro idioma.
 6. No inventes información: limita todas las afirmaciones a los resultados de las tools.
-7. Para cada hallazgo, cita archivo de origen y timestamp de inicio y fin.
+7. Para cada hallazgo, cita archivo de origen, timestamp de inicio y fin, e índice consultado.
+   Usa exactamente el campo search_index_label devuelto por la tool (por ejemplo,
+   "Índice de texto (transcripciones)" o "Índice de audio (CLAP)").
 8. Si no hay resultados, dilo claramente y sugiere una reformulación.
 """
 

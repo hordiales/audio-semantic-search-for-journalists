@@ -63,6 +63,12 @@ dev = [
 eval = [
     "ragas>=0.1",
     "datasets>=3.0",
+    # ragas<=0.4.x imports langchain_community.chat_models.vertexai unconditionally
+    # at module load time; that submodule was removed in langchain-community>=0.4.2.
+    # Pin below that version until ragas ships the upstream fix (see ragas #2741/#2753).
+    "langchain-community<0.4.2",
+    # RAGAS TestsetGenerator lo usa para distancias de string en transforms.
+    "rapidfuzz>=3.0",
 ]
 
 [tool.poetry.dependencies]
@@ -115,6 +121,10 @@ pre-commit = ">=3.0"
 [tool.poetry.group.eval.dependencies]
 ragas = ">=0.1"
 datasets = ">=3.0"
+# Ver nota en [dependency-groups] eval sobre el import roto de ragas.
+langchain-community = "<0.4.2"
+# RAGAS TestsetGenerator lo usa para distancias de string en transforms.
+rapidfuzz = ">=3.0"
 
 [tool.poetry.group.deepeval.dependencies]
 deepeval = ">=4.1,<5"
