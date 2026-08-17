@@ -88,6 +88,12 @@ segmento. YAMNet usa etiquetas AudioSet en inglés y es complementario a CLAP.
 ejecución. El manifiesto final registra los embeddings efectivamente generados,
 sus modelos, dimensiones e índices.
 
+Las ejecuciones posteriores son incrementales: se reutilizan los resultados de
+audios sin cambios y sólo se procesan archivos nuevos o modificados. La huella
+de cada fuente y la firma de configuración se guardan en
+`final/ingestion_state.json`; cambiar chunking, Whisper, ventanas o embeddings
+fuerza una reconstrucción completa para conservar consistencia.
+
 ### 1. Pipeline de Ingesta
 
 Procesa archivos de audio y genera un dataset indexado:

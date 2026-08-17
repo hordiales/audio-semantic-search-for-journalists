@@ -240,10 +240,20 @@ def transcribe_directory(
         All transcription segments with globally unique IDs
     """
     audio_path = Path(audio_dir)
-    wav_files = sorted(audio_path.glob("*.wav"))
+    return transcribe_files(sorted(audio_path.glob("*.wav")), model_name, language, start_id)
 
-    if not wav_files:
-        logger.warning("No WAV files found in %s", audio_dir)
+
+def transcribe_files(
+    wav_files: list[str | Path],
+    model_name: str = "base",
+    language: str | None = None,
+    start_id: int = 0,
+) -> list[TranscriptionSegment]:
+    """Transcribe a selected list of WAV files with one shared Whisper model."""
+    wav_paths = [Path(wav_file) for wav_file in wav_files]
+
+    if not wav_paths:
+        logger.warning("No WAV files selected for transcription")
         return []
 
     logger.info("Loading Whisper model '%s' once for batch...", model_name)
@@ -252,7 +262,7 @@ def transcribe_directory(
     all_segments = []
     current_id = start_id
 
-    for wav_file in wav_files:
+    for wav_file in wav_paths:
         logger.info("Transcribing: %s", wav_file.name)
         options = {}
         if language:
@@ -281,5 +291,5 @@ def transcribe_directory(
             )
             current_id += 1
 
-    logger.info("Total segments transcribed: %d from %d files", len(all_segments), len(wav_files))
+    logger.info("Total segments transcribed: %d from %d files", len(all_segments), len(wav_paths))
     return all_segments

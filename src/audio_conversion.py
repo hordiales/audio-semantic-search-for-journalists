@@ -14,6 +14,7 @@ def convert_audio(
     output_dir: str,
     sample_rate: int = 16000,
     mono: bool = True,
+    force: bool = False,
 ) -> str:
     """
     Convierte audio a formato WAV normalizado.
@@ -45,7 +46,7 @@ def convert_audio(
 
     output_file = output_path / f"{input_file.stem}.wav"
 
-    if output_file.exists():
+    if output_file.exists() and not force:
         logger.info("Skipping already converted: %s", output_file)
         return str(output_file)
 
@@ -72,10 +73,10 @@ def convert_audio(
         raise RuntimeError(
             f"ffmpeg failed for {input_file.name}: {e.stderr[:500]}"
         ) from e
-    except FileNotFoundError:
+    except FileNotFoundError as error:
         raise RuntimeError(
             "ffmpeg not found. Install with: brew install ffmpeg (macOS)"
-        )
+        ) from error
 
     logger.debug("ffmpeg stdout: %s", result.stdout[:200])
     return str(output_file)

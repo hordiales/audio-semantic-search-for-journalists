@@ -205,6 +205,21 @@ uv run python -m src.simple_dataset_pipeline \
 Para una prueba estructural rápida, `--mock-audio` evita CLAP real, pero no es
 válido para evaluar calidad acústica ni para producción.
 
+### Ejecuciones incrementales
+
+Después de una primera ejecución completa, el pipeline sólo convierte,
+transcribe y calcula embeddings para audios nuevos o cuyo contenido cambió.
+Guarda el estado en `final/ingestion_state.json`, con SHA-256 y tamaño de cada
+audio fuente. Los audios que se quiten de `AUDIO_INPUT_DIR` se retiran del
+dataset y sus artefactos por segmento se limpian; los índices FAISS se
+reconstruyen para reflejar el conjunto completo.
+
+Cambiar el modelo Whisper, idioma, estrategia de chunking, ventanas acústicas,
+embeddings activos o sus modelos/dimensiones invalida la caché y provoca una
+reconstrucción completa. Esto evita mezclar vectores producidos con parámetros
+incompatibles. No reemplazar el archivo convertido manualmente: modificar el
+audio fuente basta, incluso si mantiene el mismo nombre.
+
 ## 7. Entender el dataset generado
 
 Con `DATASET_OUTPUT=./dataset-real`, el resultado queda así:
@@ -227,7 +242,8 @@ dataset-real/
     ├── complete_dataset.pkl            # tabla completa, incluyendo vectores
     ├── dataset_metadata.csv            # tabla inspeccionable sin vectores
     ├── dataset_manifest.json           # modelos, dimensiones, chunking y ventanas
-    └── process_run.json                # fecha, comando y parámetros efectivos
+    ├── process_run.json                # fecha, comando y parámetros efectivos
+    └── ingestion_state.json            # huellas de fuentes y firma para modo incremental
 ```
 
 Los índices sólo aparecen para modalidades activas. `dataset_manifest.json` es

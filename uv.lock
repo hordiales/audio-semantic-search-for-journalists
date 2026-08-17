@@ -23,6 +23,13 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/dd/d5/51f4ee1bf3b736add42a542d3c8a3fd3fa85f3d36c17972127defc46c26f/a2a_sdk-0.3.26-py3-none-any.whl", hash = "sha256:754e0573f6d33b225c1d8d51f640efa69cbbed7bdfb06ce9c3540ea9f58d4a91", size = 151016, upload-time = "2026-04-09T15:21:12.35Z" },
 ]
 
+[package.optional-dependencies]
+http-server = [
+    { name = "fastapi" },
+    { name = "sse-starlette" },
+    { name = "starlette" },
+]
+
 [[package]]
 name = "absl-py"
 version = "2.5.0"
@@ -184,7 +191,7 @@ name = "audio-semantic-search"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "a2a-sdk" },
+    { name = "a2a-sdk", extra = ["http-server"] },
     { name = "aiohttp" },
     { name = "faiss-cpu" },
     { name = "fastapi" },
@@ -236,7 +243,7 @@ eval = [
 
 [package.metadata]
 requires-dist = [
-    { name = "a2a-sdk", specifier = "~=0.3.22" },
+    { name = "a2a-sdk", extras = ["http-server"], specifier = "~=0.3.22" },
     { name = "aiohttp", specifier = ">=3.13.4" },
     { name = "deepeval", marker = "extra == 'eval-deepeval'", specifier = ">=4.1,<5" },
     { name = "faiss-cpu", specifier = ">=1.7" },
@@ -4006,6 +4013,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6b/86/1392a5593de0cd3d08c2d6c071b877c84358a37f63172c4e9cb71706842d/srsly-2.5.3-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:9ffc97e22730ea97b00f7c303ccc60b1305e786afadb2a4a46578dafa4d29da0", size = 1115876, upload-time = "2026-03-23T11:55:55.624Z" },
     { url = "https://files.pythonhosted.org/packages/d4/a5/6193aa4c08e488821538fcbce2282449e228fd2183ed67d118bb5ccd8b54/srsly-2.5.3-cp311-cp311-win_amd64.whl", hash = "sha256:f09b551f6c3e334652831ac68c770ee4284741ce0a3895bf1ccf2a1178d66cdd", size = 651733, upload-time = "2026-03-23T11:55:56.964Z" },
     { url = "https://files.pythonhosted.org/packages/66/a8/a73181743b6d237026615ca75c3fb3e4780736f1390550a7350d0c7f1149/srsly-2.5.3-cp311-cp311-win_arm64.whl", hash = "sha256:21cf09e417d3e4f3fbf7dd337fd6d948c97abd01896b9b4cb80e81cd9778a73a", size = 639124, upload-time = "2026-03-23T11:55:58.532Z" },
+]
+
+[[package]]
+name = "sse-starlette"
+version = "3.4.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "starlette" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f8/00/b42a44342a054d58cb1115d7c8aa9cb4290dd9442f9c1b91a4b8173dba22/sse_starlette-3.4.8.tar.gz", hash = "sha256:ed89ffbb75cbf78a5fe2f2109cd584792ee7f9dfac96f791db546df8f15f3f9c", size = 32548, upload-time = "2026-08-05T11:19:49.982Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dd/3a/764912c58293d95b6dcdf4cc255f9d10de310580ced547b082eb9d72018c/sse_starlette-3.4.8-py3-none-any.whl", hash = "sha256:6e82314c786709a3cd9520f2285cf9fff90e181e598e8a357b0cf80f66afba0d", size = 16516, upload-time = "2026-08-05T11:19:48.748Z" },
 ]
 
 [[package]]
