@@ -156,14 +156,28 @@ async def run_ragas_evaluation(
     dataset = Dataset.from_list(results)
 
     logger.info("Running RAGAS evaluation...")
-    scores = evaluate(dataset, metrics=metrics)
+    ragas_result = evaluate(dataset, metrics=metrics)
+    score_df = ragas_result.to_pandas()
+
+    metrics_scores = {}
+    for name in metric_names:
+        if name in score_df.columns:
+            values = score_df[name].dropna()
+            if not values.empty:
+                metrics_scores[name] = float(values.mean())
+
+    # Add per-question metric scores back into the raw results for inspection
+    for name in metric_names:
+        if name in score_df.columns:
+            for row, value in zip(results, score_df[name].to_list()):
+                row[name] = None if (isinstance(value, float) and value != value) else value
 
     output = {
         "timestamp": datetime.now(UTC).isoformat(),
         "framework": "ragas",
         "dataset_source": settings.dataset_source,
         "dataset_path": str(eval_dataset_path),
-        "metrics": {k: float(v) for k, v in scores.items() if isinstance(v, (int, float))},
+        "metrics": metrics_scores,
         "metrics_used": metric_names,
         "reference_free": not has_ground_truth,
         "per_question": results,
