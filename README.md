@@ -4,17 +4,17 @@ Sistema de **búsqueda agéntica multimodal** (texto y audio) diseñado para per
 
 ## Stack Tecnológico
 
-| Componente | Tecnología |
+|Componente|Tecnología|
 |---|---|
-| Lenguaje | Python 3.11 |
-| Gestión de dependencias | uv |
-| Transcripción | OpenAI Whisper |
-| Embeddings de texto | Sentence Transformers (all-MiniLM-L6-v2) |
-| Embeddings de audio | CLAP (LAION) |
-| Indexación vectorial | FAISS |
-| Agente | Google ADK + LiteLLM/OpenAI GPT-4o-mini |
-| API REST | FastAPI + Uvicorn |
-| Evaluación | RAGAS o DeepEval + métricas IR custom |
+|Lenguaje|Python 3.11|
+|Gestión de dependencias|uv|
+|Transcripción|OpenAI Whisper|
+|Embeddings de texto|Sentence Transformers (all-MiniLM-L6-v2)|
+|Embeddings de audio|CLAP (LAION)|
+|Indexación vectorial|FAISS|
+|Agente|Google ADK + LiteLLM/OpenAI GPT-4o-mini|
+|API REST|FastAPI + Uvicorn|
+|Evaluación|RAGAS o DeepEval + métricas IR custom|
 
 ## Setup
 
@@ -256,7 +256,7 @@ uv run pytest tests/ -v
 
 ## Estructura del Proyecto
 
-```
+```text
 ├── src/                           # Código fuente
 │   ├── agent_service/             # Agente ADK y tools de retrieval
 │   │   ├── agent.py               # root_agent ADK + Runner compatible

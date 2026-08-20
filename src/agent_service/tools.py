@@ -179,5 +179,17 @@ def obtener_clases_audio(segment_id: int) -> dict:
 
 
 def get_all_tools() -> list:
-    """Return plain Python functions that ADK converts to FunctionTools."""
-    return [buscar_audio, buscar_evento_acustico, obtener_info_segmento, obtener_clases_audio]
+    """Return plain Python functions that ADK converts to FunctionTools.
+
+    Use ``AGENT_MODALITY`` to restrict retrieval for modality ablations:
+    - ``text``  → only the text/transcription search tool.
+    - ``audio`` → only the CLAP cross-modal audio search tool.
+    - ``both`` (default) → all tools.
+    """
+    modality = os.environ.get("AGENT_MODALITY", "both").lower()
+    tools = [obtener_info_segmento, obtener_clases_audio]
+    if modality in ("both", "text"):
+        tools.append(buscar_audio)
+    if modality in ("both", "audio"):
+        tools.append(buscar_evento_acustico)
+    return tools
