@@ -1,0 +1,56 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "copilotkit-proxy/widget/**"
+      - ".github/workflows/deploy-pages.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: copilotkit-proxy/widget/package-lock.json
+      - name: Verify widget runtime URL
+        env:
+          COPILOT_RUNTIME_URL: ${{ vars.COPILOT_RUNTIME_URL }}
+        run: |
+          test -n "$COPILOT_RUNTIME_URL" || { echo "Set the COPILOT_RUNTIME_URL repository variable before deploying Pages."; exit 1; }
+      - name: Build embeddable widget
+        working-directory: copilotkit-proxy/widget
+        env:
+          VITE_COPILOT_RUNTIME_URL: ${{ vars.COPILOT_RUNTIME_URL }}
+        run: |
+          npm ci
+          npm run build:widget
+      - name: Assemble static site
+        run: |
+          mkdir -p _site/widget
+          cp docs/index.html _site/index.html
+          cp docs/patron-ag-ui-a2a-copilotkit.md _site/patron-ag-ui-a2a-copilotkit.md
+          cp -R copilotkit-proxy/widget/dist-widget/. _site/widget/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
