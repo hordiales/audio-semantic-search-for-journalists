@@ -1,10 +1,13 @@
 """CLAP audio embeddings module for cross-modal audio-text search."""
 
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
+
+from src.query_translation import translate_to_english
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +17,12 @@ CLAP_EMBEDDING_DIM = 512
 @dataclass
 class CLAPConfig:
     model_name: str = "laion/clap-htsat-unfused"
-    device: str = "cpu"
+    device: str = field(default_factory=lambda: os.environ.get("CLAP_DEVICE", "cpu"))
     cache_dir: str = "/tmp/clap_cache"
+    # Language of incoming text queries. If not English, the query is translated
+    # to English before CLAP's text encoder, because laion/clap-htsat-unfused
+    # uses a RoBERTa-base text encoder trained on English.
+    query_language: str = field(default_factory=lambda: os.environ.get("QUERY_LANGUAGE", "en"))
 
 
 class CLAPEmbedding:
@@ -36,7 +43,7 @@ class CLAPEmbedding:
         import laion_clap
 
         logger.info("Loading CLAP model: %s (device: %s)", self.config.model_name, self.config.device)
-        self._model = laion_clap.CLAP_Module(enable_fusion=False)
+        self._model = laion_clap.CLAP_Module(enable_fusion=False, device=self.config.device)
         self._model.load_ckpt()
         logger.info("CLAP model loaded successfully")
 
@@ -71,18 +78,52 @@ class CLAPEmbedding:
         """
         Genera embedding de texto en espacio CLAP (512-dim, normalizado).
 
+        If ``self.config.query_language`` is not English, the query is first
+        translated to English, because the underlying text encoder
+        (RoBERTa-base) was trained on English.
+
         Args:
             text: Text query for cross-modal search
 
         Returns:
             Normalized numpy array of shape (512,)
         """
+        text = translate_to_english(text, self.config.query_language)
         embedding = self.model.get_text_embedding([text], use_tensor=False)
         embedding = embedding[0]
         norm = np.linalg.norm(embedding)
         if norm > 0:
             embedding = embedding / norm
         return embedding.astype(np.float32)
+
+    def generate_text_embeddings_batch(
+        self, texts: list[str], batch_size: int | None = None
+    ) -> np.ndarray:
+        """Generate normalized text embeddings for a batch of queries.
+
+        Args:
+            texts: List of text queries.
+            batch_size: Optional chunk size to avoid CPU/RAM spikes with very
+                large lists. Defaults to processing all at once.
+
+        Returns:
+            Normalized numpy array of shape (len(texts), 512).
+        """
+        translated = [translate_to_english(t, self.config.query_language) for t in texts]
+        if batch_size is None:
+            embeddings = self.model.get_text_embedding(translated, use_tensor=False)
+        else:
+            chunks = [
+                translated[i : i + batch_size]
+                for i in range(0, len(translated), batch_size)
+            ]
+            embeddings = np.concatenate(
+                [self.model.get_text_embedding(chunk, use_tensor=False) for chunk in chunks]
+            )
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        embeddings = embeddings / norms
+        return embeddings.astype(np.float32)
 
     def generate_batch_audio_embeddings(
         self, audio_paths: list[str], batch_size: int = 8

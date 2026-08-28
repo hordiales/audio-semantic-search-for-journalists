@@ -141,6 +141,24 @@ curl http://localhost:8000/health
 
 ## Evaluación
 
+### Validar CLAP contra Clotho (sanity check de implementación)
+
+Antes de sacar conclusiones sobre CLAP en el corpus propio, conviene descartar
+un bug de integración corriéndolo contra el banco de pruebas público en el que
+fue entrenado. Ver la guía completa en
+[docs/evaluar-clap-clotho.md](docs/evaluar-clap-clotho.md).
+
+```bash
+uv run python -m benchmarks.evaluate_clap_clotho \
+    --audio-dir data/clotho/evaluation \
+    --captions-csv data/clotho/clotho_captions_evaluation.csv \
+    --output evaluation/results/clap_clotho_eval.json \
+    --cache evaluation/results/.clap_clotho_audio_embeddings.npy
+```
+
+Un buen resultado acá descarta un bug de implementación; no valida que CLAP
+funcione en audio periodístico en español, que es un dominio distinto.
+
 ### Comparativa: esquema actual vs. Gemini Embedding 2
 
 El benchmark no modifica el servicio de producción. Evalúa por separado `minilm_text`
@@ -164,6 +182,32 @@ uv run python -m evaluation.retrieval_evaluation \
     --dataset-path ./dataset \
     --output evaluation/results/retrieval_results.json
 ```
+
+### Generar un dataset balanceado conceptual/acústico
+
+Para estudiar si CLAP mejora cuando las preguntas sí mencionan eventos sonoros,
+se puede generar un dataset pareado: una pregunta de contenido y una acústica
+por segmento. Ver `docs/reporte-comparativo-texto-clap.md` §5.3 para los
+resultados de este experimento.
+
+```bash
+# Generar en español (idioma por defecto del proyecto)
+uv run python -m evaluation.generate_balanced_questions \
+    --max-segments 10 \
+    --output evaluation/test_datasets/synthetic/balanced_journalistic_questions_es.json
+
+# Evaluar CLAP sobre ese dataset
+uv run python -m benchmarks.compare_clap_by_question_type \
+    --dataset-path ./dataset \
+    --questions evaluation/test_datasets/synthetic/balanced_journalistic_questions_es.json \
+    --output evaluation/results/clap_retrieval_by_question_type_es.json
+```
+
+> Nota: el text encoder de CLAP (`laion/clap-htsat-unfused`) está entrenado en
+> inglés. Si `QUERY_LANGUAGE` en `.env` no es inglés, el sistema traduce
+> automáticamente la query al inglés antes de generar el embedding de CLAP.
+> Para medir el límite del modelo sin la barrera del idioma, también podés
+> generar el dataset balanceado en inglés (`--language en`).
 
 ### Datasets de evaluación
 

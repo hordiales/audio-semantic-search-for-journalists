@@ -7,6 +7,7 @@ from pathlib import Path
 from google.adk.tools import ToolContext
 
 from src.agent_service.search_engine import AudioSearchEngine
+from src.dataset_storage import resolve_dataset_path
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ def initialize_search_engine(dataset_path: str | None = None) -> AudioSearchEngi
     """Initialize the search engine once from the configured processed dataset."""
     global _search_engine
     if _search_engine is None:
-        configured_path = dataset_path or os.getenv("DATASET_PATH", "./dataset")
+        configured_path = resolve_dataset_path(dataset_path)
         _search_engine = AudioSearchEngine(configured_path)
         logger.info("Search engine initialized from %s", Path(configured_path))
     return _search_engine
