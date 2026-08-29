@@ -25,12 +25,14 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: copilotkit-proxy/widget/package-lock.json
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
       - name: Verify widget runtime URL
         env:
           COPILOT_RUNTIME_URL: ${{ vars.COPILOT_RUNTIME_URL }}
@@ -49,8 +51,8 @@ jobs:
           cp docs/index.html _site/index.html
           cp docs/patron-ag-ui-a2a-copilotkit.md _site/patron-ag-ui-a2a-copilotkit.md
           cp -R copilotkit-proxy/widget/dist-widget/. _site/widget/
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
