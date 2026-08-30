@@ -1,14 +1,26 @@
 import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { search } from "./api";
-import type { IndexResults, IndexSelection, SearchIndex, SearchPlan, SearchResponse, SearchResult } from "./types";
+import type { IndexResults, SearchIndex, SearchPlan, SearchResponse, SearchResult } from "./types";
 
-const INDEXES: SearchIndex[] = ["text", "audio"];
-const labels: Record<SearchIndex, string> = { text: "Índice de texto", audio: "Índice de audio (CLAP)" };
-const labelShort: Record<SearchIndex, string> = { text: "Texto", audio: "Audio" };
+const labels: Record<SearchIndex, string> = {
+  text: "Índice de texto",
+  audio: "Índice de audio (CLAP)",
+  yamnet: "Clases de audio (YAMNet)",
+};
+const resultSourceLabels: Record<SearchIndex, string> = {
+  text: "Texto / transcripciones",
+  audio: "Audio / CLAP",
+  yamnet: "Etiquetas YAMNet / AudioSet",
+};
 
 const initialUrl = new URLSearchParams(window.location.search);
-const initialIndex = (initialUrl.get("idx") ?? "both") as IndexSelection;
-const selectedFrom = (selection: IndexSelection): SearchIndex[] => selection === "both" ? INDEXES : [selection];
+const legacyIndex = initialUrl.get("idx");
+const initialIncludeClap = initialUrl.has("clap")
+  ? initialUrl.get("clap") === "1"
+  : legacyIndex === "audio" || legacyIndex === "both" || legacyIndex === "all";
+const initialIncludeYamnet = initialUrl.has("yamnet")
+  ? initialUrl.get("yamnet") === "1"
+  : legacyIndex === "yamnet" || legacyIndex === "all";
 const asTime = (seconds: number): string => {
   const minutes = Math.floor(seconds / 60);
   const rest = Math.floor(seconds % 60);
@@ -17,7 +29,11 @@ const asTime = (seconds: number): string => {
 const resultKey = (index: SearchIndex, result: SearchResult) => `${index}-${result.segment_id}-${result.rank}`;
 
 function weakThreshold(index: SearchIndex): number | undefined {
-  const source = index === "text" ? import.meta.env.VITE_WEAK_TEXT_SIMILARITY : import.meta.env.VITE_WEAK_AUDIO_SIMILARITY;
+  const source = index === "text"
+    ? import.meta.env.VITE_WEAK_TEXT_SIMILARITY
+    : index === "audio"
+      ? import.meta.env.VITE_WEAK_AUDIO_SIMILARITY
+      : import.meta.env.VITE_WEAK_YAMNET_SCORE;
   const value = Number(source);
   return Number.isFinite(value) && source !== undefined ? value : undefined;
 }
@@ -26,7 +42,8 @@ interface PlayerCommand { play: () => void; focus: () => void }
 
 export default function App() {
   const [query, setQuery] = useState(initialUrl.get("q") ?? "");
-  const [selection, setSelection] = useState<IndexSelection>(INDEXES.includes(initialIndex as SearchIndex) ? initialIndex : "both");
+  const [includeClap, setIncludeClap] = useState(initialIncludeClap);
+  const [includeYamnet, setIncludeYamnet] = useState(initialIncludeYamnet);
   const [k, setK] = useState(Number(initialUrl.get("k")) || 10);
   const [rewrite, setRewrite] = useState(true);
   const [response, setResponse] = useState<SearchResponse | null>(null);
@@ -43,7 +60,14 @@ export default function App() {
   const [queue, setQueue] = useState<string[] | null>(null);
   const controller = useRef<AbortController | null>(null);
 
-  const selectedIndexes = selectedFrom(selection);
+  const selectedIndexes = useMemo<SearchIndex[]>(
+    () => [
+      "text",
+      ...(includeClap ? ["audio" as const] : []),
+      ...(includeYamnet ? ["yamnet" as const] : []),
+    ],
+    [includeClap, includeYamnet],
+  );
   const allResults = useMemo(() => selectedIndexes.flatMap(index =>
     (response?.indexes[index]?.results ?? []).map(result => ({ index, result })),
   ), [response, selectedIndexes]);
@@ -53,10 +77,12 @@ export default function App() {
   useEffect(() => {
     const url = new URL(window.location.href);
     if (query.trim()) url.searchParams.set("q", query.trim()); else url.searchParams.delete("q");
-    url.searchParams.set("idx", selection);
+    url.searchParams.delete("idx");
+    if (includeClap) url.searchParams.set("clap", "1"); else url.searchParams.delete("clap");
+    if (includeYamnet) url.searchParams.set("yamnet", "1"); else url.searchParams.delete("yamnet");
     url.searchParams.set("k", String(k));
     window.history.replaceState(null, "", url);
-  }, [query, selection, k]);
+  }, [query, includeClap, includeYamnet, k]);
 
   const performSearch = useCallback(async (plan?: SearchPlan) => {
     const cleanedQuery = query.trim();
@@ -71,7 +97,7 @@ export default function App() {
     setError(null);
     setQueue(null);
     try {
-      const result = await search({ query: cleanedQuery, indexes: selectedIndexes, k, rewrite, plan }, nextController.signal);
+      const result = await search({ query: cleanedQuery, include_clap: includeClap, include_yamnet: includeYamnet, k, rewrite, plan }, nextController.signal);
       setResponse(result);
       setDraftPlan(result.plan);
       setEditingPlan(false);
@@ -80,9 +106,16 @@ export default function App() {
     } finally {
       if (controller.current === nextController) setLoading(false);
     }
-  }, [k, query, rewrite, selectedIndexes]);
+  }, [includeClap, includeYamnet, k, query, rewrite]);
 
   const onSubmit = (event: FormEvent) => { event.preventDefault(); void performSearch(); };
+  const changeSourceInclusion = (source: "clap" | "yamnet", enabled: boolean) => {
+    if (source === "clap") setIncludeClap(enabled); else setIncludeYamnet(enabled);
+    setResponse(null);
+    setDraftPlan(null);
+    setEditingPlan(false);
+    setQueue(null);
+  };
 
   useEffect(() => {
     if (!response) return;
@@ -170,15 +203,14 @@ export default function App() {
             <button className="primary" type="submit" disabled={loading}>{loading ? "Buscando…" : "Buscar"}</button>
           </div>
           <div className="controls-row">
-            <fieldset className="index-picker">
-              <legend>{rewrite ? "Índices habilitados para IA" : "Índice"}</legend>
-              {(["both", "text", "audio"] as IndexSelection[]).map(option => (
-                <label key={option}>
-                  <input type="radio" checked={selection === option} onChange={() => setSelection(option)} />
-                  {option === "both" ? "Ambos" : labelShort[option]}
-                </label>
-              ))}
-            </fieldset>
+            <label className={`source-toggle ${includeClap ? "active" : ""}`}>
+              <input type="checkbox" checked={includeClap} onChange={event => changeSourceInclusion("clap", event.target.checked)} />
+              <span><strong>Incluir índice CLAP</strong><small>Busca sonidos por similitud texto→audio. Desactivado por defecto.</small></span>
+            </label>
+            <label className={`source-toggle ${includeYamnet ? "active" : ""}`}>
+              <input type="checkbox" checked={includeYamnet} onChange={event => changeSourceInclusion("yamnet", event.target.checked)} />
+              <span><strong>Incluir clases YAMNet</strong><small>Filtra por etiquetas AudioSet y score del clasificador. Desactivado por defecto.</small></span>
+            </label>
             <label className="toggle"><input type="checkbox" checked={rewrite} onChange={event => setRewrite(event.target.checked)} /> Reformular con IA</label>
             <label className="k-picker">Resultados
               <select value={k} onChange={event => setK(Number(event.target.value))}>{[5, 10, 20, 50].map(value => <option key={value} value={value}>{value}</option>)}</select>
@@ -189,7 +221,7 @@ export default function App() {
 
       {response && <PlanPanel plan={draftPlan ?? response.plan} editing={editingPlan} onEdit={() => setEditingPlan(true)} onChange={setDraftPlan} onCancel={() => { setDraftPlan(response.plan); setEditingPlan(false); }} onSave={savePlan} />}
       {error && <p className="notice error" role="alert">{error}</p>}
-      {loading && <p className="notice">Preparando la búsqueda. La primera consulta CLAP puede demorar mientras se carga el modelo.</p>}
+      {loading && <p className="notice">{includeClap || includeYamnet ? `Buscando en ${selectedIndexes.map(index => labels[index]).join(", ")}.${includeClap ? " La primera consulta CLAP puede demorar mientras se carga el modelo." : ""}` : "Buscando en las transcripciones."}</p>}
 
       {response && <>
         <div className="result-toolbar">
@@ -211,12 +243,15 @@ function PlanPanel({ plan, editing, onEdit, onChange, onCancel, onSave }: { plan
     <div><p className="eyebrow">Plan efectivo</p><p className="plan-hint">Este plan se puede copiar o reenviar para repetir el retrieval sin síntesis intermedia.</p></div>
     {editing ? <div className="plan-editor">
       {plan.indexes.includes("text") && <label>Query de texto<input value={plan.text_query ?? ""} onChange={event => onChange({ ...plan, text_query: event.target.value })} /></label>}
-      {plan.indexes.includes("audio") && <><label>Descripción acústica<input value={plan.audio_query ?? ""} onChange={event => onChange({ ...plan, audio_query: event.target.value })} /></label><label>Query CLAP en inglés<input value={plan.audio_query_en ?? ""} onChange={event => onChange({ ...plan, audio_query_en: event.target.value })} /></label></>}
+      {plan.indexes.includes("audio") && <><label>Descripción acústica<input value={plan.audio_query ?? ""} onChange={event => onChange({ ...plan, audio_query: event.target.value, audio_query_en: undefined })} /></label>{plan.audio_query_en && <p className="translated-plan">Traducción inglesa fijada para repetir este plan: “{plan.audio_query_en}”. Al editar la descripción, el servicio generará una nueva.</p>}</>}
+      {plan.indexes.includes("yamnet") && <><label>Clases acústicas YAMNet<input value={plan.yamnet_query ?? ""} onChange={event => onChange({ ...plan, yamnet_query: event.target.value, yamnet_query_en: undefined })} /></label>{plan.yamnet_query_en && <p className="translated-plan">Query inglesa de clases fijada para repetir este plan: “{plan.yamnet_query_en}”. Al editarla, el servicio generará una nueva.</p>}</>}
       <div className="inline-actions"><button className="primary" onClick={onSave}>Aplicar plan</button><button className="quiet" onClick={onCancel}>Cancelar</button></div>
     </div> : <div className="plan-summary">
       {plan.text_query && <span><b>Texto</b> “{plan.text_query}”</span>}
       {plan.audio_query && <span><b>Audio</b> “{plan.audio_query}”</span>}
       {plan.audio_query_en && <span className="translation">CLAP buscó en inglés: “{plan.audio_query_en}”</span>}
+      {plan.yamnet_query && <span><b>YAMNet</b> “{plan.yamnet_query}”</span>}
+      {plan.yamnet_query_en && <span className="translation">YAMNet buscó clases en inglés: “{plan.yamnet_query_en}”</span>}
       {plan.rationale && <span className="rationale">{plan.rationale}</span>}
       <button className="quiet" onClick={() => void copyPlan()}>Copiar plan</button><button className="quiet" onClick={onEdit}>Editar plan</button>
     </div>}
@@ -241,7 +276,7 @@ function ResultColumn({ index, bucket, fileFilter, fromTime, toTime, focusedKey,
   const topSimilarity = results[0]?.similarity ?? 0;
   const threshold = weakThreshold(index);
   return <section className="result-column">
-    <header><p className="eyebrow">{labels[index]}</p><h2>{results.length} resultado{results.length === 1 ? "" : "s"}</h2>{bucket?.effective_query && <p className="effective-query">Query: “{bucket.effective_query}”</p>}{index === "audio" && bucket?.translated_query && <p className="effective-query">En inglés: “{bucket.translated_query}”</p>}</header>
+    <header><p className="eyebrow">{labels[index]}</p><h2>{results.length} resultado{results.length === 1 ? "" : "s"}</h2>{bucket?.effective_query && <p className="effective-query">Query: “{bucket.effective_query}”</p>}{index !== "text" && bucket?.translated_query && <p className="effective-query">En inglés: “{bucket.translated_query}”</p>}</header>
     {!bucket ? <p className="empty">No se recibió una respuesta para este índice.</p> : !bucket.available ? <p className="notice">Índice no disponible en este dataset.{bucket.error ? ` ${bucket.error}` : ""}</p> : bucket.error ? <p className="notice error">{bucket.error}</p> : threshold !== undefined && results[0] && results[0].similarity < threshold ? <p className="notice">Coincidencias débiles: probablemente no haya buenos ejemplos en el corpus.</p> : null}
     {bucket?.available && !bucket.error && results.length === 0 && <p className="empty">No hay resultados que coincidan con estos filtros.</p>}
     <div className="cards">{results.map(result => <ResultCard key={resultKey(index, result)} result={result} index={index} topSimilarity={topSimilarity} focused={focusedKey === resultKey(index, result)} onFocus={() => setFocusedKey(resultKey(index, result))} requestPlay={requestPlay} registerPlayer={registerPlayer} onPlayerFinished={onPlayerFinished} />)}</div>
@@ -252,14 +287,18 @@ function ResultCard({ result, index, topSimilarity, focused, onFocus, requestPla
   const key = resultKey(index, result);
   const citation = `${result.original_file_name} · ${asTime(result.start_time)}–${asTime(result.end_time)} · segment_id ${result.segment_id} · índice ${result.search_index_label ?? labels[index]}`;
   const normalized = topSimilarity > 0 ? Math.max(0, Math.min(100, (result.similarity / topSimilarity) * 100)) : 0;
+  const scoreHelp = index === "yamnet"
+    ? "Score de ranking: cobertura de términos AudioSet × confianza media de las clases YAMNet coincidentes."
+    : "Similitud coseno. Los valores de CLAP y de texto no son comparables entre sí.";
   const copyCitation = async () => { await navigator.clipboard?.writeText(citation); };
   return <article className={`result-card${focused ? " is-focused" : ""}`} tabIndex={0} onFocus={onFocus}>
-    <div className="card-top"><span className="rank">#{result.rank}</span><div className="score" title="Similitud coseno. Los valores de CLAP y de texto no son comparables entre sí."><span><i style={{ width: `${normalized}%` }} /></span><small>{result.similarity.toFixed(3)}</small></div></div>
+    <div className="card-top"><span className={`source-badge source-${index}`} title="Origen del resultado">{resultSourceLabels[index]}</span><span className="rank">#{result.rank}</span><div className="score" title={scoreHelp}><span><i style={{ width: `${normalized}%` }} /></span><small>{result.similarity.toFixed(3)}</small></div></div>
     <h3 title={result.original_file_name}>{result.original_file_name}</h3>
     <p className="timestamp">{asTime(result.start_time)} → {asTime(result.end_time)} <span>({Math.round(result.duration ?? result.end_time - result.start_time)} s)</span></p>
     {result.clip_url ? <AudioPlayer id={key} result={result} preload={result.rank === 1} requestPlay={requestPlay} registerPlayer={registerPlayer} onFinished={() => onPlayerFinished(key)} /> : <p className="missing-audio">Clip no disponible para este segmento.</p>}
     <p className="transcript">“{result.text || "Sin transcripción disponible."}”</p>
-    {index === "audio" && result.yamnet_top_classes?.length ? <p className="yamnet"><b>AudioSet</b> {result.yamnet_top_classes.slice(0, 3).map(item => `${item.label ?? item.class_name ?? "event"} ${item.score.toFixed(2)}`).join(" · ")}</p> : null}
+    {(index === "audio" || index === "yamnet") && result.yamnet_audio_classes?.length ? <p className="yamnet"><b>AudioSet</b> {result.yamnet_audio_classes.slice(0, 3).map(item => `${item.label ?? item.class_name ?? "event"} ${item.score.toFixed(2)}`).join(" · ")}</p> : null}
+    {index === "yamnet" && result.yamnet_matched_classes?.length ? <p className="yamnet matched"><b>Coincidencias</b> {result.yamnet_matched_classes.map(item => `${item.label ?? item.class_name ?? "event"} ${item.score.toFixed(2)}`).join(" · ")}</p> : null}
     <div className="card-actions"><button className="quiet" onClick={() => void copyCitation()}>Copiar cita</button>{result.clip_url && <a className="quiet" href={result.clip_url} download={`segment_${result.segment_id}.opus`}>Descargar</a>}<span title={citation}>ID {result.segment_id}</span></div>
   </article>;
 }
