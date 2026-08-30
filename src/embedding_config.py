@@ -59,7 +59,9 @@ def embedding_config_from_env(env: Mapping[str, str] | None = None) -> Embedding
     )
 
 
-def write_embedding_config_from_env(path: str | Path, env: Mapping[str, str] | None = None) -> EmbeddingConfig:
+def write_embedding_config_from_env(
+    path: str | Path, env: Mapping[str, str] | None = None
+) -> EmbeddingConfig:
     """Generate the TOML artifact consumed by ingestion from the environment."""
     config = embedding_config_from_env(env)
     config_path = Path(path)

@@ -42,7 +42,9 @@ class CLAPEmbedding:
         """Lazy-load the CLAP model."""
         import laion_clap
 
-        logger.info("Loading CLAP model: %s (device: %s)", self.config.model_name, self.config.device)
+        logger.info(
+            "Loading CLAP model: %s (device: %s)", self.config.model_name, self.config.device
+        )
         self._model = laion_clap.CLAP_Module(enable_fusion=False, device=self.config.device)
         self._model.load_ckpt()
         logger.info("CLAP model loaded successfully")
@@ -113,10 +115,7 @@ class CLAPEmbedding:
         if batch_size is None:
             embeddings = self.model.get_text_embedding(translated, use_tensor=False)
         else:
-            chunks = [
-                translated[i : i + batch_size]
-                for i in range(0, len(translated), batch_size)
-            ]
+            chunks = [translated[i : i + batch_size] for i in range(0, len(translated), batch_size)]
             embeddings = np.concatenate(
                 [self.model.get_text_embedding(chunk, use_tensor=False) for chunk in chunks]
             )
@@ -148,9 +147,7 @@ class CLAPEmbedding:
                 (len(audio_paths) + batch_size - 1) // batch_size,
                 len(batch),
             )
-            embeddings = self.model.get_audio_embedding_from_filelist(
-                batch, use_tensor=False
-            )
+            embeddings = self.model.get_audio_embedding_from_filelist(batch, use_tensor=False)
             norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
             norms[norms == 0] = 1.0
             embeddings = embeddings / norms

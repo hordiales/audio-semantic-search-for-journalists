@@ -110,9 +110,7 @@ export function effectivePlan(request: DirectSearchRequest): SearchPlan {
     text_query: request.indexes.includes("text") ? request.query : undefined,
     audio_query: request.indexes.includes("audio") ? request.query : undefined,
     audio_query_en: request.indexes.includes("audio") ? request.query : undefined,
-    rationale: request.rewrite
-      ? "Reformulación no disponible: se ejecutó una búsqueda literal reproducible."
-      : "Búsqueda literal.",
+    rationale: "Búsqueda literal.",
   };
 }
 

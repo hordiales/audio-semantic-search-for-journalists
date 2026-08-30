@@ -4,7 +4,7 @@ import argparse
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -112,32 +112,27 @@ def evaluate_retrieval(
         metrics = compute_retrieval_metrics(ranked_ids, relevant_ids, k_values)
         all_metrics.append(metrics)
 
-        per_query_results.append({
-            "query_id": q["query_id"],
-            "query_text": q["query_text"],
-            "category": q.get("category", "unknown"),
-            "metrics": {
-                "precision_at": metrics.precision_at,
-                "recall_at": metrics.recall_at,
-                "mrr": metrics.mrr,
-                "ndcg_at": metrics.ndcg_at,
-            },
-        })
+        per_query_results.append(
+            {
+                "query_id": q["query_id"],
+                "query_text": q["query_text"],
+                "category": q.get("category", "unknown"),
+                "metrics": {
+                    "precision_at": metrics.precision_at,
+                    "recall_at": metrics.recall_at,
+                    "mrr": metrics.mrr,
+                    "ndcg_at": metrics.ndcg_at,
+                },
+            }
+        )
 
     aggregated = {
         "precision_at": {
-            k: float(np.mean([m.precision_at[k] for m in all_metrics]))
-            for k in k_values
+            k: float(np.mean([m.precision_at[k] for m in all_metrics])) for k in k_values
         },
-        "recall_at": {
-            k: float(np.mean([m.recall_at[k] for m in all_metrics]))
-            for k in k_values
-        },
+        "recall_at": {k: float(np.mean([m.recall_at[k] for m in all_metrics])) for k in k_values},
         "mrr": float(np.mean([m.mrr for m in all_metrics])),
-        "ndcg_at": {
-            k: float(np.mean([m.ndcg_at[k] for m in all_metrics]))
-            for k in k_values
-        },
+        "ndcg_at": {k: float(np.mean([m.ndcg_at[k] for m in all_metrics])) for k in k_values},
     }
 
     # By category
@@ -156,7 +151,7 @@ def evaluate_retrieval(
         }
 
     return {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "aggregated": aggregated,
         "by_category": category_aggregated,
         "per_query": per_query_results,
@@ -187,9 +182,9 @@ def main():
     output_path.write_text(json.dumps(results, indent=2, ensure_ascii=False))
     logger.info("Results saved to %s", args.output)
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print("RETRIEVAL EVALUATION RESULTS")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     print(f"Queries: {results['config']['total_queries']}")
     print(f"MRR: {results['aggregated']['mrr']:.4f}")
     for k in results["config"]["k_values"]:

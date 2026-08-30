@@ -42,7 +42,9 @@ class SentimentAnalyzer:
         """Fallback using transformers pipeline."""
         from transformers import pipeline
 
-        logger.info("Loading fallback sentiment model: cardiffnlp/twitter-roberta-base-sentiment-latest")
+        logger.info(
+            "Loading fallback sentiment model: cardiffnlp/twitter-roberta-base-sentiment-latest"
+        )
         return pipeline(
             "sentiment-analysis",
             model="cardiffnlp/twitter-roberta-base-sentiment-latest",
@@ -52,9 +54,7 @@ class SentimentAnalyzer:
     def analyze(self, text: str) -> SentimentResult:
         """Analiza sentimiento de un texto."""
         if not text or not text.strip():
-            return SentimentResult(
-                positive=0.0, negative=0.0, neutral=1.0, dominant="neutral"
-            )
+            return SentimentResult(positive=0.0, negative=0.0, neutral=1.0, dominant="neutral")
 
         try:
             result = self.analyzer.predict(text)

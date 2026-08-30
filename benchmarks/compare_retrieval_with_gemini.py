@@ -44,7 +44,9 @@ def build_gemini_audio_index(
                 f"No audio windows found for segment {row['segment_id']} in {audio_segments_dir}. "
                 "Re-run the ingestion pipeline with timestamp-aligned audio windows."
             )
-        embeddings.append(_pool_embeddings([embedder.generate_audio_embedding(path) for path in paths]))
+        embeddings.append(
+            _pool_embeddings([embedder.generate_audio_embedding(path) for path in paths])
+        )
 
     vectors = np.asarray(embeddings, dtype=np.float32)
     index = faiss.IndexFlatIP(vectors.shape[1])
@@ -54,14 +56,22 @@ def build_gemini_audio_index(
 
 def _aggregate(entries: list[dict], k_values: list[int]) -> dict:
     return {
-        "precision_at": {k: float(np.mean([x["metrics"].precision_at[k] for x in entries])) for k in k_values},
-        "recall_at": {k: float(np.mean([x["metrics"].recall_at[k] for x in entries])) for k in k_values},
+        "precision_at": {
+            k: float(np.mean([x["metrics"].precision_at[k] for x in entries])) for k in k_values
+        },
+        "recall_at": {
+            k: float(np.mean([x["metrics"].recall_at[k] for x in entries])) for k in k_values
+        },
         "mrr": float(np.mean([x["metrics"].mrr for x in entries])),
-        "ndcg_at": {k: float(np.mean([x["metrics"].ndcg_at[k] for x in entries])) for k in k_values},
+        "ndcg_at": {
+            k: float(np.mean([x["metrics"].ndcg_at[k] for x in entries])) for k in k_values
+        },
     }
 
 
-def compare_retrieval(dataset_path: str, queries_path: str, output_dimensionality: int = 1536, max_k: int = 10) -> dict:
+def compare_retrieval(
+    dataset_path: str, queries_path: str, output_dimensionality: int = 1536, max_k: int = 10
+) -> dict:
     """Evaluate MiniLM text, CLAP audio, and Gemini native-audio rankings fairly."""
     dataset = Path(dataset_path)
     dataframe = pd.read_pickle(dataset / "final" / "complete_dataset.pkl")
@@ -71,26 +81,67 @@ def compare_retrieval(dataset_path: str, queries_path: str, output_dimensionalit
         raise ValueError("The comparison requires queries with relevant_segment_ids annotations")
 
     current = AudioSearchEngine(str(dataset))
-    gemini = GeminiMultimodalEmbedding(GeminiEmbeddingConfig(output_dimensionality=output_dimensionality))
+    gemini = GeminiMultimodalEmbedding(
+        GeminiEmbeddingConfig(output_dimensionality=output_dimensionality)
+    )
     gemini_index = build_gemini_audio_index(dataframe, dataset / "audio_segments", gemini)
     k_values = [1, 5, 10]
     per_system: dict[str, list[dict]] = defaultdict(list)
     for query in labeled_queries:
         text = query["query_text"]
         rankings = {
-            "minilm_text": [x["segment"]["segment_id"] for x in current.search_semantic(text, k=max_k)],
-            "clap_audio": [x["segment"]["segment_id"] for x in current.search_audio_by_text(text, k=max_k)],
+            "minilm_text": [
+                x["segment"]["segment_id"] for x in current.search_semantic(text, k=max_k)
+            ],
+            "clap_audio": [
+                x["segment"]["segment_id"] for x in current.search_audio_by_text(text, k=max_k)
+            ],
         }
-        _, indices = gemini_index.search(gemini.generate_query_embedding(text).reshape(1, -1), min(max_k, gemini_index.ntotal))
-        rankings["gemini_embedding_2_audio"] = [int(dataframe.iloc[i]["segment_id"]) for i in indices[0] if i >= 0]
+        _, indices = gemini_index.search(
+            gemini.generate_query_embedding(text).reshape(1, -1), min(max_k, gemini_index.ntotal)
+        )
+        rankings["gemini_embedding_2_audio"] = [
+            int(dataframe.iloc[i]["segment_id"]) for i in indices[0] if i >= 0
+        ]
         relevant = set(query["relevant_segment_ids"])
         for system, ranking in rankings.items():
-            per_system[system].append({"query_id": query["query_id"], "query_text": text, "category": query.get("category", "unknown"), "ranked_segment_ids": ranking, "metrics": compute_retrieval_metrics(ranking, relevant, k_values)})
+            per_system[system].append(
+                {
+                    "query_id": query["query_id"],
+                    "query_text": text,
+                    "category": query.get("category", "unknown"),
+                    "ranked_segment_ids": ranking,
+                    "metrics": compute_retrieval_metrics(ranking, relevant, k_values),
+                }
+            )
 
     systems = {}
     for system, entries in per_system.items():
-        systems[system] = {"aggregated": _aggregate(entries, k_values), "per_query": [{**{key: value for key, value in entry.items() if key != "metrics"}, "metrics": {"precision_at": entry["metrics"].precision_at, "recall_at": entry["metrics"].recall_at, "mrr": entry["metrics"].mrr, "ndcg_at": entry["metrics"].ndcg_at}} for entry in entries]}
-    return {"created_at": datetime.now(UTC).isoformat(), "configuration": {"gemini_model": "gemini-embedding-2", "gemini_output_dimensionality": output_dimensionality, "max_k": max_k, "evaluated_queries": len(labeled_queries)}, "systems": systems}
+        systems[system] = {
+            "aggregated": _aggregate(entries, k_values),
+            "per_query": [
+                {
+                    **{key: value for key, value in entry.items() if key != "metrics"},
+                    "metrics": {
+                        "precision_at": entry["metrics"].precision_at,
+                        "recall_at": entry["metrics"].recall_at,
+                        "mrr": entry["metrics"].mrr,
+                        "ndcg_at": entry["metrics"].ndcg_at,
+                    },
+                }
+                for entry in entries
+            ],
+        }
+    return {
+        "created_at": datetime.now(UTC).isoformat(),
+        "configuration": {
+            "gemini_model": "gemini-embedding-2",
+            "gemini_output_dimensionality": output_dimensionality,
+            "max_k": max_k,
+            "evaluated_queries": len(labeled_queries),
+        },
+        "systems": systems,
+    }
 
 
 def main() -> None:

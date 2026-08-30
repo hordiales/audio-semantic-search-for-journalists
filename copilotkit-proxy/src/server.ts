@@ -18,7 +18,6 @@ if (!agentUrl) throw new Error("A2A_AGENT_URL environment variable is required")
 const configuredAgentUrl: string = agentUrl;
 const searchServiceUrl = process.env.SEARCH_SERVICE_URL?.trim().replace(/\/$/, "");
 const searchService = searchServiceUrl ? new SearchServiceClient(searchServiceUrl) : undefined;
-const searchPlanner = new A2ASearchPlanner(configuredAgentUrl);
 
 const agentCardPath = "/.well-known/agent-card.json";
 const legacyAgentCardPath = "/.well-known/agent.json";
@@ -127,10 +126,14 @@ class AudioSearchA2AAgent extends AbstractAgent {
 }
 
 installAgentRuntimeAuth();
+// A2AClient obtains and caches the agent card when it is constructed. Install
+// IAM authentication first so the planner's initial card request is authorized.
+const searchPlanner = new A2ASearchPlanner(configuredAgentUrl);
 const runtime = new CopilotRuntime({ agents: { default: new AudioSearchA2AAgent({ description: "A2A bridge to the audio-search-journalists agent." }) } });
 const app = express();
 const origins = (process.env.ALLOWED_ORIGINS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
 const corsOptions = { origin: origins.length === 0 ? false : origins, methods: ["GET", "POST"] };
+app.set("trust proxy", 1);
 app.use(cors(corsOptions));
 app.use(rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false }));
 app.use(express.json({ limit: "32kb" }));
@@ -147,8 +150,8 @@ async function resolveSearchPlan(request: DirectSearchRequest): Promise<SearchPl
   try {
     return await searchPlanner.rewrite(request);
   } catch (error) {
-    console.warn("A2A search-plan rewrite failed; using literal query.", error);
-    return undefined;
+    console.error("A2A search-plan rewrite failed.", error);
+    throw new Error("No se pudo reformular la consulta con el agente. Intentá nuevamente.");
   }
 }
 

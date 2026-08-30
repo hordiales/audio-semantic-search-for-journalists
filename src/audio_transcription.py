@@ -66,14 +66,17 @@ class ChunkingProcessor:
                 chunks.extend(self._paragraph_chunks(ordered))
 
         return [
-            TranscriptionSegment(segment_id=index, **{
-                "text": chunk.text,
-                "start_time": chunk.start_time,
-                "end_time": chunk.end_time,
-                "language": chunk.language,
-                "confidence": chunk.confidence,
-                "original_file_name": chunk.original_file_name,
-            })
+            TranscriptionSegment(
+                segment_id=index,
+                **{
+                    "text": chunk.text,
+                    "start_time": chunk.start_time,
+                    "end_time": chunk.end_time,
+                    "language": chunk.language,
+                    "confidence": chunk.confidence,
+                    "original_file_name": chunk.original_file_name,
+                },
+            )
             for index, chunk in enumerate(chunks)
         ]
 
@@ -86,7 +89,11 @@ class ChunkingProcessor:
         step = self.config.duration_sec - self.config.overlap_sec
         while start < final_end:
             end = min(start + self.config.duration_sec, final_end)
-            overlapping = [segment for segment in segments if segment.end_time > start and segment.start_time < end]
+            overlapping = [
+                segment
+                for segment in segments
+                if segment.end_time > start and segment.start_time < end
+            ]
             if overlapping:
                 chunks.append(self._combine(overlapping, start, end))
             if end == final_end:
@@ -97,7 +104,9 @@ class ChunkingProcessor:
     def _sentence_chunks(self, segments: list[TranscriptionSegment]) -> list[TranscriptionSegment]:
         chunks = []
         for segment in segments:
-            sentences = [item.strip() for item in re.split(r"(?<=[.!?])\s+", segment.text) if item.strip()]
+            sentences = [
+                item.strip() for item in re.split(r"(?<=[.!?])\s+", segment.text) if item.strip()
+            ]
             if len(sentences) <= 1:
                 chunks.append(segment)
                 continue
@@ -105,19 +114,26 @@ class ChunkingProcessor:
             cursor = segment.start_time
             for sentence in sentences:
                 duration = (segment.end_time - segment.start_time) * len(sentence) / total_chars
-                chunks.append(TranscriptionSegment(
-                    segment_id=0, text=sentence, start_time=cursor,
-                    end_time=min(cursor + duration, segment.end_time),
-                    language=segment.language, confidence=segment.confidence,
-                    original_file_name=segment.original_file_name,
-                ))
+                chunks.append(
+                    TranscriptionSegment(
+                        segment_id=0,
+                        text=sentence,
+                        start_time=cursor,
+                        end_time=min(cursor + duration, segment.end_time),
+                        language=segment.language,
+                        confidence=segment.confidence,
+                        original_file_name=segment.original_file_name,
+                    )
+                )
                 cursor += duration
         return self._merge_by_text_length(chunks)
 
     def _paragraph_chunks(self, segments: list[TranscriptionSegment]) -> list[TranscriptionSegment]:
         return self._merge_by_text_length(segments)
 
-    def _merge_by_text_length(self, segments: list[TranscriptionSegment]) -> list[TranscriptionSegment]:
+    def _merge_by_text_length(
+        self, segments: list[TranscriptionSegment]
+    ) -> list[TranscriptionSegment]:
         if not segments:
             return []
         chunks: list[TranscriptionSegment] = []

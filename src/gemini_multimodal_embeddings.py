@@ -47,7 +47,9 @@ class GeminiMultimodalEmbedding:
         mime_type = {".wav": "audio/wav", ".mp3": "audio/mpeg"}.get(path.suffix.lower())
         if mime_type is None:
             raise ValueError(f"Unsupported Gemini audio format: {path.suffix}")
-        return self._embed_content(types.Part.from_bytes(data=path.read_bytes(), mime_type=mime_type))
+        return self._embed_content(
+            types.Part.from_bytes(data=path.read_bytes(), mime_type=mime_type)
+        )
 
     def _embed_content(self, content) -> np.ndarray:
         from google.genai import types

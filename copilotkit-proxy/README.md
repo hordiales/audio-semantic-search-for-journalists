@@ -27,8 +27,9 @@ widget un plan JSON antes de consultar los índices. El plan puede reformular la
 consulta semántica y genera `audio_query_en` en inglés para CLAP. Cuando el
 cliente habilita ambos índices, el agente puede elegir texto, audio o los dos;
 nunca puede agregar un índice que el cliente no habilitó. Si A2A no está
-disponible o devuelve JSON inválido, el proxy conserva una búsqueda literal
-reproducible y deja el fallo registrado en sus logs.
+disponible o devuelve JSON inválido, la solicitud falla: con `rewrite: true`
+no se permite degradar silenciosamente a una búsqueda literal. Para pedir una
+búsqueda literal de forma deliberada, enviar `rewrite: false`.
 
 La service account del proxy necesita `roles/run.invoker` sobre el search
 service. Otorgalo antes del deploy:

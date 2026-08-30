@@ -137,13 +137,15 @@ async def run_ragas_evaluation(
             contexts = []
             retrieved_segments = []
 
-        results.append({
-            "question": sample["question"],
-            "answer": answer,
-            "contexts": contexts,
-            "ground_truth": sample.get("ground_truth", ""),
-            "retrieved_segments": retrieved_segments,
-        })
+        results.append(
+            {
+                "question": sample["question"],
+                "answer": answer,
+                "contexts": contexts,
+                "ground_truth": sample.get("ground_truth", ""),
+                "retrieved_segments": retrieved_segments,
+            }
+        )
 
     has_ground_truth = all(r["ground_truth"] for r in results)
     metrics, metric_names = _select_ragas_metrics(has_ground_truth)
@@ -169,7 +171,7 @@ async def run_ragas_evaluation(
     # Add per-question metric scores back into the raw results for inspection
     for name in metric_names:
         if name in score_df.columns:
-            for row, value in zip(results, score_df[name].to_list()):
+            for row, value in zip(results, score_df[name].to_list(), strict=True):
                 row[name] = None if (isinstance(value, float) and value != value) else value
 
     output = {
@@ -221,13 +223,11 @@ def main():
 
     logging.basicConfig(level=logging.INFO)
 
-    results = asyncio.run(
-        run_ragas_evaluation(args.dataset, args.agent_url, args.output)
-    )
+    results = asyncio.run(run_ragas_evaluation(args.dataset, args.agent_url, args.output))
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print("RAGAS EVALUATION RESULTS")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     for metric, score in results.get("metrics", {}).items():
         print(f"{metric}: {score:.4f}")
 

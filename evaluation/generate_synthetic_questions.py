@@ -21,7 +21,9 @@ DEFAULT_DATASET_SIZE = 20
 DEFAULT_MAX_SEGMENTS = 0
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_TEXT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-DEFAULT_SYNTHETIC_DATASET_PATH = "./evaluation/test_datasets/synthetic/ragas_synthetic_questions.json"
+DEFAULT_SYNTHETIC_DATASET_PATH = (
+    "./evaluation/test_datasets/synthetic/ragas_synthetic_questions.json"
+)
 DEFAULT_TIMEOUT = 1200
 DEFAULT_MAX_WORKERS = 1
 DEFAULT_LANGUAGE = "es"
@@ -73,8 +75,7 @@ def _translate_samples(samples: list[dict], language: str, llm: ChatOpenAI) -> l
         return samples
 
     texts = [
-        {"question": s["question"], "ground_truth": s.get("ground_truth", "")}
-        for s in samples
+        {"question": s["question"], "ground_truth": s.get("ground_truth", "")} for s in samples
     ]
     prompt = (
         f"Translate the 'question' and 'ground_truth' fields of each item to {language}.\n"
@@ -92,11 +93,9 @@ def _translate_samples(samples: list[dict], language: str, llm: ChatOpenAI) -> l
     translated = json.loads(raw)
 
     if len(translated) != len(samples):
-        raise ValueError(
-            f"Translation returned {len(translated)} items, expected {len(samples)}"
-        )
+        raise ValueError(f"Translation returned {len(translated)} items, expected {len(samples)}")
 
-    for sample, tr in zip(samples, translated):
+    for sample, tr in zip(samples, translated, strict=True):
         sample["question"] = tr["question"]
         if "ground_truth" in tr:
             sample["ground_truth"] = tr["ground_truth"]

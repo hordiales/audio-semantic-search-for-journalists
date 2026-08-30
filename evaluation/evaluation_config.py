@@ -21,7 +21,9 @@ class EvaluationSettings:
     dataset_size: int = 20
     dataset_max_segments: int = 0
     manual_dataset_path: str = "evaluation/test_datasets/ragas_eval_dataset_unlabeled.json"
-    synthetic_dataset_path: str = "evaluation/test_datasets/synthetic/ragas_synthetic_questions.json"
+    synthetic_dataset_path: str = (
+        "evaluation/test_datasets/synthetic/ragas_synthetic_questions.json"
+    )
     hybrid_dataset_path: str = "evaluation/test_datasets/synthetic/ragas_hybrid_questions.json"
     openai_model: str = "gpt-4o-mini"
     text_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -47,12 +49,18 @@ class EvaluationSettings:
 
         try:
             dataset_size = int(os.getenv("EVALUATION_DATASET_SIZE", str(cls.dataset_size)))
-            dataset_max_segments = int(os.getenv("EVALUATION_DATASET_MAX_SEGMENTS", str(cls.dataset_max_segments)))
+            dataset_max_segments = int(
+                os.getenv("EVALUATION_DATASET_MAX_SEGMENTS", str(cls.dataset_max_segments))
+            )
         except ValueError as error:
-            raise ValueError("EVALUATION_DATASET_SIZE and EVALUATION_DATASET_MAX_SEGMENTS must be integers") from error
+            raise ValueError(
+                "EVALUATION_DATASET_SIZE and EVALUATION_DATASET_MAX_SEGMENTS must be integers"
+            ) from error
 
         manual_dataset_path = os.getenv("EVALUATION_MANUAL_DATASET_PATH", cls.manual_dataset_path)
-        synthetic_dataset_path = os.getenv("EVALUATION_SYNTHETIC_DATASET_PATH", cls.synthetic_dataset_path)
+        synthetic_dataset_path = os.getenv(
+            "EVALUATION_SYNTHETIC_DATASET_PATH", cls.synthetic_dataset_path
+        )
         hybrid_dataset_path = os.getenv("EVALUATION_HYBRID_DATASET_PATH", cls.hybrid_dataset_path)
         dataset_path = os.getenv("EVALUATION_DATASET_PATH")
         if dataset_path is None:

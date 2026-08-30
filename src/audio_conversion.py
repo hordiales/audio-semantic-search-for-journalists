@@ -52,10 +52,14 @@ def convert_audio(
 
     cmd = [
         "ffmpeg",
-        "-i", str(input_file),
-        "-ar", str(sample_rate),
-        "-ac", "1" if mono else "2",
-        "-sample_fmt", "s16",
+        "-i",
+        str(input_file),
+        "-ar",
+        str(sample_rate),
+        "-ac",
+        "1" if mono else "2",
+        "-sample_fmt",
+        "s16",
         "-y",
         str(output_file),
     ]
@@ -70,13 +74,9 @@ def convert_audio(
             check=True,
         )
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(
-            f"ffmpeg failed for {input_file.name}: {e.stderr[:500]}"
-        ) from e
+        raise RuntimeError(f"ffmpeg failed for {input_file.name}: {e.stderr[:500]}") from e
     except FileNotFoundError as error:
-        raise RuntimeError(
-            "ffmpeg not found. Install with: brew install ffmpeg (macOS)"
-        ) from error
+        raise RuntimeError("ffmpeg not found. Install with: brew install ffmpeg (macOS)") from error
 
     logger.debug("ffmpeg stdout: %s", result.stdout[:200])
     return str(output_file)
@@ -98,10 +98,7 @@ def convert_directory(
     if not input_path.is_dir():
         raise FileNotFoundError(f"Input directory not found: {input_dir}")
 
-    audio_files = [
-        f for f in sorted(input_path.iterdir())
-        if f.suffix.lower() in SUPPORTED_FORMATS
-    ]
+    audio_files = [f for f in sorted(input_path.iterdir()) if f.suffix.lower() in SUPPORTED_FORMATS]
 
     if not audio_files:
         logger.warning("No audio files found in %s", input_dir)
