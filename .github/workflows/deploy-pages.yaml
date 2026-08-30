@@ -62,7 +62,6 @@ jobs:
           mkdir -p _site/widget _site/direct-search
           cp docs/index.html _site/index.html
           cp docs/patron-ag-ui-a2a-copilotkit.md _site/patron-ag-ui-a2a-copilotkit.md
-          cp docs/troubleshooting-github-pages.md _site/troubleshooting-github-pages.md
           cp -R copilotkit-proxy/widget/dist-widget/. _site/widget/
           cp -R frontend-direct-search/dist/. _site/direct-search/
       - uses: actions/upload-pages-artifact@v5
