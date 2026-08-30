@@ -10,13 +10,15 @@ import express from "express";
 import { rateLimit } from "express-rate-limit";
 import { GoogleAuth } from "google-auth-library";
 import { Observable } from "rxjs";
-import { SearchServiceClient, executeSearch, parseSearchRequest, type SearchIndex } from "./direct-search.js";
+import { A2ASearchPlanner } from "./a2a-planner.js";
+import { effectivePlan, SearchServiceClient, executeSearch, parseSearchRequest, type DirectSearchRequest, type SearchIndex, type SearchPlan } from "./direct-search.js";
 
 const agentUrl = process.env.A2A_AGENT_URL?.trim();
 if (!agentUrl) throw new Error("A2A_AGENT_URL environment variable is required");
 const configuredAgentUrl: string = agentUrl;
 const searchServiceUrl = process.env.SEARCH_SERVICE_URL?.trim().replace(/\/$/, "");
 const searchService = searchServiceUrl ? new SearchServiceClient(searchServiceUrl) : undefined;
+const searchPlanner = new A2ASearchPlanner(configuredAgentUrl);
 
 const agentCardPath = "/.well-known/agent-card.json";
 const legacyAgentCardPath = "/.well-known/agent.json";
@@ -140,7 +142,17 @@ function requireSearchService(response: express.Response): SearchServiceClient |
   return undefined;
 }
 
-app.post("/api/search/plan", (request, response) => {
+async function resolveSearchPlan(request: DirectSearchRequest): Promise<SearchPlan | undefined> {
+  if (!request.rewrite || request.plan) return request.plan;
+  try {
+    return await searchPlanner.rewrite(request);
+  } catch (error) {
+    console.warn("A2A search-plan rewrite failed; using literal query.", error);
+    return undefined;
+  }
+}
+
+app.post("/api/search/plan", async (request, response) => {
   try {
     const requestedIndexes = request.body && typeof request.body === "object"
       ? (request.body as Record<string, unknown>).indexes
@@ -150,15 +162,7 @@ app.post("/api/search/plan", (request, response) => {
       indexes: requestedIndexes ?? ["text", "audio"],
       k: 10,
     });
-    const indexes = parsed.indexes;
-    response.json({
-      original_query: parsed.query,
-      indexes,
-      text_query: indexes.includes("text") ? parsed.query : undefined,
-      audio_query: indexes.includes("audio") ? parsed.query : undefined,
-      audio_query_en: indexes.includes("audio") ? parsed.query : undefined,
-      rationale: "Reformulación no disponible: se propone una búsqueda literal reproducible.",
-    });
+    response.json(effectivePlan({ ...parsed, plan: await resolveSearchPlan(parsed) }));
   } catch (error) {
     response.status(400).json({ detail: error instanceof Error ? error.message : "Solicitud inválida." });
   }
@@ -168,7 +172,8 @@ app.post("/api/search", async (request, response) => {
   const client = requireSearchService(response);
   if (!client) return;
   try {
-    response.json(await executeSearch(parseSearchRequest(request.body), client));
+    const parsed = parseSearchRequest(request.body);
+    response.json(await executeSearch({ ...parsed, plan: await resolveSearchPlan(parsed) }, client));
   } catch (error) {
     response.status(400).json({ detail: error instanceof Error ? error.message : "Solicitud inválida." });
   }

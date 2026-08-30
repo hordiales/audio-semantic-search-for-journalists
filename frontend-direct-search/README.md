@@ -5,7 +5,9 @@ Interfaz de búsqueda estructurada para periodistas que trabajan con corpus de a
 ## Qué incluye
 
 - Búsqueda en índice de transcripciones, índice acústico CLAP o ambos.
-- Alternancia entre consulta literal y reformulación con IA.
+- Con `Reformular con IA`, el proxy pide por A2A al agente un plan estructurado
+  antes del retrieval; con “Ambos” habilitado puede elegir texto, audio o los
+  dos según la intención. Si ese paso falla, conserva la consulta literal.
 - Plan efectivo visible, editable y copiable para repetir el retrieval.
 - Resultados separados por índice: nunca mezcla scores de espacios vectoriales distintos.
 - Reproductor inline por segmento, con contexto opcional de ±10 segundos.

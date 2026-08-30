@@ -171,7 +171,7 @@ export default function App() {
           </div>
           <div className="controls-row">
             <fieldset className="index-picker">
-              <legend>Índice</legend>
+              <legend>{rewrite ? "Índices habilitados para IA" : "Índice"}</legend>
               {(["both", "text", "audio"] as IndexSelection[]).map(option => (
                 <label key={option}>
                   <input type="radio" checked={selection === option} onChange={() => setSelection(option)} />

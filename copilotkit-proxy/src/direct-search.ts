@@ -77,13 +77,16 @@ export function parseSearchRequest(value: unknown): DirectSearchRequest {
   return { query, indexes, k, rewrite: source.rewrite !== false, plan };
 }
 
-function parsePlan(value: unknown, query: string, indexes: SearchIndex[]): SearchPlan | undefined {
+export function parsePlan(value: unknown, query: string, indexes: SearchIndex[]): SearchPlan | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object") throw new Error("plan debe ser un objeto JSON.");
   const source = value as Record<string, unknown>;
   const planIndexes = Array.isArray(source.indexes)
     ? source.indexes.filter((index): index is SearchIndex => index === "text" || index === "audio")
     : indexes;
+  if (!planIndexes.length || planIndexes.length !== new Set(planIndexes).size) {
+    throw new Error("plan.indexes debe contener texto, audio o ambos sin duplicados.");
+  }
   if (planIndexes.some((index) => !indexes.includes(index))) {
     throw new Error("plan no puede agregar índices que el usuario no seleccionó.");
   }
@@ -91,7 +94,7 @@ function parsePlan(value: unknown, query: string, indexes: SearchIndex[]): Searc
     typeof source[field] === "string" && source[field].trim() ? source[field].trim() : undefined;
   return {
     original_query: typeof source.original_query === "string" ? source.original_query : query,
-    indexes,
+    indexes: planIndexes,
     text_query: optionalText("text_query"),
     audio_query: optionalText("audio_query"),
     audio_query_en: optionalText("audio_query_en"),
@@ -99,8 +102,8 @@ function parsePlan(value: unknown, query: string, indexes: SearchIndex[]): Searc
   };
 }
 
-function effectivePlan(request: DirectSearchRequest): SearchPlan {
-  if (request.plan) return { ...request.plan, original_query: request.query, indexes: request.indexes };
+export function effectivePlan(request: DirectSearchRequest): SearchPlan {
+  if (request.plan) return { ...request.plan, original_query: request.query };
   return {
     original_query: request.query,
     indexes: request.indexes,
@@ -134,7 +137,7 @@ function unavailableIndex(query: string, message: string) {
 export async function executeSearch(request: DirectSearchRequest, transport: ServiceTransport): Promise<Record<string, unknown>> {
   const plan = effectivePlan(request);
   const start = Date.now();
-  const searches = await Promise.all(request.indexes.map(async (index) => {
+  const searches = await Promise.all(plan.indexes.map(async (index) => {
     const query = index === "text"
       ? plan.text_query || request.query
       : plan.audio_query_en || plan.audio_query || request.query;
