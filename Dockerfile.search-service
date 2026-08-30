@@ -1,0 +1,67 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Retrieval service: owns PyTorch, CLAP, the sentence-transformers encoder and
+# the FAISS indices. Deployed to Cloud Run, not to Agent Runtime. The ADK agent
+# uses the root Dockerfile and reaches this over HTTP.
+FROM python:3.11-slim
+
+RUN pip install --no-cache-dir uv==0.8.13
+
+WORKDIR /code
+
+COPY ./pyproject.toml ./README.md ./uv.lock ./
+COPY ./src ./src
+
+# `--group ml` is the difference from the agent image. pyproject pins torch to
+# the PyTorch CPU index, so this installs torch==2.13.0+cpu and none of the
+# nvidia-* CUDA wheels (~3 GB compressed) that PyPI's default build pulls in.
+RUN uv sync --frozen --no-dev --no-group eval --group ml
+
+# Both model weights are fetched at first use rather than by pip, so without
+# this they would be downloaded on every cold start: ~1.7 GB for CLAP from
+# HuggingFace before the first cross-modal query could be answered. Baking them
+# turns that into a build-time cost paid once.
+#
+# laion_clap resolves an absent checkpoint to <package_dir>/630k-audioset-best.pt
+# for enable_fusion=False and skips the download when the file exists, so
+# writing it there is all that is required (see laion_clap/hook.py load_ckpt).
+RUN CKPT_DIR="$(echo /code/.venv/lib/python3.*/site-packages/laion_clap)" && \
+    python -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" \
+      "https://huggingface.co/lukewys/laion_clap/resolve/main/630k-audioset-best.pt" \
+      "${CKPT_DIR}/630k-audioset-best.pt" && \
+    test -s "${CKPT_DIR}/630k-audioset-best.pt"
+
+ENV HF_HOME=/opt/hf-cache
+RUN uv run --no-sync python -c "\
+from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')" && \
+    chmod -R a+rX /opt/hf-cache
+
+ARG COMMIT_SHA=""
+ENV COMMIT_SHA=${COMMIT_SHA}
+
+ARG AGENT_VERSION=0.0.0
+ENV AGENT_VERSION=${AGENT_VERSION}
+
+# FAISS and PyTorch both initialize OpenBLAS; leaving them to pick a thread
+# count each oversubscribes the container and has segfaulted locally.
+ENV OPENBLAS_NUM_THREADS=1
+ENV OMP_NUM_THREADS=1
+ENV CLAP_DEVICE=cpu
+
+EXPOSE 8080
+
+# Shell form so Cloud Run's injected $PORT is expanded.
+CMD uv run --no-sync uvicorn src.search_service.app:app --host 0.0.0.0 --port ${PORT:-8080}

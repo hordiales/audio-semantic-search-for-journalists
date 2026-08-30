@@ -2,12 +2,14 @@
 
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 import faiss
 import pandas as pd
 
 from src.clap_audio_embeddings import CLAPEmbedding
+from src.segment_clip_storage import SegmentClipStore
 from src.text_embeddings import TextEmbeddingModel
 from src.vector_indexing import load_faiss_index, search_faiss_index
 
@@ -31,6 +33,8 @@ class AudioSearchEngine:
         self._text_model: TextEmbeddingModel | None = None
         self._clap_model: CLAPEmbedding | None = None
         self._active_embeddings: set[str] | None = None
+        self._dataset_version: str | None = None
+        self._clip_store = SegmentClipStore(dataset_path=self.dataset_path)
 
         self._load_dataset()
         self._load_indices()
@@ -47,6 +51,9 @@ class AudioSearchEngine:
                 active_embeddings = manifest.get("active_embeddings")
                 if active_embeddings is not None:
                     self._active_embeddings = set(active_embeddings)
+                version = manifest.get("dataset_version") or manifest.get("release")
+                if isinstance(version, str):
+                    self._dataset_version = version
         else:
             raise FileNotFoundError(
                 f"Dataset not found at {pkl_path}. Run the ingestion pipeline first."
@@ -86,6 +93,19 @@ class AudioSearchEngine:
     def total_segments(self) -> int:
         return len(self._df) if self._df is not None else 0
 
+    @property
+    def active_indexes(self) -> list[str]:
+        """Indices currently loaded and therefore safe to offer to clients."""
+        return [
+            name
+            for name, index in (("text", self._text_index), ("audio", self._audio_index))
+            if index is not None
+        ]
+
+    @property
+    def dataset_version(self) -> str | None:
+        return self._dataset_version
+
     def search_semantic(self, query_text: str, k: int = 5) -> list[dict]:
         """
         Búsqueda semántica por texto (transcripciones).
@@ -108,11 +128,13 @@ class AudioSearchEngine:
             if idx < 0 or idx >= len(self._df):
                 continue
             row = self._df.iloc[idx]
-            results.append({
-                "segment": self._row_to_segment_dict(row),
-                "similarity": float(sim),
-                "distance": float(1.0 - sim),
-            })
+            results.append(
+                {
+                    "segment": self._row_to_segment_dict(row),
+                    "similarity": float(sim),
+                    "distance": float(1.0 - sim),
+                }
+            )
 
         return results
 
@@ -138,11 +160,13 @@ class AudioSearchEngine:
             if idx < 0 or idx >= len(self._df):
                 continue
             row = self._df.iloc[idx]
-            results.append({
-                "segment": self._row_to_segment_dict(row),
-                "similarity": float(sim),
-                "distance": float(1.0 - sim),
-            })
+            results.append(
+                {
+                    "segment": self._row_to_segment_dict(row),
+                    "similarity": float(sim),
+                    "distance": float(1.0 - sim),
+                }
+            )
 
         return results
 
@@ -222,13 +246,44 @@ class AudioSearchEngine:
             "confidence": float(row.get("confidence", 0.0)),
         }
 
+        # Playback clip, present only in datasets ingested with clips enabled.
+        # The clip window is wider than the segment: it carries the surrounding
+        # context, so consumers need both pairs of timestamps to position the player.
+        clip_name = str(row.get("clip_file_name", "") or "")
+        if clip_name:
+            result.update(
+                {
+                    "clip_file_name": clip_name,
+                    "clip_start_time": float(row.get("clip_start_time", result["start_time"])),
+                    "clip_end_time": float(row.get("clip_end_time", result["end_time"])),
+                }
+            )
+            try:
+                reference = self._clip_store.reference(int(result["segment_id"]))
+            except Exception:  # noqa: BLE001 - playback must not disable search.
+                logger.warning(
+                    "Could not create playback URL for segment %s",
+                    result["segment_id"],
+                    exc_info=True,
+                )
+            else:
+                if reference is not None:
+                    result["clip_url"] = reference.url
+                    expires_at = getattr(reference, "expires_at", None)
+                    if expires_at is not None:
+                        result["clip_expires_at"] = datetime.fromtimestamp(
+                            expires_at, tz=timezone.utc
+                        ).isoformat()
+
         if include_sentiment:
-            result.update({
-                "sentiment_positive": float(row.get("sentiment_positive", 0.0)),
-                "sentiment_negative": float(row.get("sentiment_negative", 0.0)),
-                "sentiment_neutral": float(row.get("sentiment_neutral", 0.0)),
-                "dominant_sentiment": str(row.get("dominant_sentiment", "neutral")),
-            })
+            result.update(
+                {
+                    "sentiment_positive": float(row.get("sentiment_positive", 0.0)),
+                    "sentiment_negative": float(row.get("sentiment_negative", 0.0)),
+                    "sentiment_neutral": float(row.get("sentiment_neutral", 0.0)),
+                    "dominant_sentiment": str(row.get("dominant_sentiment", "neutral")),
+                }
+            )
 
         if include_audio_classes:
             result["yamnet_audio_classes"] = self._parse_audio_classes(

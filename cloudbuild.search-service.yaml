@@ -1,0 +1,16 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - -t
+      - "${_IMAGE}"
+      - -f
+      - Dockerfile.search-service
+      - .
+    timeout: "1800s"
+images:
+  - "${_IMAGE}"
+options:
+  logging: CLOUD_LOGGING_ONLY
+substitutions:
+  _IMAGE: "us-east1-docker.pkg.dev/example/audio-search-service:latest"
