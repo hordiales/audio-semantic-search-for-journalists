@@ -6,56 +6,81 @@ from pathlib import Path
 
 from google.adk.tools import ToolContext
 
-from src.agent_service.search_engine import AudioSearchEngine
-from src.dataset_storage import resolve_dataset_path
+from src.agent_service.search_client import SearchServiceClient, search_service_url
 
 logger = logging.getLogger(__name__)
 
-_search_engine: AudioSearchEngine | None = None
+# Either a SearchServiceClient (deployed) or an AudioSearchEngine (local). Both
+# expose the same four retrieval methods, so the tools below do not branch.
+_search_engine = None
 
 
-def set_search_engine(engine: AudioSearchEngine) -> None:
-    """Set the process-wide search engine used by the agent tools."""
+def set_search_engine(engine) -> None:
+    """Set the process-wide retrieval backend used by the agent tools."""
     global _search_engine
     _search_engine = engine
 
 
-def initialize_search_engine(dataset_path: str | None = None) -> AudioSearchEngine:
-    """Initialize the search engine once from the configured processed dataset."""
+def initialize_search_engine(dataset_path: str | None = None):
+    """Resolve the retrieval backend once.
+
+    With ``SEARCH_SERVICE_URL`` set the agent talks to the Cloud Run retrieval
+    service and never imports PyTorch, FAISS or the dataset; that is what keeps
+    the agent image deployable on Agent Runtime. Without it the models load
+    in-process, which is what local development, the playground and the
+    ingestion pipeline use.
+    """
     global _search_engine
-    if _search_engine is None:
-        configured_path = resolve_dataset_path(dataset_path)
-        _search_engine = AudioSearchEngine(configured_path)
-        logger.info("Search engine initialized from %s", Path(configured_path))
+    if _search_engine is not None:
+        return _search_engine
+
+    service_url = search_service_url()
+    if service_url and dataset_path is None:
+        _search_engine = SearchServiceClient(service_url)
+        logger.info("Retrieval delegated to search service at %s", service_url)
+        return _search_engine
+
+    # Imported here, not at module scope, so the dependency on the `ml` group
+    # stays confined to processes that actually run the models.
+    from src.agent_service.search_engine import AudioSearchEngine
+    from src.dataset_storage import resolve_dataset_path
+
+    configured_path = resolve_dataset_path(dataset_path)
+    _search_engine = AudioSearchEngine(configured_path)
+    logger.info("Search engine initialized in-process from %s", Path(configured_path))
     return _search_engine
 
 
-def get_search_engine() -> AudioSearchEngine:
-    """Return the initialized search engine, creating it lazily if needed."""
+def get_search_engine():
+    """Return the initialized retrieval backend, creating it lazily if needed."""
     return initialize_search_engine()
 
 
-def _serialize_results(results: list[dict], search_index: str, search_index_label: str) -> list[dict]:
+def _serialize_results(
+    results: list[dict], search_index: str, search_index_label: str
+) -> list[dict]:
     """Return JSON-compatible search results with journalist-facing metadata."""
     serialized: list[dict] = []
     for result in results:
         segment = result["segment"]
-        serialized.append(
-            {
-                "segment_id": segment["segment_id"],
-                "search_index": search_index,
-                "search_index_label": search_index_label,
-                "text": segment["text"],
-                "similarity": round(result["similarity"], 4),
-                "similarity_percent": round(result["similarity"] * 100, 1),
-                "start_time": segment["start_time"],
-                "end_time": segment["end_time"],
-                "duration": round(segment["end_time"] - segment["start_time"], 1),
-                "original_file_name": segment["original_file_name"],
-                "language": segment["language"],
-                "confidence": segment["confidence"],
-            }
-        )
+        item = {
+            "segment_id": segment["segment_id"],
+            "search_index": search_index,
+            "search_index_label": search_index_label,
+            "text": segment["text"],
+            "similarity": round(result["similarity"], 4),
+            "similarity_percent": round(result["similarity"] * 100, 1),
+            "start_time": segment["start_time"],
+            "end_time": segment["end_time"],
+            "duration": round(segment["end_time"] - segment["start_time"], 1),
+            "original_file_name": segment["original_file_name"],
+            "language": segment["language"],
+            "confidence": segment["confidence"],
+        }
+        for field in ("clip_url", "clip_start_time", "clip_end_time", "clip_expires_at"):
+            if field in segment:
+                item[field] = segment[field]
+        serialized.append(item)
     return serialized
 
 
@@ -91,9 +116,7 @@ def buscar_audio(query: str, k: int = 5, tool_context: ToolContext | None = None
         return {"status": "error", "error": str(error), "results": []}
 
 
-def buscar_evento_acustico(
-    query: str, k: int = 5, tool_context: ToolContext | None = None
-) -> dict:
+def buscar_evento_acustico(query: str, k: int = 5, tool_context: ToolContext | None = None) -> dict:
     """Busca eventos acústicos con CLAP a partir de una descripción textual.
 
     Úsala para aplausos, música, gritos, risas u otros sonidos que pueden no
