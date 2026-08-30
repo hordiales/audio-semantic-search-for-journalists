@@ -1,311 +1,293 @@
-"""Motor de búsqueda semántica de audio adaptado para el servicio de agente"""
+"""Audio search engine with FAISS-based semantic search."""
 
-import ast
+import json
 import logging
-import os
+from datetime import datetime, timezone
 from pathlib import Path
-import pickle
 
-import numpy as np
+import faiss
 import pandas as pd
-from sentence_transformers import SentenceTransformer
 
-try:
-    import faiss
-
-    FAISS_AVAILABLE = True
-except ImportError:
-    FAISS_AVAILABLE = False
-
-# Evitar warning de tokenizers parallelism
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
+from src.clap_audio_embeddings import CLAPEmbedding
+from src.segment_clip_storage import SegmentClipStore
+from src.text_embeddings import TextEmbeddingModel
+from src.vector_indexing import load_faiss_index, search_faiss_index
 
 logger = logging.getLogger(__name__)
 
 
 class AudioSearchEngine:
-    """Sistema de búsqueda semántica local con FAISS para uso en servicio"""
+    """Motor de búsqueda semántica sobre el corpus de audio indexado."""
 
     def __init__(self, dataset_path: str):
         """
-        Inicializa el motor de búsqueda
+        Carga dataset, embeddings e índices FAISS.
 
         Args:
-            dataset_path: Ruta al directorio del dataset
+            dataset_path: Path to the processed dataset directory
         """
         self.dataset_path = Path(dataset_path)
-        self.text_model: SentenceTransformer | None = None
-        self.df: pd.DataFrame | None = None
-        self.faiss_index = None
-        self.embeddings: np.ndarray | None = None
+        self._df: pd.DataFrame | None = None
+        self._text_index: faiss.IndexFlatIP | None = None
+        self._audio_index: faiss.IndexFlatIP | None = None
+        self._text_model: TextEmbeddingModel | None = None
+        self._clap_model: CLAPEmbedding | None = None
+        self._active_embeddings: set[str] | None = None
+        self._dataset_version: str | None = None
+        self._clip_store = SegmentClipStore(dataset_path=self.dataset_path)
 
         self._load_dataset()
-        self._load_text_model()
+        self._load_indices()
 
-    def _load_dataset(self) -> None:
-        """Carga el dataset local"""
-        logger.info(f"Cargando dataset desde: {self.dataset_path}")
+    def _load_dataset(self):
+        """Load the complete dataset."""
+        pkl_path = self.dataset_path / "final" / "complete_dataset.pkl"
+        if pkl_path.exists():
+            self._df = pd.read_pickle(pkl_path)
+            logger.info("Loaded dataset: %d segments from %s", len(self._df), pkl_path)
+            manifest_path = self.dataset_path / "final" / "dataset_manifest.json"
+            if manifest_path.exists():
+                manifest = json.loads(manifest_path.read_text())
+                active_embeddings = manifest.get("active_embeddings")
+                if active_embeddings is not None:
+                    self._active_embeddings = set(active_embeddings)
+                version = manifest.get("dataset_version") or manifest.get("release")
+                if isinstance(version, str):
+                    self._dataset_version = version
+        else:
+            raise FileNotFoundError(
+                f"Dataset not found at {pkl_path}. Run the ingestion pipeline first."
+            )
 
-        # Buscar archivo de dataset
-        possible_files = [
-            self.dataset_path / "final" / "complete_dataset.pkl",
-            self.dataset_path / "embeddings" / "segments_metadata.csv",
-            self.dataset_path / "complete_dataset.pkl",
+    def _load_indices(self):
+        """Load FAISS indices."""
+        indices_dir = self.dataset_path / "indices"
+
+        text_index_path = indices_dir / "text_index.faiss"
+        if self._is_embedding_active("text") and text_index_path.exists():
+            self._text_index = load_faiss_index(str(text_index_path))
+            logger.info("Loaded text index: %d vectors", self._text_index.ntotal)
+
+        audio_index_path = indices_dir / "audio_index.faiss"
+        if self._is_embedding_active("clap") and audio_index_path.exists():
+            self._audio_index = load_faiss_index(str(audio_index_path))
+            logger.info("Loaded audio index: %d vectors", self._audio_index.ntotal)
+
+    def _is_embedding_active(self, embedding_name: str) -> bool:
+        """Respect manifest configuration while retaining legacy dataset support."""
+        return self._active_embeddings is None or embedding_name in self._active_embeddings
+
+    @property
+    def text_model(self) -> TextEmbeddingModel:
+        if self._text_model is None:
+            self._text_model = TextEmbeddingModel()
+        return self._text_model
+
+    @property
+    def clap_model(self) -> CLAPEmbedding:
+        if self._clap_model is None:
+            self._clap_model = CLAPEmbedding()
+        return self._clap_model
+
+    @property
+    def total_segments(self) -> int:
+        return len(self._df) if self._df is not None else 0
+
+    @property
+    def active_indexes(self) -> list[str]:
+        """Indices currently loaded and therefore safe to offer to clients."""
+        return [
+            name
+            for name, index in (("text", self._text_index), ("audio", self._audio_index))
+            if index is not None
         ]
 
-        dataset_file = None
-        for f in possible_files:
-            if f.exists():
-                dataset_file = f
-                break
-
-        if not dataset_file:
-            msg = f"No se encontró dataset en: {self.dataset_path}"
-            logger.error(msg)
-            raise FileNotFoundError(
-                f"{msg}. Genera un dataset primero con: "
-                "poetry run python src/simple_dataset_pipeline.py --input data/ --output ./dataset"
-            )
-
-        # Cargar según tipo de archivo
-        if dataset_file.suffix == ".pkl":
-            logger.info(f"Cargando pickle: {dataset_file.name}")
-            with open(dataset_file, "rb") as f:
-                data = pickle.load(f)
-                if isinstance(data, pd.DataFrame):
-                    self.df = data
-                elif isinstance(data, dict) and "dataframe" in data:
-                    self.df = data["dataframe"]
-                else:
-                    msg = "Formato de pickle no reconocido"
-                    logger.error(msg)
-                    raise ValueError(msg)
-        else:
-            logger.info(f"Cargando CSV: {dataset_file.name}")
-            self.df = pd.read_csv(dataset_file)
-
-        logger.info(f"Dataset cargado: {len(self.df)} segmentos")
-
-        # Cargar embeddings de texto
-        self._load_embeddings()
-
-    def _load_embeddings(self) -> None:
-        """Carga los embeddings de texto"""
-        embeddings_dir = self.dataset_path / "embeddings" / "text_embeddings"
-
-        # Primero intentar cargar desde columna del DataFrame
-        if "text_embedding" in self.df.columns or "embedding" in self.df.columns:
-            logger.info("Usando embeddings del DataFrame")
-            emb_col = (
-                "text_embedding" if "text_embedding" in self.df.columns else "embedding"
-            )
-
-            embeddings_list = []
-            for idx, row in self.df.iterrows():
-                emb = row[emb_col]
-                if isinstance(emb, str):
-                    # Parsear string a array
-                    emb = np.array(ast.literal_eval(emb), dtype=np.float32)
-                elif isinstance(emb, (list, np.ndarray)):
-                    emb = np.array(emb, dtype=np.float32)
-                else:
-                    # Embedding vacío
-                    emb = np.zeros(384, dtype=np.float32)
-                embeddings_list.append(emb)
-
-            self.embeddings = np.vstack(embeddings_list)
-            logger.info(f"Embeddings cargados: {self.embeddings.shape}")
-            self._build_faiss_index()
-            return
-
-        # Buscar archivos de embeddings individuales
-        if embeddings_dir.exists():
-            logger.info(f"Cargando embeddings desde: {embeddings_dir}")
-            embeddings_list = []
-
-            for idx in range(len(self.df)):
-                emb_file = embeddings_dir / f"segment_{idx}_embedding.npy"
-                if emb_file.exists():
-                    emb = np.load(emb_file)
-                    embeddings_list.append(emb)
-                else:
-                    # Embedding vacío si no existe
-                    embeddings_list.append(np.zeros(384, dtype=np.float32))
-
-            if embeddings_list:
-                self.embeddings = np.vstack(embeddings_list)
-                logger.info(f"Embeddings cargados: {self.embeddings.shape}")
-                self._build_faiss_index()
-                return
-
-        # Buscar índice FAISS existente
-        faiss_path = self.dataset_path / "indices" / "text_index.faiss"
-        if faiss_path.exists() and FAISS_AVAILABLE:
-            logger.info(f"Cargando índice FAISS: {faiss_path}")
-            self.faiss_index = faiss.read_index(str(faiss_path))
-            logger.info(f"Índice FAISS cargado: {self.faiss_index.ntotal} vectores")
-            return
-
-        logger.warning(
-            "No se encontraron embeddings pre-calculados. "
-            "Se generarán embeddings en tiempo de búsqueda (más lento)"
-        )
-
-    def _build_faiss_index(self) -> None:
-        """Construye índice FAISS desde embeddings"""
-        if self.embeddings is None or not FAISS_AVAILABLE:
-            return
-
-        logger.info("Construyendo índice FAISS...")
-        dimension = self.embeddings.shape[1]
-
-        # Normalizar para similitud coseno
-        normalized = self.embeddings / np.linalg.norm(
-            self.embeddings, axis=1, keepdims=True
-        )
-        normalized = np.nan_to_num(normalized, nan=0.0)  # Manejar NaN
-
-        # Crear índice con producto interno (equivalente a coseno con vectores normalizados)
-        self.faiss_index = faiss.IndexFlatIP(dimension)
-        self.faiss_index.add(normalized.astype(np.float32))
-        logger.info(f"Índice FAISS construido: {self.faiss_index.ntotal} vectores")
-
-    def _load_text_model(self) -> None:
-        """Carga el modelo de embeddings de texto"""
-        try:
-            logger.info("Cargando modelo de embeddings de texto...")
-            self.text_model = SentenceTransformer(
-                "sentence-transformers/all-MiniLM-L6-v2"
-            )
-            logger.info("Modelo de texto cargado")
-        except Exception as e:
-            msg = f"Error cargando modelo: {e}"
-            logger.error(msg)
-            raise ImportError(f"{msg}. Instala: pip install sentence-transformers")
-
-    def generate_text_embedding(self, text: str) -> np.ndarray:
-        """
-        Genera embedding vectorial para el texto de búsqueda
-
-        Args:
-            text: Texto para generar embedding
-
-        Returns:
-            Array numpy con el embedding normalizado
-        """
-        if self.text_model is None:
-            raise RuntimeError("Modelo de texto no cargado")
-        embedding = self.text_model.encode(text)
-        # Normalizar para similitud coseno
-        embedding = embedding / np.linalg.norm(embedding)
-        return embedding.astype(np.float32)
+    @property
+    def dataset_version(self) -> str | None:
+        return self._dataset_version
 
     def search_semantic(self, query_text: str, k: int = 5) -> list[dict]:
         """
-        Realiza búsqueda semántica vectorial
+        Búsqueda semántica por texto (transcripciones).
 
         Args:
-            query_text: Texto de búsqueda
-            k: Número de resultados a retornar
+            query_text: Natural language query
+            k: Number of results to return
 
         Returns:
-            Lista de diccionarios con resultados de búsqueda
+            List of dicts with segment info and similarity scores
         """
-        logger.info(f"Búsqueda semántica: '{query_text}'")
+        if self._text_index is None:
+            raise RuntimeError("Text index not loaded")
 
-        # Generar embedding de la consulta
-        query_embedding = self.generate_text_embedding(query_text)
-
-        if self.faiss_index is not None and FAISS_AVAILABLE:
-            # Búsqueda con FAISS (rápida)
-            query_embedding = query_embedding.reshape(1, -1)
-            similarities, indices = self.faiss_index.search(query_embedding, k)
-
-            results = []
-            for _i, (sim, idx) in enumerate(zip(similarities[0], indices[0], strict=False)):
-                if idx >= 0 and idx < len(self.df):
-                    row = self.df.iloc[idx]
-                    results.append(
-                        {
-                            "segment": row.to_dict(),
-                            "similarity": float(sim),
-                            "distance": 1.0 - float(sim),
-                        }
-                    )
-
-            logger.info(f"Búsqueda FAISS completada: {len(results)} resultados")
-            return results
-
-        if self.embeddings is not None:
-            # Búsqueda manual con numpy (más lenta pero funciona)
-            logger.info("Usando búsqueda numpy (más lenta)...")
-
-            # Normalizar embeddings
-            normalized = self.embeddings / np.linalg.norm(
-                self.embeddings, axis=1, keepdims=True
-            )
-            normalized = np.nan_to_num(normalized, nan=0.0)
-
-            # Calcular similitudes
-            similarities = np.dot(normalized, query_embedding)
-
-            # Obtener top-k
-            top_indices = np.argsort(similarities)[::-1][:k]
-
-            results = []
-            for idx in top_indices:
-                row = self.df.iloc[idx]
-                results.append(
-                    {
-                        "segment": row.to_dict(),
-                        "similarity": float(similarities[idx]),
-                        "distance": 1.0 - float(similarities[idx]),
-                    }
-                )
-
-            logger.info(f"Búsqueda completada: {len(results)} resultados")
-            return results
-
-        # Generar embeddings en tiempo de ejecución (muy lento)
-        logger.warning(
-            "Generando embeddings en tiempo real (muy lento)..."
-        )
+        query_embedding = self.text_model.generate_embedding(query_text, normalize=True)
+        similarities, indices = search_faiss_index(self._text_index, query_embedding, k=k)
 
         results = []
-        for idx, row in self.df.iterrows():
-            text = str(row.get("text", ""))
-            if text:
-                segment_embedding = self.generate_text_embedding(text)
-                similarity = float(np.dot(query_embedding, segment_embedding))
-                results.append(
-                    {
-                        "segment": row.to_dict(),
-                        "similarity": similarity,
-                        "distance": 1.0 - similarity,
-                    }
-                )
+        for sim, idx in zip(similarities[0], indices[0], strict=True):
+            if idx < 0 or idx >= len(self._df):
+                continue
+            row = self._df.iloc[idx]
+            results.append(
+                {
+                    "segment": self._row_to_segment_dict(row),
+                    "similarity": float(sim),
+                    "distance": float(1.0 - sim),
+                }
+            )
 
-        # Ordenar por similitud
-        results.sort(key=lambda x: x["similarity"], reverse=True)
-        return results[:k]
+        return results
+
+    def search_audio_by_text(self, query_text: str, k: int = 5) -> list[dict]:
+        """
+        Búsqueda cross-modal texto→audio usando CLAP.
+
+        Args:
+            query_text: Text query (e.g., "applause", "music")
+            k: Number of results
+
+        Returns:
+            List of dicts with segment info and similarity scores
+        """
+        if self._audio_index is None:
+            raise RuntimeError("Audio index not loaded")
+
+        query_embedding = self.clap_model.generate_text_embedding(query_text)
+        similarities, indices = search_faiss_index(self._audio_index, query_embedding, k=k)
+
+        results = []
+        for sim, idx in zip(similarities[0], indices[0], strict=True):
+            if idx < 0 or idx >= len(self._df):
+                continue
+            row = self._df.iloc[idx]
+            results.append(
+                {
+                    "segment": self._row_to_segment_dict(row),
+                    "similarity": float(sim),
+                    "distance": float(1.0 - sim),
+                }
+            )
+
+        return results
 
     def get_segment_info(self, segment_id: int) -> dict | None:
         """
-        Obtiene información de un segmento específico
+        Get full information for a specific segment.
 
         Args:
-            segment_id: ID del segmento
+            segment_id: The segment ID
 
         Returns:
-            Diccionario con información del segmento o None si no existe
+            Dict with segment info or None if not found
         """
-        if self.df is None:
+        if self._df is None:
             return None
 
-        if segment_id < 0 or segment_id >= len(self.df):
+        matches = self._df[self._df["segment_id"] == segment_id]
+        if matches.empty:
             return None
 
-        return self.df.iloc[segment_id].to_dict()
+        row = matches.iloc[0]
+        return self._row_to_segment_dict(row, include_sentiment=True, include_audio_classes=True)
 
+    def get_audio_classes(self, segment_id: int) -> list[dict] | None:
+        """Return YAMNet AudioSet labels stored for one processed segment.
 
+        ``None`` means the segment does not exist; an empty list means that the
+        dataset was created without YAMNet classification enabled.
+        """
+        if self._df is None:
+            return None
+        matches = self._df[self._df["segment_id"] == segment_id]
+        if matches.empty:
+            return None
+        return self._parse_audio_classes(matches.iloc[0].get("yamnet_top_classes", []))
 
+    @staticmethod
+    def _parse_audio_classes(value: object) -> list[dict]:
+        """Read current list values and CSV-compatible JSON values safely."""
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                return []
+        if not isinstance(value, list):
+            return []
+        classes: list[dict] = []
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            try:
+                classes.append(
+                    {
+                        "class_id": str(item["class_id"]),
+                        "class_name": str(item["class_name"]),
+                        "score": float(item["score"]),
+                    }
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+        return classes
+
+    def _row_to_segment_dict(
+        self,
+        row: pd.Series,
+        include_sentiment: bool = False,
+        include_audio_classes: bool = False,
+    ) -> dict:
+        """Convert a DataFrame row to a segment dict."""
+        result = {
+            "segment_id": int(row.get("segment_id", 0)),
+            "text": str(row.get("text", "")),
+            "start_time": float(row.get("start_time", 0.0)),
+            "end_time": float(row.get("end_time", 0.0)),
+            "original_file_name": str(row.get("original_file_name", "")),
+            "language": str(row.get("language", "unknown")),
+            "confidence": float(row.get("confidence", 0.0)),
+        }
+
+        # Playback clip, present only in datasets ingested with clips enabled.
+        # The clip window is wider than the segment: it carries the surrounding
+        # context, so consumers need both pairs of timestamps to position the player.
+        clip_name = str(row.get("clip_file_name", "") or "")
+        if clip_name:
+            result.update(
+                {
+                    "clip_file_name": clip_name,
+                    "clip_start_time": float(row.get("clip_start_time", result["start_time"])),
+                    "clip_end_time": float(row.get("clip_end_time", result["end_time"])),
+                }
+            )
+            try:
+                reference = self._clip_store.reference(int(result["segment_id"]))
+            except Exception:  # noqa: BLE001 - playback must not disable search.
+                logger.warning(
+                    "Could not create playback URL for segment %s",
+                    result["segment_id"],
+                    exc_info=True,
+                )
+            else:
+                if reference is not None:
+                    result["clip_url"] = reference.url
+                    expires_at = getattr(reference, "expires_at", None)
+                    if expires_at is not None:
+                        result["clip_expires_at"] = datetime.fromtimestamp(
+                            expires_at, tz=timezone.utc
+                        ).isoformat()
+
+        if include_sentiment:
+            result.update(
+                {
+                    "sentiment_positive": float(row.get("sentiment_positive", 0.0)),
+                    "sentiment_negative": float(row.get("sentiment_negative", 0.0)),
+                    "sentiment_neutral": float(row.get("sentiment_neutral", 0.0)),
+                    "dominant_sentiment": str(row.get("dominant_sentiment", "neutral")),
+                }
+            )
+
+        if include_audio_classes:
+            result["yamnet_audio_classes"] = self._parse_audio_classes(
+                row.get("yamnet_top_classes", [])
+            )
+
+        return result

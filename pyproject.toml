@@ -1,201 +1,198 @@
 [tool.poetry]
-name = "audio-semantic-search-for-journalists"
-version = "1.0.0"
-description = "Sistema de búsqueda semántica multimodal (texto y audio) para contenido de audio hablado con enfoque periodístico"
-authors = ["Your Name <your.email@example.com>"]
+name = "audio-semantic-search"
+version = "0.1.0"
+description = "Búsqueda agéntica multimodal de audio para periodistas"
+authors = ["dev"]
 readme = "README.md"
-license = "GPL-3.0"
-homepage = "https://github.com/yourusername/audio-semantic-search-for-journalists"
-repository = "https://github.com/yourusername/audio-semantic-search-for-journalists"
-keywords = ["audio", "semantic-search", "nlp", "whisper", "embeddings", "journalism"]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11.13",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Multimedia :: Sound/Audio :: Speech",
+packages = [{include = "src"}]
+
+[project]
+name = "audio-semantic-search"
+version = "0.1.0"
+description = "Búsqueda agéntica multimodal de audio para periodistas"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "google-adk[eval,gcp,otel-gcp]>=2.6.0,<3.0.0",
+    "google-genai>=2.17.0",
+    "litellm>=1.0",
+    "a2a-sdk[http-server]>=1.0,<2",
+    "aiohttp>=3.13.4",
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.20",
+    "httpx>=0.27",
+    "pandas>=2.0",
+    "numpy>=1.24,<2.0",
+    "python-dotenv>=1.0",
+    "pydantic>=2.0",
+    "google-auth>=2.35",
+    "google-cloud-aiplatform[agent-engines,evaluation]>=1.156.0",
+    "google-cloud-logging>=3.12.0,<4.0.0",
+    "google-cloud-storage>=2.18,<4.0",
+    "gcsfs>=2024.11.0",
+    "protobuf>=6.31.1,<7.0.0",
+    "opentelemetry-resourcedetector-gcp<=1.12.0a0",
+]
+
+[project.optional-dependencies]
+# YAMNet is optional because TensorFlow substantially increases the local runtime.
+# Install it only in ingestion environments that classify acoustic events.
+yamnet = [
+    "tensorflow>=2.16,<2.21",
+    "tensorflow-hub>=0.16,<0.17",
+]
+eval-deepeval = [
+    "deepeval>=4.1,<5",
+]
+# Extras expected by `agents-cli lint`; kept in sync with the dev group.
+lint = [
+    "ruff>=0.8.0",
+    "codespell>=2.4",
+    "ty>=0.0.75",
+]
+
+[dependency-groups]
+# Heavy ML stack: PyTorch, CLAP, Whisper, FAISS and the audio toolchain.
+# Only the ingestion pipeline and the Cloud Run search service need these.
+# The ADK agent image is built with `--no-group ml` and reaches the models over
+# HTTP (see src/agent_service/search_client.py), which keeps that image small
+# enough for Agent Runtime to provision. See ARCHITECTURE-CLOUD.md.
+ml = [
+    "torch>=2.2",
+    "torchvision>=0.15",
+    "openai-whisper>=20231117",
+    "sentence-transformers>=2.2",
+    "transformers>=4.30",
+    "laion-clap>=1.1",
+    "faiss-cpu>=1.7",
+    "librosa>=0.10",
+    "soundfile>=0.12",
+    "pydub>=0.25",
+    "pysentimiento>=0.7",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "httpx>=0.24",
+    "ruff>=0.8.0",
+    "pre-commit>=3.0",
+]
+eval = [
+    "ragas>=0.1",
+    "datasets>=3.0",
+    # ragas<=0.4.x imports langchain_community.chat_models.vertexai unconditionally
+    # at module load time; that submodule was removed in langchain-community>=0.4.2.
+    # Pin below that version until ragas ships the upstream fix (see ragas #2741/#2753).
+    "langchain-community<0.4.2",
+    # RAGAS TestsetGenerator lo usa para distancias de string en transforms.
+    "rapidfuzz>=3.0",
 ]
 
 [tool.poetry.dependencies]
-python = "3.11.13"
-# Core ML libraries
-# Nota: numpy debe ser <2.0.0 por compatibilidad con laion-clap
-numpy = ">=1.23.5,<2.0.0"
-# Nota: triton solo funciona en Linux (para CUDA). En macOS usamos MPS.
-triton = {version = ">=2.0.0", optional = true, markers = "sys_platform == 'linux'"}
-openai-whisper = "^20231117"
-sentence-transformers = "^2.2.2"
-faiss-cpu = "^1.7.4"
-torch = "^2.1.0"
-torchaudio = "^2.1.0"
-torchvision = "^0.16.0"
-librosa = "^0.10.0"
-pandas = "^1.5.0"
-laion-clap = "^1.1.7"
-
-# External AI APIs
-google-generativeai = "*"
-openai = "*"
-transformers = "^4.20.0"
-
-# LangChain for agent functionality and scene detection
-langchain = "^0.1.0"
-langchain-openai = "^0.0.5"
-langchain-core = "^0.1.0"
-
+python = "~3.11"
+# Transcripción
+openai-whisper = ">=20231117"
+# Embeddings de texto
+sentence-transformers = ">=2.2"
+transformers = ">=4.30"
 # Audio processing
-soundfile = "^0.12.0"
-pydub = "^0.25.0"
-ffmpeg-python = "^0.2.0"
-
-# TensorFlow (optional for YAMNet)
-tensorflow = {version = "^2.17.0", optional = true}
-tensorflow-hub = {version = "^0.14.0", optional = true}
-
-# Web API
-plotly = "^5.15.0"
-fastapi = "^0.115.0"
-uvicorn = {extras = ["standard"], version = "^0.24.0"}
-# Nota: python-multipart y httpx deben ser compatibles con mcp
-# mcp requiere: python-multipart >=0.0.9 O httpx >=0.27
-python-multipart = ">=0.0.9"
-slowapi = "^0.1.9"
-mcp = "^1.0.0"
-httpx = ">=0.27"
-aiofiles = "^23.0.0"
-psutil = "^5.9.0"
-
-# Visualization
-matplotlib = "^3.7.0"
-seaborn = "^0.12.0"
-
-[tool.poetry.extras]
-yamnet = ["tensorflow", "tensorflow-hub"]
-all = ["tensorflow", "tensorflow-hub"]
+librosa = ">=0.10"
+soundfile = ">=0.12"
+pydub = ">=0.25"
+# Búsqueda vectorial
+faiss-cpu = ">=1.7"
+# Agente (Google ADK con OpenAI vía LiteLLM)
+google-adk = {version = ">=2.0,<3.0", extras = ["eval", "gcp"]}
+google-genai = ">=2.17.0"
+litellm = ">=1.0"
+a2a-sdk = "~=0.3.22"
+aiohttp = ">=3.13.4"
+# API
+fastapi = ">=0.100"
+uvicorn = {version = ">=0.20", extras = ["standard"]}
+# Datos
+pandas = ">=2.0"
+numpy = ">=1.24,<2.0"
+# Audio embeddings (CLAP)
+laion-clap = ">=1.1"
+torchvision = ">=0.15"
+# Sentiment analysis
+pysentimiento = ">=0.7"
+# Utilities
+python-dotenv = ">=1.0"
+pydantic = ">=2.0"
+# Runtime administrado de Agent Platform
+google-cloud-aiplatform = {version = ">=1.156.0", extras = ["evaluation", "agent-engines"]}
+google-cloud-logging = ">=3.12.0,<4.0.0"
+google-cloud-storage = ">=2.18,<4.0"
+opentelemetry-instrumentation-google-genai = ">=0.1.0,<1.0.0"
+gcsfs = ">=2024.11.0"
+protobuf = ">=6.31.1,<7.0.0"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.0.0"
-pytest-asyncio = "^0.21.0"
-ruff = "^0.8.0"
-pre-commit = "^3.0.0"  # Para git hooks automáticos
-black = "^22.0.0"  # Mantenido para compatibilidad, ruff puede reemplazarlo
-isort = "^5.0.0"  # Mantenido para compatibilidad, ruff puede reemplazarlo
-flake8 = "^5.0.0"  # Mantenido para compatibilidad, ruff puede reemplazarlo
-mypy = "^1.0.0"
+pytest = ">=7.0"
+pytest-asyncio = ">=0.21"
+httpx = ">=0.24"
+ruff = ">=0.8.0"
+pre-commit = ">=3.0"
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.poetry.group.eval.dependencies]
+ragas = ">=0.1"
+datasets = ">=3.0"
+# Ver nota en [dependency-groups] eval sobre el import roto de ragas.
+langchain-community = "<0.4.2"
+# RAGAS TestsetGenerator lo usa para distancias de string en transforms.
+rapidfuzz = ">=3.0"
 
-[tool.black]
-line-length = 88
-target-version = ['py311']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+[tool.poetry.group.deepeval.dependencies]
+deepeval = ">=4.1,<5"
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-known_first_party = ["src"]
+[tool.poetry.group.yamnet.dependencies]
+tensorflow = ">=2.16,<2.21"
+tensorflow-hub = ">=0.16,<0.17"
 
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false
-ignore_missing_imports = true
+[tool.uv]
+# `ml` resolves by default so local development, ingestion and the test suite
+# keep working with a plain `uv sync`. Container builds opt out explicitly.
+default-groups = ["dev", "ml"]
+
+# PyPI ships PyTorch linked against CUDA, which drags in ~3 GB (compressed) of
+# nvidia-* wheels and pushes the image past 8 GB. Nothing here runs on a GPU:
+# CLAP and the sentence-transformers encoder only encode short query strings,
+# and neither Agent Runtime nor the CPU Cloud Run service exposes a device.
+# Pinning the CPU index drops those wheels entirely.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "evaluation", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.codespell]
+# Codespell is English-centric; skip Spanish markdown/docs/data/specs and vendored dirs.
+skip = "*.md,copilotkit-proxy,data,docs,evaluation,node_modules,spec,spec-comparar,*.lock,*.json,*.csv,*.toml,*.yaml,*.yml,*.ipynb,uv.lock"
+check-hidden = false
+check-filenames = false
+ignore-words-list = "vectores,clases,responde,profesional,relevante,utiliza,valide,Componentes,serie,te"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = "-v --tb=short"
+asyncio_mode = "auto"
 
-# Configuración de Ruff (reemplaza black, isort y flake8)
-[tool.ruff]
-# Longitud de línea compatible con black
-line-length = 88
-target-version = "py311"
-
-# Excluir directorios comunes
-exclude = [
-    ".eggs",
-    ".git",
-    ".hg",
-    ".mypy_cache",
-    ".tox",
-    ".venv",
-    "build",
-    "dist",
-    "__pycache__",
-    "*.egg-info",
-]
-
-# Habilitar reglas de formato (compatible con black)
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-skip-magic-trailing-comma = false
-line-ending = "auto"
-
-# Habilitar reglas de linting (compatible con flake8)
-[tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
-    "ARG", # flake8-unused-arguments
-    "SIM", # flake8-simplify
-    "TCH", # flake8-type-checking
-    "PIE", # flake8-pie
-    "PT",  # flake8-pytest-style
-    "RET", # flake8-return
-    "RUF", # Ruff-specific rules
-]
-
-ignore = [
-    "E501",   # line too long (manejado por formatter)
-    "B008",   # do not perform function calls in argument defaults
-    "C901",   # too complex
-    "F401",   # imported but unused (muy común en proyectos existentes)
-    "F841",   # local variable assigned but never used
-    "ARG001", # unused function argument
-    "ARG002", # unused method argument
-    "ARG003", # unused class method argument
-    "ARG004", # unused static method argument
-    "ARG005", # unused lambda argument
-    "UP007",  # use X | Y for type annotations (muy estricto para proyectos existentes)
-    "RET504", # unnecessary assignment before return
-    "SIM108", # use ternary operator instead of if-else-block
-    "T201",   # print statements (común en scripts)
-    "T203",   # pprint statements
-    "PLR0913", # too many arguments
-    "PLR2004", # magic value used in comparison
-    "PLR0912", # too many branches
-    "PLR0915", # too many statements
-]
-
-# Configuración de isort (compatible con black)
-[tool.ruff.lint.isort]
-known-first-party = ["src"]
-force-sort-within-sections = true
-split-on-trailing-comma = true
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

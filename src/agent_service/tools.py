@@ -1,134 +1,219 @@
-"""Herramientas (tools) para el agente LangChain"""
+"""Function tools exposed by the ADK audio-search agent."""
 
 import logging
-from typing import Annotated
+import os
+from pathlib import Path
 
-from langchain_core.tools import tool
+from google.adk.tools import ToolContext
+
+from src.agent_service.search_client import SearchServiceClient, search_service_url
 
 logger = logging.getLogger(__name__)
 
+# Either a SearchServiceClient (deployed) or an AudioSearchEngine (local). Both
+# expose the same four retrieval methods, so the tools below do not branch.
+_search_engine = None
 
-@tool
-def buscar_audio(
-    query: Annotated[str, "Texto de búsqueda en lenguaje natural"],
-    k: Annotated[int, "Número de resultados a retornar (default: 5)"] = 5,
-) -> str:
+
+def set_search_engine(engine) -> None:
+    """Set the process-wide retrieval backend used by the agent tools."""
+    global _search_engine
+    _search_engine = engine
+
+
+def initialize_search_engine(dataset_path: str | None = None):
+    """Resolve the retrieval backend once.
+
+    With ``SEARCH_SERVICE_URL`` set the agent talks to the Cloud Run retrieval
+    service and never imports PyTorch, FAISS or the dataset; that is what keeps
+    the agent image deployable on Agent Runtime. Without it the models load
+    in-process, which is what local development, the playground and the
+    ingestion pipeline use.
     """
-    Busca segmentos de audio usando búsqueda semántica.
+    global _search_engine
+    if _search_engine is not None:
+        return _search_engine
 
-    Esta herramienta permite buscar contenido en audios transcritos usando
-    embeddings semánticos. Retorna los segmentos más relevantes según la consulta.
+    service_url = search_service_url()
+    if service_url and dataset_path is None:
+        _search_engine = SearchServiceClient(service_url)
+        logger.info("Retrieval delegated to search service at %s", service_url)
+        return _search_engine
+
+    # Imported here, not at module scope, so the dependency on the `ml` group
+    # stays confined to processes that actually run the models.
+    from src.agent_service.search_engine import AudioSearchEngine
+    from src.dataset_storage import resolve_dataset_path
+
+    configured_path = resolve_dataset_path(dataset_path)
+    _search_engine = AudioSearchEngine(configured_path)
+    logger.info("Search engine initialized in-process from %s", Path(configured_path))
+    return _search_engine
+
+
+def get_search_engine():
+    """Return the initialized retrieval backend, creating it lazily if needed."""
+    return initialize_search_engine()
+
+
+def _serialize_results(
+    results: list[dict], search_index: str, search_index_label: str
+) -> list[dict]:
+    """Return JSON-compatible search results with journalist-facing metadata."""
+    serialized: list[dict] = []
+    for result in results:
+        segment = result["segment"]
+        item = {
+            "segment_id": segment["segment_id"],
+            "search_index": search_index,
+            "search_index_label": search_index_label,
+            "text": segment["text"],
+            "similarity": round(result["similarity"], 4),
+            "similarity_percent": round(result["similarity"] * 100, 1),
+            "start_time": segment["start_time"],
+            "end_time": segment["end_time"],
+            "duration": round(segment["end_time"] - segment["start_time"], 1),
+            "original_file_name": segment["original_file_name"],
+            "language": segment["language"],
+            "confidence": segment["confidence"],
+        }
+        for field in ("clip_url", "clip_start_time", "clip_end_time", "clip_expires_at"):
+            if field in segment:
+                item[field] = segment[field]
+        serialized.append(item)
+    return serialized
+
+
+def buscar_audio(query: str, k: int = 5, tool_context: ToolContext | None = None) -> dict:
+    """Busca texto semánticamente en las transcripciones del corpus de audio.
 
     Args:
-        query: Texto de búsqueda en lenguaje natural (ej: "política económica",
-               "entrevista sobre tecnología", "música de fondo")
-        k: Número de resultados a retornar (por defecto 5)
+        query: Consulta del periodista en lenguaje natural.
+        k: Cantidad máxima de segmentos a devolver, entre 1 y 20.
 
     Returns:
-        String JSON con los resultados de búsqueda, incluyendo:
-        - segment_id: ID del segmento
-        - text: Texto transcrito
-        - similarity: Similitud con la consulta (0-1)
-        - start_time: Tiempo de inicio en segundos
-        - end_time: Tiempo de fin en segundos
-        - original_file_name: Nombre del archivo de audio original
-        - language: Idioma detectado
+        Un objeto con resultados, fuente, timestamps y similitud.
     """
-    # Esta función será modificada dinámicamente con el motor de búsqueda
-    # cuando se inicialice el agente
-    raise RuntimeError(
-        "Motor de búsqueda no inicializado. "
-        "Usa AudioAgent.initialize() primero."
-    )
+    if tool_context is not None:
+        k = int(tool_context.state.get("max_results", k))
+    if not query.strip():
+        return {"status": "error", "error": "La consulta no puede estar vacía.", "results": []}
+    if not 1 <= k <= 20:
+        return {"status": "error", "error": "k debe estar entre 1 y 20.", "results": []}
+
+    try:
+        return {
+            "status": "success",
+            "modality": "text",
+            "results": _serialize_results(
+                get_search_engine().search_semantic(query, k=k),
+                search_index="text",
+                search_index_label="Índice de texto (transcripciones)",
+            ),
+        }
+    except Exception as error:
+        logger.exception("Text search failed")
+        return {"status": "error", "error": str(error), "results": []}
 
 
-@tool
-def obtener_info_segmento(
-    segment_id: Annotated[int, "ID del segmento a consultar"],
-) -> str:
-    """
-    Obtiene información detallada de un segmento específico.
+def buscar_evento_acustico(query: str, k: int = 5, tool_context: ToolContext | None = None) -> dict:
+    """Busca eventos acústicos con CLAP a partir de una descripción textual.
 
-    Usa esta herramienta cuando necesites información completa sobre un
-    segmento de audio, incluyendo metadatos, transcripción completa y
-    características del audio.
+    Úsala para aplausos, música, gritos, risas u otros sonidos que pueden no
+    estar presentes en la transcripción.
 
     Args:
-        segment_id: ID numérico del segmento (se obtiene de los resultados
-                   de búsqueda)
+        query: Descripción textual del evento acústico.
+        k: Cantidad máxima de segmentos a devolver, entre 1 y 20.
 
     Returns:
-        String JSON con toda la información del segmento
+        Un objeto con resultados acústicos, fuente, timestamps y similitud.
     """
-    # Esta función será modificada dinámicamente con el motor de búsqueda
-    # cuando se inicialice el agente
-    raise RuntimeError(
-        "Motor de búsqueda no inicializado. "
-        "Usa AudioAgent.initialize() primero."
-    )
+    if tool_context is not None:
+        k = int(tool_context.state.get("max_results", k))
+    if not query.strip():
+        return {"status": "error", "error": "La consulta no puede estar vacía.", "results": []}
+    if not 1 <= k <= 20:
+        return {"status": "error", "error": "k debe estar entre 1 y 20.", "results": []}
+
+    try:
+        return {
+            "status": "success",
+            "modality": "audio",
+            "results": _serialize_results(
+                get_search_engine().search_audio_by_text(query, k=k),
+                search_index="audio",
+                search_index_label="Índice de audio (CLAP)",
+            ),
+        }
+    except Exception as error:
+        logger.exception("Audio-event search failed")
+        return {"status": "error", "error": str(error), "results": []}
 
 
-def get_tools(search_engine) -> list:
-    """
-    Obtiene las herramientas configuradas con el motor de búsqueda
+def obtener_info_segmento(segment_id: int) -> dict:
+    """Obtiene los metadatos completos de un segmento recuperado previamente.
 
     Args:
-        search_engine: Instancia de AudioSearchEngine
+        segment_id: Identificador estable del segmento.
 
     Returns:
-        Lista de herramientas LangChain configuradas
+        Los metadatos del segmento o un error si no existe.
     """
-    import json
+    try:
+        result = get_search_engine().get_segment_info(segment_id)
+    except Exception as error:
+        logger.exception("Segment lookup failed")
+        return {"status": "error", "error": str(error)}
 
-    @tool
-    def buscar_audio_impl(
-        query: Annotated[str, "Texto de búsqueda en lenguaje natural"],
-        k: Annotated[int, "Número de resultados a retornar (default: 5)"] = 5,
-    ) -> str:
-        """Busca segmentos de audio usando búsqueda semántica."""
-        try:
-            results = search_engine.search_semantic(query, k)
-            # Formatear resultados para el agente
-            formatted_results = []
-            for result in results:
-                segment = result["segment"]
-                formatted_results.append(
-                    {
-                        "segment_id": segment.get("segment_id", ""),
-                        "text": segment.get("text", ""),
-                        "similarity": round(result["similarity"], 4),
-                        "similarity_percent": round(result["similarity"] * 100, 1),
-                        "start_time": segment.get("start_time", 0),
-                        "end_time": segment.get("end_time", 0),
-                        "duration": segment.get("end_time", 0)
-                        - segment.get("start_time", 0),
-                        "original_file_name": segment.get(
-                            "original_file_name", segment.get("source_file", "N/A")
-                        ),
-                        "language": segment.get("language", "N/A"),
-                        "confidence": segment.get("confidence"),
-                    }
-                )
-            return json.dumps(formatted_results, indent=2, ensure_ascii=False)
-        except Exception as e:
-            logger.error(f"Error en búsqueda: {e}")
-            return json.dumps({"error": str(e)})
-
-    @tool
-    def obtener_info_segmento_impl(
-        segment_id: Annotated[int, "ID del segmento a consultar"],
-    ) -> str:
-        """Obtiene información detallada de un segmento específico."""
-        try:
-            segment_info = search_engine.get_segment_info(segment_id)
-            if segment_info is None:
-                return json.dumps({"error": f"Segmento {segment_id} no encontrado"})
-            return json.dumps(segment_info, indent=2, ensure_ascii=False, default=str)
-        except Exception as e:
-            logger.error(f"Error obteniendo info del segmento: {e}")
-            return json.dumps({"error": str(e)})
-
-    return [buscar_audio_impl, obtener_info_segmento_impl]
+    if result is None:
+        return {"status": "error", "error": f"Segmento {segment_id} no encontrado."}
+    return {"status": "success", "segment": result}
 
 
+def obtener_clases_audio(segment_id: int) -> dict:
+    """Obtiene las clases de AudioSet detectadas por YAMNet para un segmento.
 
+    Úsala después de recuperar un segmento para identificar eventos acústicos
+    estandarizados. Las etiquetas de YAMNet están en inglés y sus scores son
+    probabilidades del clasificador, no porcentajes de similitud de CLAP.
+
+    Args:
+        segment_id: Identificador estable del segmento.
+
+    Returns:
+        Las clases acústicas detectadas, o información para reprocesar el dataset.
+    """
+    try:
+        classes = get_search_engine().get_audio_classes(segment_id)
+    except Exception as error:
+        logger.exception("YAMNet class lookup failed")
+        return {"status": "error", "error": str(error)}
+
+    if classes is None:
+        return {"status": "error", "error": f"Segmento {segment_id} no encontrado."}
+    if not classes:
+        return {
+            "status": "not_available",
+            "error": "El dataset no contiene clases YAMNet para este segmento. "
+            "Reprocésalo habilitando yamnet en config/embeddings.toml.",
+            "classes": [],
+        }
+    return {"status": "success", "classifier": "yamnet", "classes": classes}
+
+
+def get_all_tools() -> list:
+    """Return plain Python functions that ADK converts to FunctionTools.
+
+    Use ``AGENT_MODALITY`` to restrict retrieval for modality ablations:
+    - ``text``  → only the text/transcription search tool.
+    - ``audio`` → only the CLAP cross-modal audio search tool.
+    - ``both`` (default) → all tools.
+    """
+    modality = os.environ.get("AGENT_MODALITY", "both").lower()
+    tools = [obtener_info_segmento, obtener_clases_audio]
+    if modality in ("both", "text"):
+        tools.append(buscar_audio)
+    if modality in ("both", "audio"):
+        tools.append(buscar_evento_acustico)
+    return tools

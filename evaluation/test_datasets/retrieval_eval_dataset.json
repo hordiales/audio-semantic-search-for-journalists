@@ -1,0 +1,22 @@
+{
+    "queries": [
+        {
+            "query_id": 1,
+            "query_text": "política económica",
+            "category": "discurso_politico",
+            "relevant_segment_ids": []
+        },
+        {
+            "query_id": 2,
+            "query_text": "entrevista sobre cambio climático",
+            "category": "entrevista",
+            "relevant_segment_ids": []
+        },
+        {
+            "query_id": 3,
+            "query_text": "aplausos durante discurso",
+            "category": "evento_acustico",
+            "relevant_segment_ids": []
+        }
+    ]
+}

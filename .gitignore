@@ -1,21 +1,12 @@
-# tmp
-#*.md
-docs/archive/*.md
-old/*
-
 # development files
 .cursorrules
 .vscode/*
-.supabase
 
 #custom files
 data/*
 dataset/*
 results/*
-activate-conda-env.sh
 tmp/*
-TODO.md
-BUGS-SOLVED/*
 
 # tools files, and binary data
 *.lock
@@ -123,6 +114,8 @@ ipython_config.py
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
 #uv.lock
+#exception to include it
+!uv.lock
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
@@ -160,6 +153,7 @@ celerybeat.pid
 
 # Environments
 .env
+deploy.env
 .envrc
 .venv
 env/
@@ -167,6 +161,12 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Node builds for the CopilotKit Cloud Run proxy and embeddable widget
+copilotkit-proxy/node_modules/
+copilotkit-proxy/dist/
+copilotkit-proxy/widget/node_modules/
+copilotkit-proxy/widget/dist-widget/
 
 # Spyder project settings
 .spyderproject

@@ -1,356 +1,295 @@
-import os
-
-import librosa
-import numpy as np
-import pandas as pd
-from pydub import AudioSegment
-from pydub.silence import detect_silence
-
-try:
-    import torch
-    import whisper
-    WHISPER_AVAILABLE = True
-except ImportError:
-    WHISPER_AVAILABLE = False
+"""Audio transcription module using OpenAI Whisper."""
 
 import logging
-import sys
+import re
+from dataclasses import dataclass
+from pathlib import Path
 
-try:
-    from .models_config import WhisperConfig, get_models_config
-except ImportError:
-    from models_config import WhisperConfig, get_models_config
+import whisper
 
-# Configuración de logging
-handler = logging.StreamHandler(sys.stderr)
-handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+logger = logging.getLogger(__name__)
 
 
-class AudioTranscriber:
-    """Transcripción de audio usando Whisper con configuración centralizada"""
+@dataclass
+class TranscriptionSegment:
+    segment_id: int
+    text: str
+    start_time: float
+    end_time: float
+    language: str
+    confidence: float
+    original_file_name: str
 
-    def __init__(self, model_name: str | None = None, config: WhisperConfig | None = None):
-        """
-        Inicializa el transcriptor
 
-        Args:
-            model_name: Nombre del modelo Whisper (tiny, base, small, medium, large) - opcional
-            config: Configuración específica de Whisper - usa configuración global si None
-        """
-        if not WHISPER_AVAILABLE:
-            raise RuntimeError("Whisper no está disponible. Instala con: pip install openai-whisper")
+@dataclass(frozen=True)
+class ChunkingConfig:
+    """How Whisper segments are transformed before embedding generation."""
 
-        # Cargar configuración
-        if config is None:
-            models_config = get_models_config()
-            self.config = models_config.whisper_config
-            # Usar el modelo configurado globalmente si no se especifica uno
-            if model_name is None:
-                model_name = models_config.get_whisper_model_name()
-        else:
-            self.config = config
-            if model_name is None:
-                model_name = config.model_name
+    strategy: str = "whisper"
+    duration_sec: float = 30.0
+    overlap_sec: float = 5.0
+    max_text_chars: int = 500
 
-        self.model_name = model_name
-        self.device = self._get_device()
 
-        # Intentar cargar el modelo con manejo de errores para MPS
-        try:
-            self.model = whisper.load_model(model_name, device=self.device)
-            logging.info(f"Modelo Whisper '{model_name}' cargado en {self.device}")
-        except (NotImplementedError, RuntimeError) as e:
-            # Si falla con MPS (problemas conocidos con tensores dispersos), usar CPU
-            if self.device == "mps":
-                logging.warning(
-                    f"⚠️  Error cargando modelo en MPS: {e!s}\n"
-                    "   Cambiando a CPU (MPS tiene limitaciones con algunas operaciones de Whisper)"
-                )
-                self.device = "cpu"
-                self.model = whisper.load_model(model_name, device=self.device)
-                logging.info(f"Modelo Whisper '{model_name}' cargado en {self.device} (fallback a CPU)")
+class ChunkingProcessor:
+    """Create globally identified chunks while preserving audio provenance."""
+
+    _VALID_STRATEGIES = frozenset({"whisper", "fixed", "sentence", "paragraph"})
+
+    def __init__(self, config: ChunkingConfig | None = None):
+        self.config = config or ChunkingConfig()
+        if self.config.strategy not in self._VALID_STRATEGIES:
+            raise ValueError(f"Unsupported chunk strategy: {self.config.strategy}")
+        if self.config.duration_sec <= 0:
+            raise ValueError("duration_sec must be greater than zero")
+        if not 0 <= self.config.overlap_sec < self.config.duration_sec:
+            raise ValueError("overlap_sec must be non-negative and less than duration_sec")
+        if self.config.max_text_chars <= 0:
+            raise ValueError("max_text_chars must be greater than zero")
+
+    def process_segments(self, segments: list[TranscriptionSegment]) -> list[TranscriptionSegment]:
+        """Return chunks with sequential IDs, grouped independently per source file."""
+        by_file: dict[str, list[TranscriptionSegment]] = {}
+        for segment in segments:
+            by_file.setdefault(segment.original_file_name, []).append(segment)
+
+        chunks: list[TranscriptionSegment] = []
+        for file_segments in by_file.values():
+            ordered = sorted(file_segments, key=lambda item: item.start_time)
+            if self.config.strategy == "whisper":
+                chunks.extend(ordered)
+            elif self.config.strategy == "fixed":
+                chunks.extend(self._fixed_chunks(ordered))
+            elif self.config.strategy == "sentence":
+                chunks.extend(self._sentence_chunks(ordered))
             else:
-                # Si no es MPS, re-lanzar el error
-                raise
+                chunks.extend(self._paragraph_chunks(ordered))
 
-    def _get_device(self) -> str:
-        """Determina el device a usar basado en la configuración"""
-        if self.config.device == "auto":
-            if torch.cuda.is_available():
-                return "cuda"
-            # MPS puede tener problemas con Whisper (tensores dispersos)
-            # Se intentará usar pero habrá fallback a CPU si falla
-            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                return "mps"  # Apple Silicon
-            return "cpu"
-        return self.config.device
+        return [
+            TranscriptionSegment(segment_id=index, **{
+                "text": chunk.text,
+                "start_time": chunk.start_time,
+                "end_time": chunk.end_time,
+                "language": chunk.language,
+                "confidence": chunk.confidence,
+                "original_file_name": chunk.original_file_name,
+            })
+            for index, chunk in enumerate(chunks)
+        ]
 
-    def load_audio(self, file_path: str) -> np.ndarray:
-        """
-        Carga un archivo de audio y lo convierte al formato requerido por Whisper
+    def _fixed_chunks(self, segments: list[TranscriptionSegment]) -> list[TranscriptionSegment]:
+        if not segments:
+            return []
+        chunks = []
+        start = segments[0].start_time
+        final_end = segments[-1].end_time
+        step = self.config.duration_sec - self.config.overlap_sec
+        while start < final_end:
+            end = min(start + self.config.duration_sec, final_end)
+            overlapping = [segment for segment in segments if segment.end_time > start and segment.start_time < end]
+            if overlapping:
+                chunks.append(self._combine(overlapping, start, end))
+            if end == final_end:
+                break
+            start += step
+        return chunks
 
-        Args:
-            file_path: Ruta al archivo de audio
+    def _sentence_chunks(self, segments: list[TranscriptionSegment]) -> list[TranscriptionSegment]:
+        chunks = []
+        for segment in segments:
+            sentences = [item.strip() for item in re.split(r"(?<=[.!?])\s+", segment.text) if item.strip()]
+            if len(sentences) <= 1:
+                chunks.append(segment)
+                continue
+            total_chars = sum(len(sentence) for sentence in sentences)
+            cursor = segment.start_time
+            for sentence in sentences:
+                duration = (segment.end_time - segment.start_time) * len(sentence) / total_chars
+                chunks.append(TranscriptionSegment(
+                    segment_id=0, text=sentence, start_time=cursor,
+                    end_time=min(cursor + duration, segment.end_time),
+                    language=segment.language, confidence=segment.confidence,
+                    original_file_name=segment.original_file_name,
+                ))
+                cursor += duration
+        return self._merge_by_text_length(chunks)
 
-        Returns:
-            Audio normalizado como array numpy
-        """
-        # Whisper requiere 16kHz mono
-        audio, _sr = librosa.load(file_path, sr=16000, mono=True)
-        return audio
+    def _paragraph_chunks(self, segments: list[TranscriptionSegment]) -> list[TranscriptionSegment]:
+        return self._merge_by_text_length(segments)
 
-    def segment_by_silence(self, audio_path: str, min_silence_len: int = 500,
-                          silence_thresh: int = -40) -> list[dict]:
-        """
-        Segmenta el audio basándose en silencios preservando timestamps originales
+    def _merge_by_text_length(self, segments: list[TranscriptionSegment]) -> list[TranscriptionSegment]:
+        if not segments:
+            return []
+        chunks: list[TranscriptionSegment] = []
+        current: list[TranscriptionSegment] = []
+        current_length = 0
+        for segment in segments:
+            additional = len(segment.text) + (1 if current else 0)
+            if current and current_length + additional > self.config.max_text_chars:
+                chunks.append(self._combine(current, current[0].start_time, current[-1].end_time))
+                current, current_length = [], 0
+            current.append(segment)
+            current_length += additional
+        if current:
+            chunks.append(self._combine(current, current[0].start_time, current[-1].end_time))
+        return chunks
 
-        Args:
-            audio_path: Ruta al archivo de audio
-            min_silence_len: Duración mínima del silencio en ms
-            silence_thresh: Umbral de silencio en dB
-
-        Returns:
-            Lista de diccionarios con información de segmentos con timestamps correctos
-        """
-        audio = AudioSegment.from_file(audio_path)
-
-        # PASO 1: Detectar silencios para obtener las posiciones originales
-        silence_ranges = detect_silence(
-            audio,
-            min_silence_len=min_silence_len,
-            silence_thresh=silence_thresh
+    @staticmethod
+    def _combine(
+        segments: list[TranscriptionSegment], start_time: float, end_time: float
+    ) -> TranscriptionSegment:
+        return TranscriptionSegment(
+            segment_id=0,
+            text=" ".join(segment.text for segment in segments),
+            start_time=start_time,
+            end_time=end_time,
+            language=segments[0].language,
+            confidence=sum(segment.confidence for segment in segments) / len(segments),
+            original_file_name=segments[0].original_file_name,
         )
 
-        # PASO 2: Calcular los rangos de audio (no-silencio) con timestamps originales
-        audio_ranges = []
-        start_pos = 0
 
-        for silence_start, silence_end in silence_ranges:
-            if start_pos < silence_start:
-                # Hay audio antes de este silencio
-                audio_ranges.append((start_pos, silence_start))
-            start_pos = silence_end
+def transcribe_audio(
+    audio_path: str,
+    model_name: str = "base",
+    language: str | None = None,
+) -> list[TranscriptionSegment]:
+    """
+    Transcribe audio usando Whisper y retorna segmentos.
 
-        # Añadir el último segmento si existe audio después del último silencio
-        if start_pos < len(audio):
-            audio_ranges.append((start_pos, len(audio)))
+    Args:
+        audio_path: Ruta al archivo WAV
+        model_name: Modelo Whisper a usar (tiny/base/small/medium/large)
+        language: Forzar idioma (None = auto-detección)
 
-        # Si no hay silencios detectados, todo el audio es un segmento
-        if not silence_ranges and len(audio) > 0:
-            audio_ranges = [(0, len(audio))]
+    Returns:
+        Lista de segmentos transcritos
+    """
+    audio_file = Path(audio_path)
+    if not audio_file.exists():
+        raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-        # PASO 3: Crear segmentos con timestamps originales correctos
-        segments = []
+    logger.info("Loading Whisper model '%s'...", model_name)
+    model = whisper.load_model(model_name)
 
-        for i, (start_ms, end_ms) in enumerate(audio_ranges):
-            # Extraer el chunk con las posiciones originales
-            chunk = audio[start_ms:end_ms]
+    logger.info("Transcribing: %s", audio_file.name)
+    options = {}
+    if language:
+        options["language"] = language
 
-            # Calcular timestamps en segundos (basados en posiciones originales)
-            start_time = start_ms / 1000.0
-            end_time = end_ms / 1000.0
-            duration = (end_ms - start_ms) / 1000.0
+    result = model.transcribe(str(audio_file), **options)
 
-            # Guardar segmento temporal
-            temp_path = f"temp_segment_{i}.wav"
-            chunk.export(temp_path, format="wav")
+    detected_language = result.get("language", "unknown")
+    segments = []
 
-            segment_info = {
-                'segment_id': i,
-                'start_time': start_time,
-                'end_time': end_time,
-                'duration': duration,
-                'temp_path': temp_path,
-                'source_file': audio_path,
-                'original_start_ms': start_ms,  # Para debugging
-                'original_end_ms': end_ms       # Para debugging
-            }
+    for i, seg in enumerate(result.get("segments", [])):
+        text = seg.get("text", "").strip()
+        if not text:
+            continue
 
-            segments.append(segment_info)
+        confidence = _compute_confidence(seg)
 
-        logging.info(f"Segmentación por silencio: {len(segments)} segmentos detectados")
-        if len(segments) > 0:
-            total_audio_time = sum(seg['duration'] for seg in segments)
-            original_duration = len(audio) / 1000.0
-            logging.info(f"Tiempo total de audio: {total_audio_time:.2f}s de {original_duration:.2f}s originales")
+        segments.append(
+            TranscriptionSegment(
+                segment_id=i,
+                text=text,
+                start_time=seg.get("start", 0.0),
+                end_time=seg.get("end", 0.0),
+                language=detected_language,
+                confidence=confidence,
+                original_file_name=audio_file.name,
+            )
+        )
 
-        return segments
+    logger.info(
+        "Transcribed %d segments from %s (language: %s)",
+        len(segments),
+        audio_file.name,
+        detected_language,
+    )
+    return segments
 
-    def segment_by_time(self, audio_path: str, segment_duration: float = 10.0) -> list[dict]:
-        """
-        Segmenta el audio en intervalos fijos de tiempo
 
-        Args:
-            audio_path: Ruta al archivo de audio
-            segment_duration: Duración de cada segmento en segundos
+def _compute_confidence(segment: dict) -> float:
+    """Compute confidence score from Whisper segment data."""
+    avg_logprob = segment.get("avg_logprob", -1.0)
+    no_speech_prob = segment.get("no_speech_prob", 0.0)
+    import math
 
-        Returns:
-            Lista de diccionarios con información de segmentos
-        """
-        audio = AudioSegment.from_file(audio_path)
-        total_duration = len(audio) / 1000.0  # Duración total en segundos
+    prob = math.exp(avg_logprob) if avg_logprob > -10 else 0.0
+    confidence = prob * (1.0 - no_speech_prob)
+    return max(0.0, min(1.0, confidence))
 
-        segments = []
-        current_time = 0
-        segment_id = 0
 
-        while current_time < total_duration:
-            start_ms = int(current_time * 1000)
-            end_ms = int(min((current_time + segment_duration) * 1000, len(audio)))
+def transcribe_directory(
+    audio_dir: str,
+    model_name: str = "base",
+    language: str | None = None,
+    start_id: int = 0,
+) -> list[TranscriptionSegment]:
+    """
+    Transcribe all WAV files in a directory.
 
-            chunk = audio[start_ms:end_ms]
-            duration = (end_ms - start_ms) / 1000.0
+    Args:
+        audio_dir: Directory with WAV files
+        model_name: Whisper model name
+        language: Force language or None for auto-detect
+        start_id: Starting segment_id for global uniqueness
 
-            # Guardar segmento temporal
-            temp_path = f"temp_segment_{segment_id}.wav"
-            chunk.export(temp_path, format="wav")
+    Returns:
+        All transcription segments with globally unique IDs
+    """
+    audio_path = Path(audio_dir)
+    return transcribe_files(sorted(audio_path.glob("*.wav")), model_name, language, start_id)
 
-            segment_info = {
-                'segment_id': segment_id,
-                'start_time': current_time,
-                'end_time': current_time + duration,
-                'duration': duration,
-                'temp_path': temp_path,
-                'source_file': audio_path
-            }
 
-            segments.append(segment_info)
-            current_time += segment_duration
-            segment_id += 1
+def transcribe_files(
+    wav_files: list[str | Path],
+    model_name: str = "base",
+    language: str | None = None,
+    start_id: int = 0,
+) -> list[TranscriptionSegment]:
+    """Transcribe a selected list of WAV files with one shared Whisper model."""
+    wav_paths = [Path(wav_file) for wav_file in wav_files]
 
-        return segments
+    if not wav_paths:
+        logger.warning("No WAV files selected for transcription")
+        return []
 
-    def transcribe_segments(self, segments: list[dict]) -> list[dict]:
-        """
-        Transcribe una lista de segmentos de audio
+    logger.info("Loading Whisper model '%s' once for batch...", model_name)
+    model = whisper.load_model(model_name)
 
-        Args:
-            segments: Lista de diccionarios con información de segmentos
+    all_segments = []
+    current_id = start_id
 
-        Returns:
-            Lista de segmentos con transcripciones añadidas
-        """
-        transcribed_segments = []
+    for wav_file in wav_paths:
+        logger.info("Transcribing: %s", wav_file.name)
+        options = {}
+        if language:
+            options["language"] = language
 
-        for segment in segments:
-            try:
-                # Transcribir el segmento usando configuración
-                transcribe_options = {
-                    'language': self.config.language,
-                    'temperature': self.config.temperature,
-                    'no_speech_threshold': self.config.no_speech_threshold,
-                    'logprob_threshold': self.config.logprob_threshold,
-                    'compression_ratio_threshold': self.config.compression_ratio_threshold
-                }
+        result = model.transcribe(str(wav_file), **options)
+        detected_language = result.get("language", "unknown")
 
-                # Filtrar opciones None
-                transcribe_options = {k: v for k, v in transcribe_options.items() if v is not None}
-
-                result = self.model.transcribe(segment['temp_path'], **transcribe_options)
-
-                # Añadir información de transcripción
-                segment_with_text = segment.copy()
-                segment_with_text.update({
-                    'text': result['text'].strip(),
-                    'language': result['language'],
-                    'confidence': getattr(result, 'confidence', None),
-                    'whisper_model': self.model_name,
-                    'whisper_config': transcribe_options
-                })
-
-                transcribed_segments.append(segment_with_text)
-
-                # Limpiar archivo temporal
-                if os.path.exists(segment['temp_path']):
-                    os.remove(segment['temp_path'])
-
-            except Exception as e:
-                logging.error(f"Error transcribiendo segmento {segment['segment_id']}: {e}")
+        for seg in result.get("segments", []):
+            text = seg.get("text", "").strip()
+            if not text:
                 continue
 
-        return transcribed_segments
+            confidence = _compute_confidence(seg)
 
-    def process_audio_file(self, file_path: str, segmentation_method: str = "silence",
-                          **kwargs) -> pd.DataFrame:
-        """
-        Procesa un archivo de audio completo: segmenta y transcribe
+            all_segments.append(
+                TranscriptionSegment(
+                    segment_id=current_id,
+                    text=text,
+                    start_time=seg.get("start", 0.0),
+                    end_time=seg.get("end", 0.0),
+                    language=detected_language,
+                    confidence=confidence,
+                    original_file_name=wav_file.name,
+                )
+            )
+            current_id += 1
 
-        Args:
-            file_path: Ruta al archivo de audio
-            segmentation_method: 'silence' o 'time'
-            min_silence_len: Duración mínima de silencio para segmentar (ms)
-            silence_thresh: Umbral de silencio (dBFS)
-            segment_duration: Duración de cada segmento en segundos (para método 'time')
-
-        Returns:
-            DataFrame con segmentos y transcripciones
-        """
-        logging.info(f"Procesando archivo: {file_path}")
-
-        # Cargar y segmentar audio
-        if segmentation_method == 'silence':
-            segments = self.segment_by_silence(file_path, **kwargs)
-        elif segmentation_method == "time":
-            segments = self.segment_by_time(file_path, **kwargs)
-        else:
-            raise ValueError("segmentation_method debe ser 'silence' o 'time'")
-
-        logging.info(f"Encontrados {len(segments)} segmentos")
-
-        # Transcribir segmentos
-        transcribed_segments = self.transcribe_segments(segments)
-
-        # Convertir a DataFrame
-        df = pd.DataFrame(transcribed_segments)
-
-        # Filtrar segmentos vacíos o muy cortos
-        df = df[df['text'].str.len() > 3]
-
-        return df
-
-    def process_multiple_files(self, file_paths: list[str],
-                             segmentation_method: str = "silence",
-                             **kwargs) -> pd.DataFrame:
-        """
-        Procesa múltiples archivos de audio
-
-        Args:
-            file_paths: Lista de rutas a archivos de audio
-            segmentation_method: Método de segmentación
-            **kwargs: Argumentos adicionales
-
-        Returns:
-            DataFrame combinado con todos los segmentos
-        """
-        all_segments = []
-
-        for file_path in file_paths:
-            try:
-                segments_df = self.process_audio_file(file_path, segmentation_method, **kwargs)
-                all_segments.append(segments_df)
-            except Exception as e:
-                logging.error(f"Error procesando {file_path}: {e}")
-                continue
-
-        if all_segments:
-            combined_df = pd.concat(all_segments, ignore_index=True)
-            return combined_df
-        return pd.DataFrame()
-
-
-# Ejemplo de uso
-if __name__ == "__main__":
-    # Ejemplo de uso del transcriptor
-    transcriber = AudioTranscriber(model_name="base")
-
-    # Procesar un archivo individual
-    # df = transcriber.process_audio_file("ejemplo.wav", segmentation_method="silence")
-    # print(df.head())
-
-    # Procesar múltiples archivos
-    # files = ["audio1.wav", "audio2.mp3"]
-    # df = transcriber.process_multiple_files(files)
-    # print(f"Total de segmentos: {len(df)}")
-
-    logging.info("Módulo de transcripción listo. Usar AudioTranscriber para procesar archivos.")
+    logger.info("Total segments transcribed: %d from %d files", len(all_segments), len(wav_paths))
+    return all_segments

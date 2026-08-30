@@ -1,312 +1,331 @@
-# Búsqueda Semántica en Audios con fines Periodísticos
+# Búsqueda Agéntica de Audio para Periodistas
 
-Sistema completo para realizar búsqueda semántica multimodal (texto y audio) de contenido de audio hablado con enfoque en aplicaciones periodísticas. Permite la búsqueda analizando el texto y el análisis de sentimiento del mismo, pero también buscar en el audio por eventos de la ontología AudioSet (aplausos, gritos, música de fondo, etc).
+Sistema de **búsqueda agéntica multimodal** (texto y audio) diseñado para periodistas. Un agente de IA con acceso a herramientas realiza búsqueda semántica sobre un corpus de audios previamente transcritos e indexados, combinando embeddings de texto y embeddings acústicos.
 
-## 🎯 Características
+## Stack Tecnológico
 
-- **Embeddings semánticos** de texto con sentence-transformers
-- **Embeddings acústicos** con YAMNet según ontología de AudioSet
-- **Múltiples modelos de audio**: YAMNet, CLAP, SpeechDPR
-- **Indexación vectorial** con FAISS, Supabase, ChromaDB
-- **Transcripción automática** con OpenAI Whisper
-- **Análisis de sentimiento** integrado
-- **MCP server** para consultar desde LLMs
-- **API REST** con FastAPI para funcionar como servicio
-- **CLI** para búsqueda interactiva
+|Componente|Tecnología|
+|---|---|
+|Lenguaje|Python 3.11|
+|Gestión de dependencias|uv|
+|Transcripción|OpenAI Whisper|
+|Embeddings de texto|Sentence Transformers (all-MiniLM-L6-v2)|
+|Embeddings de audio|CLAP (LAION)|
+|Indexación vectorial|FAISS|
+|Agente|Google ADK + LiteLLM/OpenAI GPT-4o-mini|
+|API REST|FastAPI + Uvicorn|
+|Evaluación|RAGAS o DeepEval + métricas IR custom|
 
-## 🚀 Inicio Rápido
+## Setup
 
 ### Prerequisitos
 
-- **Python 3.11.13** (requerido exactamente) - usar pyenv
-- **Poetry** para gestión de dependencias (recomendado)
-- **ffmpeg** para procesamiento de audio
-
-### Instalación Rápida
-
 ```bash
-# 1. Instalar pyenv (si no lo tienes)
-# macOS: brew install pyenv
-# Linux: curl https://pyenv.run | bash
-
-# 2. Instalar Python 3.11.13
+# Python 3.11
 pyenv install 3.11.13
 pyenv local 3.11.13
 
-# 3. Instalar Poetry
-curl -sSL https://install.python-poetry.org | python3 -
+# uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 4. Clonar e instalar
-git clone <url-del-repositorio>
-cd audio-semantic-search-for-journalists
-poetry install  # ⚠️ El venv se crea AUTOMÁTICAMENTE aquí
-poetry shell    # Opcional: activar venv (o usar 'poetry run' sin activar)
-
-# 5. (Opcional) Instalar extras para YAMNet
-poetry install --extras yamnet
+# ffmpeg (macOS)
+brew install ffmpeg
 ```
 
-Para más detalles, ver [docs/INSTALL.md](docs/INSTALL.md).
-
-**⚠️ IMPORTANTE**: Este proyecto requiere exactamente Python 3.11.13.
-
-## 📖 Documentación
-
-### Guías Principales
-
-- **[Instalación](docs/INSTALL.md)** - Guía completa de instalación
-- **[Guía Completa: Dataset y Búsqueda](docs/GUIA_DATASET_Y_BUSQUEDA.md)** - 🆕 Paso a paso para generar dataset y usar CLI
-- **[Dataset](docs/DATASET.md)** - Crear y procesar datasets
-- **[README Principal de Docs](docs/README.md)** - Índice completo de documentación
-
-### Interfaces y APIs
-
-- **[API REST](doc/API_README.md)** - Documentación de la API FastAPI
-- **[MCP Server](doc/MCP_SETUP.md)** - Integración con LLMs
-- **[Aplicaciones](doc/README_APPS.md)** - Guía de todas las interfaces
-
-### Documentación Técnica
-
-- **[Embeddings de Audio](doc/AUDIO_EMBEDDINGS_ARCHITECTURE.md)** - Arquitectura de embeddings
-- **[Estrategia de Chunking](doc/ESTRATEGIA_CHUNKING.md)** - Segmentación de audio
-- **[Evaluación de Modelos](doc/EMBEDDING_EVALUATION_SYSTEM.md)** - Framework de evaluación
-
-## 💻 Uso
-
-### CLI Interactivo
-
-**CLI de búsqueda local con FAISS (Recomendado):**
-```bash
-# Solo requiere dataset local - no necesita Supabase ni internet
-poetry run python examples/demos/cli_audio_search.py ./dataset
-```
-
-**CLI alternativo:**
-```bash
-poetry run python src/query_client.py ./dataset --interactive
-```
-
-Ver [docs/GUIA_DATASET_Y_BUSQUEDA.md](docs/GUIA_DATASET_Y_BUSQUEDA.md) para guía completa paso a paso.
-
-### API REST
+### Instalación
 
 ```bash
-# Opción 1: API principal (services/app/main.py)
-cd services
-poetry run python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
+# Instalar dependencias base
+uv sync
 
-# Acceder a documentación Swagger
-open http://localhost:8080/docs
-# O ReDoc: http://localhost:8080/redoc
+# Configurar variables de entorno
+cp .env.example .env
+# Editar .env con tu OPENAI_API_KEY
+
+# Instalar pre-commit hooks
+uv run pre-commit install
+
+# Dependencias opcionales de evaluación
+uv sync --group eval          # RAGAS
+uv sync --extra eval-deepeval # DeepEval
 ```
 
-Ver [doc/API_FASTAPI.md](doc/API_FASTAPI.md) para más detalles y opciones.
+## Uso
 
-### Uso Programático
+Para procesar WAV, OPUS u otros audios reales, seguí la guía operativa
+[Crear un dataset con audios reales](docs/guia-dataset-real.md).
 
-```python
-from src.semantic_search import SemanticSearchEngine
+### Configurar embeddings activos
 
-engine = SemanticSearchEngine()
-results = engine.search("economía y inflación")
+La fuente de verdad es `.env`. Antes de cada ejecución de la CLI, el pipeline
+genera [config/embeddings.toml](config/embeddings.toml) a partir de las
+variables `EMBEDDINGS_*`; no edites el TOML manualmente. Por ejemplo, para
+habilitar Gemini junto con los índices actuales:
+
+```dotenv
+GEMINI_API_KEY=tu-clave
+EMBEDDINGS_ACTIVE=text,clap,gemini
+GEMINI_EMBEDDING_MODEL=gemini-embedding-2
+GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY=1536
 ```
 
-Ver [doc/QUICK_START.md](doc/QUICK_START.md) para más ejemplos.
+- `text`: MiniLM para consulta↔transcripción (`text_index.faiss`).
+- `clap`: CLAP para consulta↔audio (`audio_index.faiss`).
+- `gemini`: Gemini Embedding 2 nativo para consulta↔audio
+  (`gemini_audio_index.faiss`); requiere `GEMINI_API_KEY`.
+- `yamnet`: clasificador AudioSet por segmento. Guarda etiquetas y scores de
+  eventos acústicos, pero no crea un índice FAISS. Requiere `uv sync --extra yamnet`.
 
-## 📁 Estructura del Proyecto
+Para habilitar YAMNet, usar `EMBEDDINGS_ACTIVE=text,clap,yamnet` y volver a
+procesar el corpus. Las demás variables disponibles son
+`TEXT_EMBEDDING_MODEL`, `CLAP_EMBEDDING_MODEL`, `YAMNET_MODEL` y `YAMNET_TOP_K`;
+están documentadas en `.env.example`.
+Las clases se consultan mediante `obtener_clases_audio` después de recuperar un
+segmento. YAMNet usa etiquetas AudioSet en inglés y es complementario a CLAP.
 
-```
-audio-semantic-search-for-journalists/
-├── src/                    # Código fuente principal
-│   ├── audio_transcription.py
-│   ├── text_embeddings.py
-│   ├── audio_embeddings.py
-│   ├── semantic_search.py
-│   └── ...
-├── benchmarks/             # Scripts de benchmarks y comparación
-├── tools/                  # Herramientas y utilidades
-│   ├── database/           # Scripts de bases de datos
-│   └── setup/              # Scripts de configuración
-├── examples/               # Ejemplos y demos
-│   └── demos/              # Scripts de demostración
-├── scripts/                # Scripts de utilidad general
-│   ├── sql/                # Scripts SQL
-│   └── shell/              # Scripts shell
-├── doc/                    # Documentación
-├── tests/                  # Tests
-├── mcp_server/            # Servidor MCP
-├── services/              # Servicios (GCP, etc.)
-├── pyproject.toml         # Configuración Poetry
-└── README.md              # Este archivo
-```
+`EMBEDDINGS_CONFIG_PATH` define dónde se escribe el TOML generado (por defecto,
+`./config/embeddings.toml`); `--embeddings-config` permite cambiar esa ruta por
+ejecución. El manifiesto final registra los embeddings efectivamente generados,
+sus modelos, dimensiones e índices.
 
-## 🔧 Configuración
+Las ejecuciones posteriores son incrementales: se reutilizan los resultados de
+audios sin cambios y sólo se procesan archivos nuevos o modificados. La huella
+de cada fuente y la firma de configuración se guardan en
+`final/ingestion_state.json`; cambiar chunking, Whisper, ventanas o embeddings
+fuerza una reconstrucción completa para conservar consistencia.
 
-### Variables de Entorno
+### 1. Pipeline de Ingesta
 
-Crear archivo `.env` en la raíz:
+Procesa archivos de audio y genera un dataset indexado:
 
 ```bash
-# APIs opcionales
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Configuración de modelos
-DEFAULT_WHISPER_MODEL=base
-DEFAULT_AUDIO_EMBEDDING_MODEL=yamnet
-USE_MOCK_AUDIO=false
-
-# Nivel de logging (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-# Por defecto: DEBUG (para desarrollo)
-# Para producción, cambiar a INFO
-LOG_LEVEL=INFO
+uv run python -m src.simple_dataset_pipeline \
+    --input data/ \
+    --output ./dataset \
+    --whisper-model base \
+    --batch-size 8 \
+    --verbose
 ```
 
-**Nota sobre LOG_LEVEL**:
-- El valor por defecto es `DEBUG` para facilitar el desarrollo
-- Para producción o cuando no necesites logs detallados, configura `LOG_LEVEL=INFO` en tu archivo `.env`
-- Esto afecta a todos los scripts del proyecto, incluyendo `scripts/fix_ruff_errors.py`
-
-Ver `src/config_loader.py` para todas las opciones.
-
-## 🧪 Testing
+Para testing sin CLAP (más rápido):
 
 ```bash
-# Ejecutar todos los tests
-poetry run pytest
-
-# Test específico
-poetry run pytest tests/functional/test_audio_segment_extraction.py
+uv run python -m src.simple_dataset_pipeline \
+    --input data/ \
+    --output ./dataset \
+    --mock-audio \
+    --verbose
 ```
 
-## 🔍 Pre-commit Hooks (Ruff)
-
-El proyecto incluye pre-commit hooks que ejecutan ruff automáticamente antes de cada commit para mantener la calidad del código:
+### 2. Servicio del Agente
 
 ```bash
-# 1. Instalar pre-commit (incluido en poetry install)
-poetry install
-
-# 2. Instalar los hooks de git
-poetry run pre-commit install
-
-# 3. (Opcional) Ejecutar manualmente en todos los archivos
-poetry run pre-commit run --all-files
+# Iniciar API
+uv run uvicorn src.fast_api_app:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --reload
 ```
 
-**Qué hace automáticamente:**
-- ✅ Ejecuta ruff linting y corrige errores automáticamente
-- ✅ Formatea el código con ruff
-- ✅ Verifica archivos YAML, JSON, TOML
-- ✅ Verifica que no se suban archivos grandes
-- ✅ Elimina espacios en blanco al final de líneas
-
-**Si un hook falla:**
-- Ruff intenta corregir automáticamente los errores
-- Si hay errores que no se pueden corregir automáticamente, el commit se bloquea
-- Revisa los errores, corrígelos y vuelve a intentar el commit
-
-Ver [docs/comandos-útiles.md](docs/comandos-útiles.md) para más detalles.
-
-## 📊 Modelos Soportados
-
-### Embeddings de Audio
-- **YAMNet**: Clasificación general de audio (1024 dim)
-- **CLAP**: Búsqueda multimodal audio-texto (512 dim)
-- **SpeechDPR**: Dense Passage Retrieval para speech (768 dim)
-
-### Embeddings de Texto
-- **Sentence Transformers**: all-MiniLM-L6-v2, all-mpnet-base-v2
-
-### Transcripción
-- **OpenAI Whisper**: tiny, base, small, medium, large
-
-## 🤝 Contribuir
-
-1. Fork el repositorio
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
-## 📄 Licencia
-
-Este proyecto está bajo la licencia GPLv3. Ver `LICENSE` para más detalles.
-
-## 🔗 Referencias
-
-- [OpenAI Whisper](https://github.com/openai/whisper)
-- [Sentence Transformers](https://github.com/UKPLab/sentence-transformers)
-- [FAISS](https://github.com/facebookresearch/faiss)
-- [YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet)
-- [FastAPI](https://fastapi.tiangolo.com/)
-
-## 🔧 Troubleshooting
-
-### Error: `NotImplementedError: Could not run 'aten::empty.memory_format' with arguments from the 'SparseMPS' backend`
-
-**Problema**: Whisper falla al cargarse en MPS (Apple Silicon) debido a limitaciones del backend con operaciones de tensores dispersos.
-
-**Solución automática**: El código detecta este error y automáticamente hace fallback a CPU. Verás un mensaje de advertencia:
-
-```
-⚠️  Error cargando modelo en MPS: ...
-   Cambiando a CPU (MPS tiene limitaciones con algunas operaciones de Whisper)
-```
-
-**Forzar CPU desde el inicio** (opcional):
-```bash
-export WHISPER_DEVICE=cpu
-poetry run python src/simple_dataset_pipeline.py --input data/ --output ./dataset
-```
-
-Para más detalles sobre GPU y MPS, ver [docs/GPU_CONSIDERATIONS.md](docs/GPU_CONSIDERATIONS.md).
-
-### Error: `No module named 'triton'` en macOS
-
-**Esperado.** Triton no está disponible para macOS. El código funciona sin él. Si `poetry install` falla por triton:
+### 3. Consultar al Agente
 
 ```bash
-# Crear venv (puede fallar en triton, pero crea el venv)
-poetry install || true
+# POST request
+curl -X POST http://localhost:8000/query \
+    -H "Content-Type: application/json" \
+    -d '{"query": "Busca segmentos sobre política económica", "max_results": 5}'
 
-# Instalar dependencias con pip (ignora triton)
-poetry run pip install -r requirements.txt
+# Health check
+curl http://localhost:8000/health
 ```
 
-### Error: TensorFlow no disponible (YAMNet)
+## Evaluación
 
-Si ves el mensaje `⚠️ TensorFlow no disponible. YAMNet no estará disponible.`:
+### Validar CLAP contra Clotho (sanity check de implementación)
+
+Antes de sacar conclusiones sobre CLAP en el corpus propio, conviene descartar
+un bug de integración corriéndolo contra el banco de pruebas público en el que
+fue entrenado. Ver la guía completa en
+[docs/evaluar-clap-clotho.md](docs/evaluar-clap-clotho.md).
 
 ```bash
-# Instalar extras para YAMNet
-poetry install --extras yamnet
+uv run python -m benchmarks.evaluate_clap_clotho \
+    --audio-dir data/clotho/evaluation \
+    --captions-csv data/clotho/clotho_captions_evaluation.csv \
+    --output evaluation/results/clap_clotho_eval.json \
+    --cache evaluation/results/.clap_clotho_audio_embeddings.npy
 ```
 
-### Problemas con Python 3.11.13
+Un buen resultado acá descarta un bug de implementación; no valida que CLAP
+funcione en audio periodístico en español, que es un dominio distinto.
 
-Este proyecto requiere exactamente Python 3.11.13. Si tienes otra versión:
+### Comparativa: esquema actual vs. Gemini Embedding 2
+
+El benchmark no modifica el servicio de producción. Evalúa por separado `minilm_text`
+(consulta↔transcripción), `clap_audio` (consulta↔audio) y
+`gemini_embedding_2_audio` (consulta↔WAV) sobre los mismos segmentos y queries
+anotadas. Requiere ventanas acústicas y `relevant_segment_ids` no vacíos.
 
 ```bash
-# Con pyenv
-pyenv install 3.11.13
-pyenv local 3.11.13
-
-# Verificar versión
-python --version  # Debe mostrar 3.11.13
+export GEMINI_API_KEY="..."
+uv run python -m benchmarks.compare_retrieval_with_gemini \
+    --dataset-path ./dataset \
+    --queries evaluation/test_datasets/retrieval_eval_dataset.json \
+    --output evaluation/results/gemini_comparison.json
 ```
 
-Para más problemas, ver [docs/GPU_CONSIDERATIONS.md](docs/GPU_CONSIDERATIONS.md) y [docs/INSTALL.md](docs/INSTALL.md).
+### Retrieval (RAG aislado)
 
-## 📞 Soporte
+```bash
+uv run python -m evaluation.retrieval_evaluation \
+    --dataset evaluation/test_datasets/retrieval_eval_dataset.json \
+    --dataset-path ./dataset \
+    --output evaluation/results/retrieval_results.json
+```
 
-- **Documentación**: Ver `docs/` para guías detalladas
-- **Problemas de GPU/MPS**: Ver [docs/GPU_CONSIDERATIONS.md](docs/GPU_CONSIDERATIONS.md)
-- **Problemas de instalación**: Ver [docs/INSTALL.md](docs/INSTALL.md)
-- **Issues**: Abrir un issue en el repositorio
+### Generar un dataset balanceado conceptual/acústico
 
----
+Para estudiar si CLAP mejora cuando las preguntas sí mencionan eventos sonoros,
+se puede generar un dataset pareado: una pregunta de contenido y una acústica
+por segmento. Ver `docs/reporte-comparativo-texto-clap.md` §5.3 para los
+resultados de este experimento.
 
-**Versión**: 1.0.0
-**Python**: 3.11.13 (requerido exactamente)
-**Última actualización**: Enero 2025
+```bash
+# Generar en español (idioma por defecto del proyecto)
+uv run python -m evaluation.generate_balanced_questions \
+    --max-segments 10 \
+    --output evaluation/test_datasets/synthetic/balanced_journalistic_questions_es.json
+
+# Evaluar CLAP sobre ese dataset
+uv run python -m benchmarks.compare_clap_by_question_type \
+    --dataset-path ./dataset \
+    --questions evaluation/test_datasets/synthetic/balanced_journalistic_questions_es.json \
+    --output evaluation/results/clap_retrieval_by_question_type_es.json
+```
+
+> Nota: el text encoder de CLAP (`laion/clap-htsat-unfused`) está entrenado en
+> inglés. Si `QUERY_LANGUAGE` en `.env` no es inglés, el sistema traduce
+> automáticamente la query al inglés antes de generar el embedding de CLAP.
+> Para medir el límite del modelo sin la barrera del idioma, también podés
+> generar el dataset balanceado en inglés (`--language en`).
+
+### Datasets de evaluación
+
+Existen tres fuentes de preguntas, controlables desde `.env`:
+
+- `manual`: preguntas escritas a mano.
+- `synthetic`: preguntas generadas por RAGAS a partir del corpus procesado.
+- `hybrid`: unión del manual y el sintético, sin duplicados.
+
+Variables relevantes en `.env`:
+
+```dotenv
+EVALUATION_DATASET_SOURCE=manual
+EVALUATION_DATASET_SIZE=20
+EVALUATION_DATASET_MAX_SEGMENTS=0
+EVALUATION_MANUAL_DATASET_PATH=./evaluation/test_datasets/ragas_eval_dataset_unlabeled.json
+EVALUATION_SYNTHETIC_DATASET_PATH=./evaluation/test_datasets/synthetic/ragas_synthetic_questions.json
+EVALUATION_HYBRID_DATASET_PATH=./evaluation/test_datasets/synthetic/ragas_hybrid_questions.json
+```
+
+Para generar preguntas sintéticas (requiere `OPENAI_API_KEY` y el corpus en `DATASET_PATH`):
+
+```bash
+# 20 preguntas sobre todo el corpus
+uv run python -m evaluation.generate_synthetic_questions \
+    --dataset-path ./dataset \
+    --size 20
+
+# También se puede definir cantidad y límite de segmentos por env:
+# EVALUATION_DATASET_SIZE=30
+# EVALUATION_DATASET_MAX_SEGMENTS=50
+
+# Si hay problemas de memoria/segfault en MPS (Apple Silicon), usar 1 worker
+# y embeddings en CPU:
+# EVALUATION_GENERATION_MAX_WORKERS=1
+# uv run python -m evaluation.generate_synthetic_questions --size 5
+```
+
+El resultado se escribe en `EVALUATION_SYNTHETIC_DATASET_PATH` y contiene una
+lista de `question` (y opcionalmente `ground_truth`/`ground_truth_contexts`,
+generados por RAGAS).
+
+### Dataset híbrido
+
+Para combinar el manual y el sintético en la misma evaluación:
+
+```dotenv
+EVALUATION_DATASET_SOURCE=hybrid
+```
+
+```bash
+# Primero generar las sintéticas si aún no existen
+uv run python -m evaluation.generate_synthetic_questions --size 20
+
+# Evaluar con la unión (el runner elimina duplicados, prioriza el manual)
+uv run python -m evaluation.run_agent_evaluation \
+    --agent-url http://localhost:8000 \
+    --output evaluation/results/hybrid_evaluation.json
+```
+
+El resultado combinado se guarda en `EVALUATION_HYBRID_DATASET_PATH`. Notá que
+las métricas con `ground_truth` (Context Precision, Context Recall y Answer
+Correctness) sólo se activan cuando **todas** las muestras del híbrido traen
+`ground_truth`.
+
+### Evaluación RAG del agente (RAGAS o DeepEval)
+
+```bash
+# Requiere servicio corriendo
+# En .env: EVALUATION_FRAMEWORK=ragas (default) o deepeval
+# Instalar: uv sync --group eval (RAGAS) o uv sync --extra eval-deepeval (DeepEval)
+
+# Usa el dataset definido por EVALUATION_DATASET_SOURCE
+uv run python -m evaluation.run_agent_evaluation \
+    --agent-url http://localhost:8000 \
+    --output evaluation/results/agent_evaluation.json
+
+# Sobrescribir el dataset por línea de comandos
+uv run python -m evaluation.run_agent_evaluation \
+    --dataset evaluation/test_datasets/ragas_eval_dataset.json \
+    --agent-url http://localhost:8000 \
+    --output evaluation/results/agent_evaluation.json
+```
+
+## Tests
+
+```bash
+uv run pytest tests/ -v
+```
+
+## Estructura del Proyecto
+
+```text
+├── src/                           # Código fuente
+│   ├── agent_service/             # Agente ADK y tools de retrieval
+│   │   ├── agent.py               # root_agent ADK + Runner compatible
+│   │   ├── search_engine.py       # Motor FAISS
+│   │   └── tools.py               # Tools del agente
+│   ├── fast_api_app.py            # Superficie ADK de producción
+│   ├── embedding_config.py        # Modalidades activas de ingesta
+│   ├── audio_conversion.py        # ffmpeg conversion
+│   ├── audio_transcription.py     # Whisper
+│   ├── text_embeddings.py         # MiniLM / Sentence Transformers
+│   ├── clap_audio_embeddings.py   # CLAP
+│   ├── gemini_multimodal_embeddings.py # Gemini Embedding 2 opcional
+│   ├── yamnet_audio_classifier.py # Clasificador YAMNet opcional
+│   ├── sentiment_analysis.py      # Sentiment analysis
+│   ├── vector_indexing.py         # FAISS indexing
+│   └── simple_dataset_pipeline.py # Pipeline orchestrator
+├── evaluation/                    # Framework de evaluación
+│   ├── ragas_evaluation.py        # RAGAS evaluation
+│   ├── retrieval_evaluation.py    # IR metrics
+│   └── test_datasets/             # Evaluation datasets
+├── tests/                         # Unit tests
+├── data/                          # Audio source (not versioned)
+├── dataset/                       # Processed dataset (not versioned)
+├── spec/                          # Specification documents
+├── pyproject.toml                 # Dependencias del proyecto
+├── uv.lock                        # Lockfile reproducible de uv
+└── .env.example                   # Environment template
+```
