@@ -13,13 +13,6 @@ description = "Búsqueda agéntica multimodal de audio para periodistas"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-    "openai-whisper>=20231117",
-    "sentence-transformers>=2.2",
-    "transformers>=4.30",
-    "librosa>=0.10",
-    "soundfile>=0.12",
-    "pydub>=0.25",
-    "faiss-cpu>=1.7",
     "google-adk[eval,gcp,otel-gcp]>=2.6.0,<3.0.0",
     "google-genai>=2.17.0",
     "litellm>=1.0",
@@ -27,13 +20,12 @@ dependencies = [
     "aiohttp>=3.13.4",
     "fastapi>=0.100",
     "uvicorn[standard]>=0.20",
+    "httpx>=0.27",
     "pandas>=2.0",
     "numpy>=1.24,<2.0",
-    "laion-clap>=1.1",
-    "torchvision>=0.15",
-    "pysentimiento>=0.7",
     "python-dotenv>=1.0",
     "pydantic>=2.0",
+    "google-auth>=2.35",
     "google-cloud-aiplatform[agent-engines,evaluation]>=1.156.0",
     "google-cloud-logging>=3.12.0,<4.0.0",
     "google-cloud-storage>=2.18,<4.0",
@@ -52,8 +44,32 @@ yamnet = [
 eval-deepeval = [
     "deepeval>=4.1,<5",
 ]
+# Extras expected by `agents-cli lint`; kept in sync with the dev group.
+lint = [
+    "ruff>=0.8.0",
+    "codespell>=2.4",
+    "ty>=0.0.75",
+]
 
 [dependency-groups]
+# Heavy ML stack: PyTorch, CLAP, Whisper, FAISS and the audio toolchain.
+# Only the ingestion pipeline and the Cloud Run search service need these.
+# The ADK agent image is built with `--no-group ml` and reaches the models over
+# HTTP (see src/agent_service/search_client.py), which keeps that image small
+# enough for Agent Runtime to provision. See ARCHITECTURE-CLOUD.md.
+ml = [
+    "torch>=2.2",
+    "torchvision>=0.15",
+    "openai-whisper>=20231117",
+    "sentence-transformers>=2.2",
+    "transformers>=4.30",
+    "laion-clap>=1.1",
+    "faiss-cpu>=1.7",
+    "librosa>=0.10",
+    "soundfile>=0.12",
+    "pydub>=0.25",
+    "pysentimiento>=0.7",
+]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
@@ -135,6 +151,25 @@ deepeval = ">=4.1,<5"
 tensorflow = ">=2.16,<2.21"
 tensorflow-hub = ">=0.16,<0.17"
 
+[tool.uv]
+# `ml` resolves by default so local development, ingestion and the test suite
+# keep working with a plain `uv sync`. Container builds opt out explicitly.
+default-groups = ["dev", "ml"]
+
+# PyPI ships PyTorch linked against CUDA, which drags in ~3 GB (compressed) of
+# nvidia-* wheels and pushes the image past 8 GB. Nothing here runs on a GPU:
+# CLAP and the sentence-transformers encoder only encode short query strings,
+# and neither Agent Runtime nor the CPU Cloud Run service exposes a device.
+# Pinning the CPU index drops those wheels entirely.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -146,6 +181,13 @@ ignore = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
+
+[tool.codespell]
+# Codespell is English-centric; skip Spanish markdown/docs/data/specs and vendored dirs.
+skip = "*.md,copilotkit-proxy,data,docs,evaluation,node_modules,spec,spec-comparar,*.lock,*.json,*.csv,*.toml,*.yaml,*.yml,*.ipynb,uv.lock"
+check-hidden = false
+check-filenames = false
+ignore-words-list = "vectores,clases,responde,profesional,relevante,utiliza,valide,Componentes,serie,te"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

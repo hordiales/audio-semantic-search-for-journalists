@@ -1,0 +1,161 @@
+import { GoogleAuth } from "google-auth-library";
+
+export type SearchIndex = "text" | "audio";
+
+export interface SearchPlan {
+  original_query: string;
+  indexes: SearchIndex[];
+  text_query?: string;
+  audio_query?: string;
+  audio_query_en?: string;
+  rationale?: string;
+}
+
+export interface DirectSearchRequest {
+  query: string;
+  indexes: SearchIndex[];
+  k: number;
+  rewrite: boolean;
+  plan?: SearchPlan;
+}
+
+interface RetrievalResult {
+  segment?: Record<string, unknown>;
+  similarity?: number;
+}
+
+interface RetrievalResponse {
+  results?: RetrievalResult[];
+}
+
+interface ServiceTransport {
+  request(method: "GET" | "POST", path: string, body?: unknown): Promise<unknown>;
+}
+
+const indexLabels: Record<SearchIndex, string> = {
+  text: "Índice de texto (transcripciones)",
+  audio: "Índice de audio (CLAP)",
+};
+
+export class SearchServiceClient implements ServiceTransport {
+  private readonly baseUrl: string;
+  private readonly auth = new GoogleAuth();
+
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl.replace(/\/$/, "");
+  }
+
+  async request(method: "GET" | "POST", path: string, body?: unknown): Promise<unknown> {
+    const client = await this.auth.getIdTokenClient(this.baseUrl);
+    const response = await client.request<unknown>({
+      url: `${this.baseUrl}${path}`,
+      method,
+      data: body,
+      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    });
+    return response.data;
+  }
+}
+
+export function parseSearchRequest(value: unknown): DirectSearchRequest {
+  if (!value || typeof value !== "object") throw new Error("El body debe ser un objeto JSON.");
+  const source = value as Record<string, unknown>;
+  const query = typeof source.query === "string" ? source.query.trim() : "";
+  if (!query) throw new Error("query es obligatorio.");
+
+  const indexes = Array.isArray(source.indexes)
+    ? source.indexes.filter((index): index is SearchIndex => index === "text" || index === "audio")
+    : [];
+  if (!indexes.length || indexes.length !== new Set(indexes).size) {
+    throw new Error("indexes debe contener texto, audio o ambos sin duplicados.");
+  }
+
+  const k = typeof source.k === "number" ? source.k : Number(source.k ?? 10);
+  if (!Number.isInteger(k) || k < 1 || k > 50) throw new Error("k debe ser un entero entre 1 y 50.");
+
+  const plan = parsePlan(source.plan, query, indexes);
+  return { query, indexes, k, rewrite: source.rewrite !== false, plan };
+}
+
+function parsePlan(value: unknown, query: string, indexes: SearchIndex[]): SearchPlan | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object") throw new Error("plan debe ser un objeto JSON.");
+  const source = value as Record<string, unknown>;
+  const planIndexes = Array.isArray(source.indexes)
+    ? source.indexes.filter((index): index is SearchIndex => index === "text" || index === "audio")
+    : indexes;
+  if (planIndexes.some((index) => !indexes.includes(index))) {
+    throw new Error("plan no puede agregar índices que el usuario no seleccionó.");
+  }
+  const optionalText = (field: "text_query" | "audio_query" | "audio_query_en" | "rationale") =>
+    typeof source[field] === "string" && source[field].trim() ? source[field].trim() : undefined;
+  return {
+    original_query: typeof source.original_query === "string" ? source.original_query : query,
+    indexes,
+    text_query: optionalText("text_query"),
+    audio_query: optionalText("audio_query"),
+    audio_query_en: optionalText("audio_query_en"),
+    rationale: optionalText("rationale"),
+  };
+}
+
+function effectivePlan(request: DirectSearchRequest): SearchPlan {
+  if (request.plan) return { ...request.plan, original_query: request.query, indexes: request.indexes };
+  return {
+    original_query: request.query,
+    indexes: request.indexes,
+    text_query: request.indexes.includes("text") ? request.query : undefined,
+    audio_query: request.indexes.includes("audio") ? request.query : undefined,
+    audio_query_en: request.indexes.includes("audio") ? request.query : undefined,
+    rationale: request.rewrite
+      ? "Reformulación no disponible: se ejecutó una búsqueda literal reproducible."
+      : "Búsqueda literal.",
+  };
+}
+
+function normalizeResults(payload: unknown, index: SearchIndex): Record<string, unknown>[] {
+  const response = payload as RetrievalResponse;
+  return (response.results ?? []).flatMap((item, position) => {
+    if (!item.segment || typeof item.segment !== "object") return [];
+    return [{
+      ...item.segment,
+      similarity: typeof item.similarity === "number" ? item.similarity : 0,
+      rank: position + 1,
+      search_index: index,
+      search_index_label: indexLabels[index],
+    }];
+  });
+}
+
+function unavailableIndex(query: string, message: string) {
+  return { available: false, effective_query: query, results: [], error: message };
+}
+
+export async function executeSearch(request: DirectSearchRequest, transport: ServiceTransport): Promise<Record<string, unknown>> {
+  const plan = effectivePlan(request);
+  const start = Date.now();
+  const searches = await Promise.all(request.indexes.map(async (index) => {
+    const query = index === "text"
+      ? plan.text_query || request.query
+      : plan.audio_query_en || plan.audio_query || request.query;
+    const path = index === "text" ? "/search/semantic" : "/search/audio";
+    try {
+      const payload = await transport.request("POST", path, { query, k: request.k });
+      return [index, {
+        available: true,
+        effective_query: index === "audio" ? (plan.audio_query || query) : query,
+        ...(index === "audio" ? { translated_query: query } : {}),
+        results: normalizeResults(payload, index),
+      }];
+    } catch (error) {
+      console.error(`Direct ${index} search failed`, error);
+      return [index, unavailableIndex(query, "Índice no disponible temporalmente.")];
+    }
+  }));
+  return {
+    query: request.query,
+    plan,
+    took_ms: Date.now() - start,
+    indexes: Object.fromEntries(searches),
+  };
+}
