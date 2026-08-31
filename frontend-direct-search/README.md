@@ -54,8 +54,12 @@ cp .env.example .env
 | `VITE_WEAK_TEXT_SIMILARITY` | Umbral opcional para advertir coincidencias débiles del índice de texto. |
 | `VITE_WEAK_AUDIO_SIMILARITY` | Umbral opcional para advertir coincidencias débiles de CLAP. |
 | `VITE_WEAK_YAMNET_SCORE` | Umbral opcional para advertir coincidencias débiles del ranking por clases YAMNet. |
+| `VITE_LOW_SCORE_WARNING` | Umbral visual por tarjeta: el score, barra y borde se muestran en rojo por debajo de este valor. Predeterminado: `0.10`. |
 
 Los umbrales deben medirse sobre el corpus real; no se configuran por defecto para no presentar valores arbitrarios como criterio editorial.
+
+La alerta roja es una ayuda de triage, no una probabilidad de certeza: los
+scores de texto, CLAP y YAMNet no son comparables entre sí.
 
 ### Elegir las fuentes desde el frontend
 

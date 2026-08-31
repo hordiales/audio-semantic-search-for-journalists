@@ -41,6 +41,12 @@ function weakThreshold(index: SearchIndex): number | undefined {
   return Number.isFinite(value) && source !== undefined ? value : undefined;
 }
 
+function lowScoreWarningThreshold(): number {
+  const configured = import.meta.env.VITE_LOW_SCORE_WARNING;
+  const value = configured === undefined ? 0.1 : Number(configured);
+  return Number.isFinite(value) && value >= 0 ? value : 0.1;
+}
+
 interface PlayerCommand { play: () => void; focus: () => void }
 
 export default function App() {
@@ -314,17 +320,18 @@ function ResultCard({ result, index, topSimilarity, focused, onFocus, requestPla
   const key = resultKey(index, result);
   const citation = `${result.original_file_name} · ${asTime(result.start_time)}–${asTime(result.end_time)} · segment_id ${result.segment_id} · índice ${result.search_index_label ?? labels[index]}`;
   const normalized = topSimilarity > 0 ? Math.max(0, Math.min(100, (result.similarity / topSimilarity) * 100)) : 0;
+  const isLowScore = result.similarity < lowScoreWarningThreshold();
   const scoreHelp = index === "yamnet"
     ? "Score de ranking: cobertura de términos AudioSet × confianza media de las clases YAMNet coincidentes."
     : "Similitud coseno. Los valores de CLAP y de texto no son comparables entre sí.";
   const copyCitation = async () => { await navigator.clipboard?.writeText(citation); };
-  return <article className={`result-card${focused ? " is-focused" : ""}`} tabIndex={0} onFocus={onFocus}>
-    <div className="card-top"><span className={`source-badge source-${index}`} title="Origen del resultado">{resultSourceLabels[index]}</span><span className="rank">#{result.rank}</span><div className="score" title={scoreHelp}><span><i style={{ width: `${normalized}%` }} /></span><small>{result.similarity.toFixed(3)}</small></div></div>
+  return <article className={`result-card${focused ? " is-focused" : ""}${isLowScore ? " is-low-score" : ""}`} tabIndex={0} onFocus={onFocus}>
+    <div className="card-top"><span className={`source-badge source-${index}`} title="Origen del resultado">{resultSourceLabels[index]}</span><span className="rank">#{result.rank}</span><div className={`score${isLowScore ? " is-low" : ""}`} title={scoreHelp}><span><i style={{ width: `${normalized}%` }} /></span><small>{result.similarity.toFixed(3)}</small></div>{isLowScore && <span className="low-score-warning" title={`Score menor a ${lowScoreWarningThreshold().toFixed(2)}: revisar el resultado antes de usarlo.`}>Score bajo</span>}</div>
     <h3 title={result.original_file_name}>{result.original_file_name}</h3>
     <p className="timestamp">{asTime(result.start_time)} → {asTime(result.end_time)} <span>({Math.round(result.duration ?? result.end_time - result.start_time)} s)</span></p>
+    {result.yamnet_audio_classes?.length ? <p className="yamnet"><b>Etiquetas AudioSet</b> {result.yamnet_audio_classes.slice(0, 3).map(item => `${item.label ?? item.class_name ?? "event"} ${item.score.toFixed(2)}`).join(" · ")}</p> : null}
     {result.clip_url ? <AudioPlayer id={key} result={result} preload={result.rank === 1} requestPlay={requestPlay} registerPlayer={registerPlayer} onFinished={() => onPlayerFinished(key)} /> : <p className="missing-audio">Clip no disponible para este segmento.</p>}
     <p className="transcript">“{result.text || "Sin transcripción disponible."}”</p>
-    {result.yamnet_audio_classes?.length ? <p className="yamnet"><b>AudioSet</b> {result.yamnet_audio_classes.slice(0, 3).map(item => `${item.label ?? item.class_name ?? "event"} ${item.score.toFixed(2)}`).join(" · ")}</p> : null}
     {index === "yamnet" && result.yamnet_matched_classes?.length ? <p className="yamnet matched"><b>Coincidencias</b> {result.yamnet_matched_classes.map(item => `${item.label ?? item.class_name ?? "event"} ${item.score.toFixed(2)}`).join(" · ")}</p> : null}
     <div className="card-actions"><button className="quiet" onClick={() => void copyCitation()}>Copiar cita</button>{result.clip_url && <a className="quiet" href={result.clip_url} download={`segment_${result.segment_id}.opus`}>Descargar</a>}<span title={citation}>ID {result.segment_id}</span></div>
   </article>;
