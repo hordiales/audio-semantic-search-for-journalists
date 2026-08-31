@@ -327,6 +327,32 @@ uv run python -m evaluation.run_agent_evaluation \
     --output evaluation/results/agent_evaluation.json
 ```
 
+### Evaluación aislada del índice textual y revisión humana de CLAP
+
+La evaluación determinista del índice textual usa las preguntas generadas con
+RAGAS y alinea sus contextos de referencia con los segmentos actuales:
+
+```bash
+UV_CACHE_DIR=.uv-cache HF_HUB_OFFLINE=1 uv run python \
+  -m evaluation.text_index_evaluation \
+  --dataset evaluation/test_datasets/synthetic/ragas_synthetic_questions.json \
+  --dataset-path "$DATASET_PATH" \
+  --minimum-segment-duration 0 \
+  --output evaluation/results/text_index_ragas_raw.json
+```
+
+La muestra acústica preparada se revisa desde una interfaz local:
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run uvicorn evaluation.human_review.app:app \
+  --host 127.0.0.1 --port 8010
+```
+
+Abrir `http://127.0.0.1:8010`. Ver la metodología, resultados y limitaciones en
+[`docs/reporte-evaluacion-dataset-actual.md`](docs/reporte-evaluacion-dataset-actual.md)
+y el protocolo operativo en
+[`evaluation/human_review/README.md`](evaluation/human_review/README.md).
+
 ## Tests
 
 ```bash

@@ -102,8 +102,16 @@ test("the A2A planner cannot remove CLAP after the user enabled it", () => {
   );
 });
 
-test("search defaults to text and adds CLAP and YAMNet only through independent opt-ins", () => {
+test("all search sources can be independently selected while text stays compatible by default", () => {
   assert.deepEqual(parseSearchRequest({ query: "inflación", k: 10, rewrite: false }).indexes, ["text"]);
+  assert.deepEqual(
+    parseSearchRequest({ query: "aplausos", include_text: false, include_clap: true, k: 10, rewrite: false }).indexes,
+    ["audio"],
+  );
+  assert.deepEqual(
+    parseSearchRequest({ query: "aplausos", include_text: false, include_yamnet: true, k: 10, rewrite: false }).indexes,
+    ["yamnet"],
+  );
   assert.deepEqual(
     parseSearchRequest({ query: "aplausos", include_clap: true, k: 10, rewrite: false }).indexes,
     ["text", "audio"],
@@ -115,6 +123,10 @@ test("search defaults to text and adds CLAP and YAMNet only through independent 
   assert.deepEqual(
     parseSearchRequest({ query: "aplausos", include_clap: true, include_yamnet: true, k: 10, rewrite: false }).indexes,
     ["text", "audio", "yamnet"],
+  );
+  assert.throws(
+    () => parseSearchRequest({ query: "aplausos", include_text: false, k: 10, rewrite: false }),
+    /al menos un índice/,
   );
 });
 

@@ -15,6 +15,9 @@ const resultSourceLabels: Record<SearchIndex, string> = {
 
 const initialUrl = new URLSearchParams(window.location.search);
 const legacyIndex = initialUrl.get("idx");
+const initialIncludeText = initialUrl.has("text")
+  ? initialUrl.get("text") !== "0"
+  : true;
 const initialIncludeClap = initialUrl.has("clap")
   ? initialUrl.get("clap") === "1"
   : legacyIndex === "audio" || legacyIndex === "both" || legacyIndex === "all";
@@ -42,6 +45,7 @@ interface PlayerCommand { play: () => void; focus: () => void }
 
 export default function App() {
   const [query, setQuery] = useState(initialUrl.get("q") ?? "");
+  const [includeText, setIncludeText] = useState(initialIncludeText);
   const [includeClap, setIncludeClap] = useState(initialIncludeClap);
   const [includeYamnet, setIncludeYamnet] = useState(initialIncludeYamnet);
   const [k, setK] = useState(Number(initialUrl.get("k")) || 10);
@@ -62,11 +66,11 @@ export default function App() {
 
   const selectedIndexes = useMemo<SearchIndex[]>(
     () => [
-      "text",
+      ...(includeText ? ["text" as const] : []),
       ...(includeClap ? ["audio" as const] : []),
       ...(includeYamnet ? ["yamnet" as const] : []),
     ],
-    [includeClap, includeYamnet],
+    [includeText, includeClap, includeYamnet],
   );
   const allResults = useMemo(() => selectedIndexes.flatMap(index =>
     (response?.indexes[index]?.results ?? []).map(result => ({ index, result })),
@@ -78,11 +82,12 @@ export default function App() {
     const url = new URL(window.location.href);
     if (query.trim()) url.searchParams.set("q", query.trim()); else url.searchParams.delete("q");
     url.searchParams.delete("idx");
+    if (!includeText) url.searchParams.set("text", "0"); else url.searchParams.delete("text");
     if (includeClap) url.searchParams.set("clap", "1"); else url.searchParams.delete("clap");
     if (includeYamnet) url.searchParams.set("yamnet", "1"); else url.searchParams.delete("yamnet");
     url.searchParams.set("k", String(k));
     window.history.replaceState(null, "", url);
-  }, [query, includeClap, includeYamnet, k]);
+  }, [query, includeText, includeClap, includeYamnet, k]);
 
   const performSearch = useCallback(async (plan?: SearchPlan) => {
     const cleanedQuery = query.trim();
@@ -97,7 +102,7 @@ export default function App() {
     setError(null);
     setQueue(null);
     try {
-      const result = await search({ query: cleanedQuery, include_clap: includeClap, include_yamnet: includeYamnet, k, rewrite, plan }, nextController.signal);
+      const result = await search({ query: cleanedQuery, include_text: includeText, include_clap: includeClap, include_yamnet: includeYamnet, k, rewrite, plan }, nextController.signal);
       setResponse(result);
       setDraftPlan(result.plan);
       setEditingPlan(false);
@@ -106,11 +111,18 @@ export default function App() {
     } finally {
       if (controller.current === nextController) setLoading(false);
     }
-  }, [includeClap, includeYamnet, k, query, rewrite]);
+  }, [includeText, includeClap, includeYamnet, k, query, rewrite]);
 
   const onSubmit = (event: FormEvent) => { event.preventDefault(); void performSearch(); };
-  const changeSourceInclusion = (source: "clap" | "yamnet", enabled: boolean) => {
-    if (source === "clap") setIncludeClap(enabled); else setIncludeYamnet(enabled);
+  const changeSourceInclusion = (source: "text" | "clap" | "yamnet", enabled: boolean) => {
+    if (!enabled && selectedIndexes.length === 1) {
+      setError("Elegí al menos un índice para buscar.");
+      return;
+    }
+    setError(null);
+    if (source === "text") setIncludeText(enabled);
+    else if (source === "clap") setIncludeClap(enabled);
+    else setIncludeYamnet(enabled);
     setResponse(null);
     setDraftPlan(null);
     setEditingPlan(false);
@@ -203,11 +215,15 @@ export default function App() {
             <button className="primary" type="submit" disabled={loading}>{loading ? "Buscando…" : "Buscar"}</button>
           </div>
           <div className="controls-row">
-            <label className={`source-toggle ${includeClap ? "active" : ""}`}>
+            <label className={`source-toggle source-toggle-text ${includeText ? "active" : ""}`}>
+              <input type="checkbox" checked={includeText} onChange={event => changeSourceInclusion("text", event.target.checked)} />
+              <span><strong>Incluir índice de texto</strong><small>Busca en las transcripciones. Activado por defecto.</small></span>
+            </label>
+            <label className={`source-toggle source-toggle-audio ${includeClap ? "active" : ""}`}>
               <input type="checkbox" checked={includeClap} onChange={event => changeSourceInclusion("clap", event.target.checked)} />
               <span><strong>Incluir índice CLAP</strong><small>Busca sonidos por similitud texto→audio. Desactivado por defecto.</small></span>
             </label>
-            <label className={`source-toggle ${includeYamnet ? "active" : ""}`}>
+            <label className={`source-toggle source-toggle-yamnet ${includeYamnet ? "active" : ""}`}>
               <input type="checkbox" checked={includeYamnet} onChange={event => changeSourceInclusion("yamnet", event.target.checked)} />
               <span><strong>Incluir clases YAMNet</strong><small>Filtra por etiquetas AudioSet y score del clasificador. Desactivado por defecto.</small></span>
             </label>
@@ -221,7 +237,7 @@ export default function App() {
 
       {response && <PlanPanel plan={draftPlan ?? response.plan} editing={editingPlan} onEdit={() => setEditingPlan(true)} onChange={setDraftPlan} onCancel={() => { setDraftPlan(response.plan); setEditingPlan(false); }} onSave={savePlan} />}
       {error && <p className="notice error" role="alert">{error}</p>}
-      {loading && <p className="notice">{includeClap || includeYamnet ? `Buscando en ${selectedIndexes.map(index => labels[index]).join(", ")}.${includeClap ? " La primera consulta CLAP puede demorar mientras se carga el modelo." : ""}` : "Buscando en las transcripciones."}</p>}
+      {loading && <p className="notice">{`Buscando en ${selectedIndexes.map(index => labels[index]).join(", ")}.${includeClap ? " La primera consulta CLAP puede demorar mientras se carga el modelo." : ""}`}</p>}
 
       {response && <>
         <div className="result-toolbar">
@@ -308,7 +324,7 @@ function ResultCard({ result, index, topSimilarity, focused, onFocus, requestPla
     <p className="timestamp">{asTime(result.start_time)} → {asTime(result.end_time)} <span>({Math.round(result.duration ?? result.end_time - result.start_time)} s)</span></p>
     {result.clip_url ? <AudioPlayer id={key} result={result} preload={result.rank === 1} requestPlay={requestPlay} registerPlayer={registerPlayer} onFinished={() => onPlayerFinished(key)} /> : <p className="missing-audio">Clip no disponible para este segmento.</p>}
     <p className="transcript">“{result.text || "Sin transcripción disponible."}”</p>
-    {(index === "audio" || index === "yamnet") && result.yamnet_audio_classes?.length ? <p className="yamnet"><b>AudioSet</b> {result.yamnet_audio_classes.slice(0, 3).map(item => `${item.label ?? item.class_name ?? "event"} ${item.score.toFixed(2)}`).join(" · ")}</p> : null}
+    {result.yamnet_audio_classes?.length ? <p className="yamnet"><b>AudioSet</b> {result.yamnet_audio_classes.slice(0, 3).map(item => `${item.label ?? item.class_name ?? "event"} ${item.score.toFixed(2)}`).join(" · ")}</p> : null}
     {index === "yamnet" && result.yamnet_matched_classes?.length ? <p className="yamnet matched"><b>Coincidencias</b> {result.yamnet_matched_classes.map(item => `${item.label ?? item.class_name ?? "event"} ${item.score.toFixed(2)}`).join(" · ")}</p> : null}
     <div className="card-actions"><button className="quiet" onClick={() => void copyCitation()}>Copiar cita</button>{result.clip_url && <a className="quiet" href={result.clip_url} download={`segment_${result.segment_id}.opus`}>Descargar</a>}<span title={citation}>ID {result.segment_id}</span></div>
   </article>;

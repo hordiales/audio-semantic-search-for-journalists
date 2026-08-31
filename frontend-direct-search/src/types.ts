@@ -56,6 +56,7 @@ export interface SearchResponse {
 
 export interface SearchRequest {
   query: string;
+  include_text: boolean;
   include_clap: boolean;
   include_yamnet: boolean;
   k: number;

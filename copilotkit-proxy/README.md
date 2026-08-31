@@ -24,10 +24,12 @@ disponibles son `POST /api/search/plan`, `POST /api/search`,
 
 Con `rewrite: true`, el proxy solicita por A2A al mismo agente que usa el
 widget un plan JSON antes de consultar los índices. El plan puede reformular
-las consultas, pero no agregar ni quitar índices elegidos por el cliente. La
-búsqueda textual es el default; CLAP se agrega con `include_clap: true` y la
-búsqueda por clases AudioSet/YAMNet con `include_yamnet: true`. Los dos opt-ins
-son independientes. El search service traduce ambas descripciones acústicas al
+las consultas, pero no agregar ni quitar índices elegidos por el cliente. Texto
+es el default para clientes compatibles, pero se puede desactivar con
+`include_text: false`; CLAP se agrega con `include_clap: true` y la búsqueda por
+clases AudioSet/YAMNet con `include_yamnet: true`. Las tres fuentes son
+independientes y debe haber al menos una activa. El search service traduce ambas
+descripciones acústicas al
 inglés y devuelve las queries efectivas usadas. Si A2A no está
 disponible o devuelve JSON inválido, la solicitud falla: con `rewrite: true`
 no se permite degradar silenciosamente a una búsqueda literal. Para pedir una
@@ -38,6 +40,7 @@ Ejemplo de búsqueda textual con CLAP incluido:
 ```json
 {
   "query": "aplausos al terminar el discurso",
+  "include_text": true,
   "include_clap": true,
   "include_yamnet": true,
   "k": 10,
@@ -45,7 +48,8 @@ Ejemplo de búsqueda textual con CLAP incluido:
 }
 ```
 
-Si `include_clap` se omite o vale `false`, `/api/search` no consulta
+Si `include_text` se omite, texto se mantiene activo por compatibilidad; si vale
+`false`, `/api/search` no consulta transcripciones. Si `include_clap` se omite o vale `false`, `/api/search` no consulta
 `audio_index.faiss`. Si `include_yamnet` se omite o vale `false`, no busca sobre
 las etiquetas almacenadas en `yamnet_top_classes`. YAMNet no es un índice
 vectorial: rankea coincidencias de clases usando sus scores del clasificador.

@@ -16,8 +16,10 @@ logger = logging.getLogger(__name__)
 class RetrievalMetrics:
     precision_at: dict[int, float]
     recall_at: dict[int, float]
+    f1_at: dict[int, float]
     mrr: float
     ndcg_at: dict[int, float]
+    fp_cost_at: dict[int, float]
 
 
 def precision_at_k(ranked_ids: list[int], relevant_ids: set[int], k: int) -> float:
@@ -38,6 +40,15 @@ def recall_at_k(ranked_ids: list[int], relevant_ids: set[int], k: int) -> float:
     return hits / len(relevant_ids)
 
 
+def f1_at_k(ranked_ids: list[int], relevant_ids: set[int], k: int) -> float:
+    """Media armónica de Precision@K y Recall@K."""
+    precision = precision_at_k(ranked_ids, relevant_ids, k)
+    recall = recall_at_k(ranked_ids, relevant_ids, k)
+    if precision + recall == 0:
+        return 0.0
+    return 2.0 * precision * recall / (precision + recall)
+
+
 def mean_reciprocal_rank(ranked_ids: list[int], relevant_ids: set[int]) -> float:
     """Inverso del rank del primer resultado relevante."""
     for rank, rid in enumerate(ranked_ids, start=1):
@@ -54,11 +65,23 @@ def ndcg_at_k(ranked_ids: list[int], relevant_ids: set[int], k: int) -> float:
     rel = np.array([1.0 if x in relevant_ids else 0.0 for x in top_k])
     discounts = 1.0 / np.log2(np.arange(2, 2 + len(rel)))
     dcg = float(np.sum(rel * discounts))
-    ideal_rel = np.sort(rel)[::-1]
+    ideal_rel = np.zeros(len(rel), dtype=float)
+    ideal_rel[: min(len(relevant_ids), len(rel))] = 1.0
     idcg = float(np.sum(ideal_rel * discounts))
     if idcg <= 1e-12:
         return 0.0
     return dcg / idcg
+
+
+def fp_cost_at_k(ranked_ids: list[int], relevant_ids: set[int], k: int) -> float:
+    """Costo de falsos positivos con descuento logarítmico por posición."""
+    return float(
+        sum(
+            1.0 / np.log2(rank + 1)
+            for rank, result_id in enumerate(ranked_ids[:k], start=1)
+            if result_id not in relevant_ids
+        )
+    )
 
 
 def compute_retrieval_metrics(
@@ -73,8 +96,10 @@ def compute_retrieval_metrics(
     return RetrievalMetrics(
         precision_at={k: precision_at_k(ranked_ids, relevant_ids, k) for k in k_values},
         recall_at={k: recall_at_k(ranked_ids, relevant_ids, k) for k in k_values},
+        f1_at={k: f1_at_k(ranked_ids, relevant_ids, k) for k in k_values},
         mrr=mean_reciprocal_rank(ranked_ids, relevant_ids),
         ndcg_at={k: ndcg_at_k(ranked_ids, relevant_ids, k) for k in k_values},
+        fp_cost_at={k: fp_cost_at_k(ranked_ids, relevant_ids, k) for k in k_values},
     )
 
 
@@ -120,8 +145,10 @@ def evaluate_retrieval(
                 "metrics": {
                     "precision_at": metrics.precision_at,
                     "recall_at": metrics.recall_at,
+                    "f1_at": metrics.f1_at,
                     "mrr": metrics.mrr,
                     "ndcg_at": metrics.ndcg_at,
+                    "fp_cost_at": metrics.fp_cost_at,
                 },
             }
         )
@@ -131,8 +158,10 @@ def evaluate_retrieval(
             k: float(np.mean([m.precision_at[k] for m in all_metrics])) for k in k_values
         },
         "recall_at": {k: float(np.mean([m.recall_at[k] for m in all_metrics])) for k in k_values},
+        "f1_at": {k: float(np.mean([m.f1_at[k] for m in all_metrics])) for k in k_values},
         "mrr": float(np.mean([m.mrr for m in all_metrics])),
         "ndcg_at": {k: float(np.mean([m.ndcg_at[k] for m in all_metrics])) for k in k_values},
+        "fp_cost_at": {k: float(np.mean([m.fp_cost_at[k] for m in all_metrics])) for k in k_values},
     }
 
     # By category
@@ -190,7 +219,9 @@ def main():
     for k in results["config"]["k_values"]:
         print(f"Precision@{k}: {results['aggregated']['precision_at'][k]:.4f}")
         print(f"Recall@{k}: {results['aggregated']['recall_at'][k]:.4f}")
+        print(f"F1@{k}: {results['aggregated']['f1_at'][k]:.4f}")
         print(f"NDCG@{k}: {results['aggregated']['ndcg_at'][k]:.4f}")
+        print(f"FP_Cost@{k}: {results['aggregated']['fp_cost_at'][k]:.4f}")
 
 
 if __name__ == "__main__":

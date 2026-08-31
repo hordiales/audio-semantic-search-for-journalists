@@ -240,7 +240,10 @@ class AudioSearchEngine:
                 continue
             results.append(
                 {
-                    "segment": self._row_to_segment_dict(row),
+                    # AudioSet labels describe the same segment independently of
+                    # the retrieval source. Keep them in text results too so the
+                    # UI can expose acoustic evidence alongside the transcript.
+                    "segment": self._row_to_segment_dict(row, include_audio_classes=True),
                     "similarity": float(sim),
                     "distance": float(1.0 - sim),
                 }

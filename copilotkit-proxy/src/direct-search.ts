@@ -67,6 +67,9 @@ export function parseSearchRequest(value: unknown): DirectSearchRequest {
   const query = typeof source.query === "string" ? source.query.trim() : "";
   if (!query) throw new Error("query es obligatorio.");
 
+  if (source.include_text !== undefined && typeof source.include_text !== "boolean") {
+    throw new Error("include_text debe ser booleano.");
+  }
   if (source.include_clap !== undefined && typeof source.include_clap !== "boolean") {
     throw new Error("include_clap debe ser booleano.");
   }
@@ -88,13 +91,14 @@ export function parseSearchRequest(value: unknown): DirectSearchRequest {
   ) {
     throw new Error("indexes debe contener text, audio y/o yamnet sin duplicados.");
   }
-  // Text retrieval is always the default. CLAP and YAMNet are independent
-  // opt-ins; `indexes` remains accepted for saved/legacy clients.
+  // Text remains active for legacy clients that omit include_text. All three
+  // sources are independently selectable from the direct-search frontend.
   const indexes: SearchIndex[] = explicitIndexes ?? [
-    "text",
+    ...(source.include_text !== false ? ["text" as const] : []),
     ...(source.include_clap === true ? ["audio" as const] : []),
     ...(source.include_yamnet === true ? ["yamnet" as const] : []),
   ];
+  if (!indexes.length) throw new Error("Elegí al menos un índice para buscar.");
 
   const k = typeof source.k === "number" ? source.k : Number(source.k ?? 10);
   if (!Number.isInteger(k) || k < 1 || k > 50) throw new Error("k debe ser un entero entre 1 y 50.");

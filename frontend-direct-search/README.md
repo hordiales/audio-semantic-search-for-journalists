@@ -4,11 +4,12 @@ Interfaz de búsqueda estructurada para periodistas que trabajan con corpus de a
 
 ## Qué incluye
 
-- Búsqueda de transcripciones por defecto y dos fuentes acústicas opt-in e
-  independientes: el índice vectorial CLAP y las clases AudioSet de YAMNet.
+- Tres fuentes seleccionables e independientes: transcripciones, el índice
+  vectorial CLAP y las clases AudioSet de YAMNet. Texto empieza activado para
+  conservar el comportamiento existente.
 - Con `Reformular con IA`, el proxy pide por A2A al agente un plan estructurado
   antes del retrieval. El planner reformula las queries, pero respeta los
-  fuentes elegidas: texto siempre, más CLAP y/o YAMNet si se activaron.
+  fuentes elegidas, sin agregar ni quitar ninguna.
 - Plan efectivo visible, editable y copiable para repetir el retrieval.
 - Resultados separados por índice: nunca mezcla scores de espacios vectoriales distintos.
 - Cada tarjeta identifica explícitamente su origen: texto/transcripciones,
@@ -56,15 +57,17 @@ cp .env.example .env
 
 Los umbrales deben medirse sobre el corpus real; no se configuran por defecto para no presentar valores arbitrarios como criterio editorial.
 
-### Activar o desactivar CLAP y YAMNet desde el frontend
+### Elegir las fuentes desde el frontend
+
+Los tres controles son independientes y se exige al menos uno activo. El
+índice de texto inicia activado; CLAP y YAMNet inician desactivados. Desactivar
+texto agrega `text=0` a la URL compartible.
 
 La búsqueda CLAP está **desactivada por defecto**. El control **Incluir índice
 CLAP** aparece junto al formulario:
 
-- Desmarcado: `POST /api/search` recibe `include_clap: false` y sólo consulta
-  las transcripciones.
-- Marcado: recibe `include_clap: true`, mantiene la búsqueda textual y agrega
-  el ranking texto→audio de CLAP en una segunda columna.
+- Desmarcado: `POST /api/search` recibe `include_clap: false`.
+- Marcado: recibe `include_clap: true` y agrega el ranking texto→audio de CLAP.
 
 El estado se puede compartir en la URL. `?clap=1` lo activa; si el parámetro no
 está presente, permanece desactivado. Por ejemplo:
@@ -87,13 +90,15 @@ YAMNet tiene un segundo control, **Incluir clases YAMNet**, también
 
 YAMNet no crea un índice vectorial FAISS: es una búsqueda/filtro sobre las
 clases producidas durante la ingesta. Para que esté disponible, el release debe
-haberse generado con `CLASSIFIERS_ACTIVE=yamnet`. Cuando CLAP está activo,
-sus tarjetas muestran además las clases YAMNet disponibles como señal auxiliar.
+haberse generado con `CLASSIFIERS_ACTIVE=yamnet`. Toda tarjeta cuyo segmento
+tenga etiquetas las muestra como señal acústica auxiliar, incluso cuando el
+resultado proviene del índice de texto.
 
-El estado compartible es `?yamnet=1`; las tres fuentes se habilitan con:
+El estado compartible es `?text=0`, `?clap=1` y `?yamnet=1`. Por ejemplo, para
+consultar sólo CLAP y YAMNet:
 
 ```text
-/direct-search/?q=aplausos&clap=1&yamnet=1&k=10
+/direct-search/?q=aplausos&text=0&clap=1&yamnet=1&k=10
 ```
 
 ## Compilar y previsualizar
@@ -118,9 +123,10 @@ La aplicación realiza una petición a:
 POST /api/search
 ```
 
-El body recomendado contiene `query`, `include_clap` e `include_yamnet` (ambos
-default `false`), `k`, `rewrite` y, opcionalmente, `plan`. `indexes` sigue aceptándose para clientes
-anteriores y para reproducir planes guardados. La respuesta incluye el plan de
+El body recomendado contiene `query`, `include_text` (default `true`),
+`include_clap` e `include_yamnet` (default `false`), `k`, `rewrite` y,
+opcionalmente, `plan`. `indexes` sigue aceptándose para clientes anteriores y
+para reproducir planes guardados. La respuesta incluye el plan de
 búsqueda, resultados separados por índice, URLs firmadas de clip y sus tiempos
 de expiración.
 
