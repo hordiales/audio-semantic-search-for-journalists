@@ -87,7 +87,7 @@ YAMNet tiene un segundo control, **Incluir clases YAMNet**, también
 
 YAMNet no crea un índice vectorial FAISS: es una búsqueda/filtro sobre las
 clases producidas durante la ingesta. Para que esté disponible, el release debe
-haberse generado con `EMBEDDINGS_ACTIVE=...,yamnet`. Cuando CLAP está activo,
+haberse generado con `CLASSIFIERS_ACTIVE=yamnet`. Cuando CLAP está activo,
 sus tarjetas muestran además las clases YAMNet disponibles como señal auxiliar.
 
 El estado compartible es `?yamnet=1`; las tres fuentes se habilitan con:

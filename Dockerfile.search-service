@@ -60,6 +60,9 @@ ENV AGENT_VERSION=${AGENT_VERSION}
 ENV OPENBLAS_NUM_THREADS=1
 ENV OMP_NUM_THREADS=1
 ENV CLAP_DEVICE=cpu
+# Search results exclude segments at or below this duration by default. Cloud
+# Run can override it with --update-env-vars.
+ENV MIN_SEGMENT_DURATION_SECONDS=5
 
 EXPOSE 8080
 

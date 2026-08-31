@@ -105,6 +105,7 @@ La configuración inicial en `.env` es:
 
 ```dotenv
 EMBEDDINGS_ACTIVE=text,clap
+CLASSIFIERS_ACTIVE=yamnet
 EMBEDDINGS_CONFIG_PATH=./config/embeddings.toml
 TEXT_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 CLAP_EMBEDDING_MODEL=laion/clap-htsat-unfused
@@ -137,7 +138,7 @@ comparación y evaluación, y su índice queda disponible como artefacto.
 Para añadir clasificación de eventos:
 
 ```dotenv
-EMBEDDINGS_ACTIVE=text,clap,yamnet
+CLASSIFIERS_ACTIVE=yamnet
 ```
 
 Si necesitás conservar el TOML generado en otra ubicación, cambiar la ruta:
@@ -246,9 +247,10 @@ dataset-real/
     └── ingestion_state.json            # huellas de fuentes y firma para modo incremental
 ```
 
-Los índices sólo aparecen para modalidades activas. `dataset_manifest.json` es
-la fuente de verdad de una ejecución: registra `active_embeddings`, el modelo y
-dimensión de cada índice, la estrategia de chunking y las ventanas acústicas.
+Los índices sólo aparecen para embeddings activos. `dataset_manifest.json` es
+la fuente de verdad de una ejecución: registra `active_embeddings`,
+`active_classifiers`, el modelo y dimensión de cada índice, la estrategia de
+chunking y las ventanas acústicas.
 `process_run.json` complementa ese manifiesto con la fecha UTC, directorio de
 trabajo, argumentos del comando y todos los parámetros efectivos de esa
 ejecución. Se escribe únicamente cuando el pipeline termina correctamente.

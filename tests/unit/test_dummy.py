@@ -23,6 +23,7 @@ def test_adk_entrypoint_exposes_the_audio_tools() -> None:
     assert {tool.__name__ for tool in root_agent.tools} == {
         "buscar_audio",
         "buscar_evento_acustico",
+        "buscar_clase_audio",
         "obtener_info_segmento",
         "obtener_clases_audio",
     }
@@ -81,6 +82,9 @@ def test_serialized_results_identify_the_search_index() -> None:
                     "clip_start_time": 7.0,
                     "clip_end_time": 22.0,
                     "clip_expires_at": "2026-08-29T16:30:00+00:00",
+                    "yamnet_audio_classes": [
+                        {"class_id": "/m/028ght", "class_name": "Applause", "score": 0.82}
+                    ],
                 },
                 "similarity": 0.8,
             }
@@ -95,3 +99,4 @@ def test_serialized_results_identify_the_search_index() -> None:
     assert results[0]["clip_start_time"] == 7.0
     assert results[0]["clip_end_time"] == 22.0
     assert results[0]["clip_expires_at"] == "2026-08-29T16:30:00+00:00"
+    assert results[0]["yamnet_audio_classes"][0]["class_name"] == "Applause"

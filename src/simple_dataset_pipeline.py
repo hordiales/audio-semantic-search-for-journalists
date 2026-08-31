@@ -39,6 +39,10 @@ from src.yamnet_audio_classifier import (
     YAMNetConfig,
     aggregate_yamnet_classes,
 )
+from src.yamnet_inverted_index import (
+    YAMNET_INVERTED_INDEX_FILENAME,
+    write_yamnet_inverted_index,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +72,8 @@ def _write_process_run_log(
         "command_display": shlex.join(recorded_argv) if recorded_argv else None,
         "parameters": parameters,
         "embedding_configuration": {
-            "active": sorted(embedding_config.active),
+            "active_embeddings": sorted(embedding_config.active_embeddings),
+            "active_classifiers": sorted(embedding_config.active_classifiers),
             "text_model": embedding_config.text_model,
             "clap_model": embedding_config.clap_model,
             "gemini_model": embedding_config.gemini_model,
@@ -126,11 +131,14 @@ def _pipeline_signature(
         },
         "mock_audio": mock_audio,
         "embeddings": {
-            "active": sorted(embedding_config.active),
+            "active": sorted(embedding_config.active_embeddings),
             "text_model": embedding_config.text_model,
             "clap_model": embedding_config.clap_model,
             "gemini_model": embedding_config.gemini_model,
             "gemini_output_dimensionality": embedding_config.gemini_output_dimensionality,
+        },
+        "classifiers": {
+            "active": sorted(embedding_config.active_classifiers),
             "yamnet_model": embedding_config.yamnet_model,
             "yamnet_top_k": embedding_config.yamnet_top_k,
         },
@@ -215,7 +223,11 @@ def run_pipeline(
 
     setup_logging(verbose)
     embedding_config = load_embedding_config(embeddings_config_path)
-    logger.info("Active embeddings: %s", ", ".join(sorted(embedding_config.active)))
+    logger.info(
+        "Active embeddings: %s | classifiers: %s",
+        ", ".join(sorted(embedding_config.active_embeddings)),
+        ", ".join(sorted(embedding_config.active_classifiers)) or "none",
+    )
 
     output = Path(output_dir)
     converted_dir = output / "converted"
@@ -343,13 +355,16 @@ def run_pipeline(
 
     texts = new_df["text"].tolist()
     embeddings: dict[str, np.ndarray] = {}
-    if len(new_df) and embedding_config.is_active("text"):
+    if len(new_df) and embedding_config.is_embedding_active("text"):
         logger.info("Generating text embeddings (%s)", embedding_config.text_model)
         text_model = TextEmbeddingModel(embedding_config.text_model)
         embeddings["text"] = text_model.generate_embeddings(texts, batch_size=batch_size)
 
     audio_windows: dict[int, list[Path]] = {}
-    if len(new_df) and embedding_config.active & {"clap", "gemini", "yamnet"}:
+    if len(new_df) and (
+        embedding_config.active_embeddings & {"clap", "gemini"}
+        or embedding_config.is_classifier_active("yamnet")
+    ):
         for _, row in new_df.iterrows():
             source_path = converted_dir / row["original_file_name"]
             if not source_path.exists():
@@ -376,11 +391,11 @@ def run_pipeline(
             len(audio_windows[int(segment_id)]) for segment_id in new_df["segment_id"]
         ]
 
-    if len(new_df) and embedding_config.is_active("clap") and mock_audio:
+    if len(new_df) and embedding_config.is_embedding_active("clap") and mock_audio:
         logger.warning("Using MOCK audio embeddings (testing mode)")
         clap_embeddings = np.random.randn(len(new_df), 512).astype(np.float32)
         clap_embeddings /= np.linalg.norm(clap_embeddings, axis=1, keepdims=True)
-    elif len(new_df) and embedding_config.is_active("clap"):
+    elif len(new_df) and embedding_config.is_embedding_active("clap"):
         logger.info("Generating CLAP audio embeddings (%s)", embedding_config.clap_model)
         clap = CLAPEmbedding(CLAPConfig(model_name=embedding_config.clap_model))
         clap_embeddings = []
@@ -390,10 +405,10 @@ def run_pipeline(
             ]
             clap_embeddings.append(_pool_audio_embeddings(window_embeddings, 512))
         clap_embeddings = np.asarray(clap_embeddings, dtype=np.float32)
-    if len(new_df) and embedding_config.is_active("clap"):
+    if len(new_df) and embedding_config.is_embedding_active("clap"):
         embeddings["clap"] = clap_embeddings
 
-    if len(new_df) and embedding_config.is_active("gemini"):
+    if len(new_df) and embedding_config.is_embedding_active("gemini"):
         logger.info("Generating Gemini native audio embeddings (%s)", embedding_config.gemini_model)
         gemini = GeminiMultimodalEmbedding(
             GeminiEmbeddingConfig(
@@ -414,7 +429,7 @@ def run_pipeline(
             )
         embeddings["gemini"] = np.asarray(gemini_embeddings, dtype=np.float32)
 
-    if len(new_df) and embedding_config.is_active("yamnet"):
+    if len(new_df) and embedding_config.is_classifier_active("yamnet"):
         logger.info("Classifying acoustic events with YAMNet (%s)", embedding_config.yamnet_model)
         yamnet = YAMNetAudioClassifier(
             YAMNetConfig(
@@ -524,14 +539,31 @@ def run_pipeline(
         "clap": "audio_index.faiss",
         "gemini": "gemini_audio_index.faiss",
     }
+    yamnet_index_path = indices_dir / YAMNET_INVERTED_INDEX_FILENAME
+    yamnet_index_token_count = 0
+    if embedding_config.is_classifier_active("yamnet"):
+        if "yamnet_top_classes" not in df:
+            df["yamnet_top_classes"] = [[] for _ in range(len(df))]
+        yamnet_index_token_count = write_yamnet_inverted_index(
+            yamnet_index_path,
+            df[["segment_id", "yamnet_top_classes"]].to_dict("records"),
+        )
+        logger.info(
+            "Saved YAMNet inverted index: %d tokens at %s",
+            yamnet_index_token_count,
+            yamnet_index_path,
+        )
+    elif yamnet_index_path.exists():
+        yamnet_index_path.unlink()
+        logger.info("Removed stale disabled YAMNet inverted index: %s", yamnet_index_path)
     all_embeddings = {
         name: np.asarray(df[f"{name}_embedding"].tolist(), dtype=np.float32)
         for name in index_files
-        if name in embedding_config.active
+        if name in embedding_config.active_embeddings
     }
     for name, filename in index_files.items():
         stale_index = indices_dir / filename
-        if name not in embedding_config.active and stale_index.exists():
+        if name not in embedding_config.active_embeddings and stale_index.exists():
             stale_index.unlink()
             logger.info("Removed stale disabled index: %s", stale_index)
     valid_segment_ids = {int(segment_id) for segment_id in df["segment_id"]}
@@ -541,7 +573,7 @@ def run_pipeline(
         for artifact in embedding_dir.glob("segment_*.npy"):
             segment_id = int(artifact.stem.removeprefix("segment_"))
             if (
-                embedding_dir.name not in embedding_config.active
+                embedding_dir.name not in embedding_config.active_embeddings
                 or segment_id not in valid_segment_ids
             ):
                 artifact.unlink()
@@ -591,7 +623,8 @@ def run_pipeline(
             "overlap_sec": chunk_overlap_sec,
             "max_text_chars": max_chunk_text_chars,
         },
-        "active_embeddings": sorted(embedding_config.active),
+        "active_embeddings": sorted(embedding_config.active_embeddings),
+        "active_classifiers": sorted(embedding_config.active_classifiers),
         "embeddings": {
             name: {
                 "model": getattr(embedding_config, f"{name}_model"),
@@ -606,9 +639,11 @@ def run_pipeline(
                     "model": embedding_config.yamnet_model,
                     "top_k": embedding_config.yamnet_top_k,
                     "window_aggregation": "max_score",
+                    "inverted_index": f"indices/{YAMNET_INVERTED_INDEX_FILENAME}",
+                    "inverted_index_token_count": yamnet_index_token_count,
                 }
             }
-            if embedding_config.is_active("yamnet")
+            if embedding_config.is_classifier_active("yamnet")
             else {}
         ),
         "audio_window_duration_sec": audio_window_duration_sec,

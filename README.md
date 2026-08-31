@@ -55,11 +55,12 @@ uv sync --extra eval-deepeval # DeepEval
 Para procesar WAV, OPUS u otros audios reales, seguí la guía operativa
 [Crear un dataset con audios reales](docs/guia-dataset-real.md).
 
-### Configurar embeddings activos
+### Configurar embeddings y clasificadores activos
 
 La fuente de verdad es `.env`. Antes de cada ejecución de la CLI, el pipeline
-genera [config/embeddings.toml](config/embeddings.toml) a partir de las
-variables `EMBEDDINGS_*`; no edites el TOML manualmente. Por ejemplo, para
+genera [config/embeddings.toml](config/embeddings.toml) a partir de
+`EMBEDDINGS_ACTIVE`, `CLASSIFIERS_ACTIVE` y las variables de modelo; no edites
+el TOML manualmente. Por ejemplo, para
 habilitar Gemini junto con los índices actuales:
 
 ```dotenv
@@ -76,17 +77,20 @@ GEMINI_EMBEDDING_OUTPUT_DIMENSIONALITY=1536
 - `yamnet`: clasificador AudioSet por segmento. Guarda etiquetas y scores de
   eventos acústicos, pero no crea un índice FAISS. Requiere `uv sync --extra yamnet`.
 
-Para habilitar YAMNet, usar `EMBEDDINGS_ACTIVE=text,clap,yamnet` y volver a
-procesar el corpus. Las demás variables disponibles son
+La configuración base habilita YAMNet con `CLASSIFIERS_ACTIVE=yamnet`; volver a
+procesar el corpus al cambiar ese valor. Las demás variables disponibles son
 `TEXT_EMBEDDING_MODEL`, `CLAP_EMBEDDING_MODEL`, `YAMNET_MODEL` y `YAMNET_TOP_K`;
 están documentadas en `.env.example`.
 Las clases se consultan mediante `obtener_clases_audio` después de recuperar un
-segmento. YAMNet usa etiquetas AudioSet en inglés y es complementario a CLAP.
+segmento y también se pueden buscar directamente con `buscar_clase_audio` o
+`POST /search/yamnet`. YAMNet usa etiquetas AudioSet en inglés, no crea un
+espacio vectorial y es complementario a CLAP. Los resultados CLAP incluyen sus
+clases YAMNet cuando el dataset las contiene.
 
 `EMBEDDINGS_CONFIG_PATH` define dónde se escribe el TOML generado (por defecto,
 `./config/embeddings.toml`); `--embeddings-config` permite cambiar esa ruta por
-ejecución. El manifiesto final registra los embeddings efectivamente generados,
-sus modelos, dimensiones e índices.
+ejecución. El manifiesto final registra por separado los embeddings y los
+clasificadores activos, sus modelos y sus artefactos.
 
 Las ejecuciones posteriores son incrementales: se reutilizan los resultados de
 audios sin cambios y sólo se procesan archivos nuevos o modificados. La huella
@@ -227,6 +231,22 @@ EVALUATION_MANUAL_DATASET_PATH=./evaluation/test_datasets/ragas_eval_dataset_unl
 EVALUATION_SYNTHETIC_DATASET_PATH=./evaluation/test_datasets/synthetic/ragas_synthetic_questions.json
 EVALUATION_HYBRID_DATASET_PATH=./evaluation/test_datasets/synthetic/ragas_hybrid_questions.json
 ```
+
+### Filtro de duración de segmentos
+
+Las búsquedas sólo devuelven segmentos cuya duración sea estrictamente mayor a
+`MIN_SEGMENT_DURATION_SECONDS`. El valor predeterminado es `5` segundos; se
+puede cambiar en Cloud Run al desplegar el search service:
+
+```bash
+gcloud run services update audio-search-service \
+  --region REGION --project PROJECT \
+  --update-env-vars "MIN_SEGMENT_DURATION_SECONDS=8"
+```
+
+Usá `0` para aceptar cualquier segmento con duración positiva. Los endpoints
+de consulta directa (`/search/*`) aplican este filtro; la consulta puntual
+`GET /segments/:id` continúa permitiendo inspeccionar cualquier segmento.
 
 Para generar preguntas sintéticas (requiere `OPENAI_API_KEY` y el corpus en `DATASET_PATH`):
 

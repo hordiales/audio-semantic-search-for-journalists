@@ -76,7 +76,9 @@ class CLAPEmbedding:
             embedding = embedding / norm
         return embedding.astype(np.float32)
 
-    def generate_text_embedding(self, text: str) -> np.ndarray:
+    def generate_text_embedding(
+        self, text: str, *, source_language: str | None = None
+    ) -> np.ndarray:
         """
         Genera embedding de texto en espacio CLAP (512-dim, normalizado).
 
@@ -86,11 +88,14 @@ class CLAPEmbedding:
 
         Args:
             text: Text query for cross-modal search
+            source_language: Optional language override for this query. Use
+                ``en`` when the caller already translated the text.
 
         Returns:
             Normalized numpy array of shape (512,)
         """
-        text = translate_to_english(text, self.config.query_language)
+        query_language = self.config.query_language if source_language is None else source_language
+        text = translate_to_english(text, query_language)
         embedding = self.model.get_text_embedding([text], use_tensor=False)
         embedding = embedding[0]
         norm = np.linalg.norm(embedding)

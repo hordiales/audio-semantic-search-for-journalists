@@ -23,13 +23,34 @@ disponibles son `POST /api/search/plan`, `POST /api/search`,
 `GET /api/segments/:id` y `GET /api/corpus`.
 
 Con `rewrite: true`, el proxy solicita por A2A al mismo agente que usa el
-widget un plan JSON antes de consultar los índices. El plan puede reformular la
-consulta semántica y genera `audio_query_en` en inglés para CLAP. Cuando el
-cliente habilita ambos índices, el agente puede elegir texto, audio o los dos;
-nunca puede agregar un índice que el cliente no habilitó. Si A2A no está
+widget un plan JSON antes de consultar los índices. El plan puede reformular
+las consultas, pero no agregar ni quitar índices elegidos por el cliente. La
+búsqueda textual es el default; CLAP se agrega con `include_clap: true` y la
+búsqueda por clases AudioSet/YAMNet con `include_yamnet: true`. Los dos opt-ins
+son independientes. El search service traduce ambas descripciones acústicas al
+inglés y devuelve las queries efectivas usadas. Si A2A no está
 disponible o devuelve JSON inválido, la solicitud falla: con `rewrite: true`
 no se permite degradar silenciosamente a una búsqueda literal. Para pedir una
 búsqueda literal de forma deliberada, enviar `rewrite: false`.
+
+Ejemplo de búsqueda textual con CLAP incluido:
+
+```json
+{
+  "query": "aplausos al terminar el discurso",
+  "include_clap": true,
+  "include_yamnet": true,
+  "k": 10,
+  "rewrite": true
+}
+```
+
+Si `include_clap` se omite o vale `false`, `/api/search` no consulta
+`audio_index.faiss`. Si `include_yamnet` se omite o vale `false`, no busca sobre
+las etiquetas almacenadas en `yamnet_top_classes`. YAMNet no es un índice
+vectorial: rankea coincidencias de clases usando sus scores del clasificador.
+El campo legado `indexes` continúa disponible para clientes
+existentes y planes persistidos.
 
 La service account del proxy necesita `roles/run.invoker` sobre el search
 service. Otorgalo antes del deploy:

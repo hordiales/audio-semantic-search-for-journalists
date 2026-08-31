@@ -162,7 +162,7 @@ app.post("/api/search/plan", async (request, response) => {
       : undefined;
     const parsed = parseSearchRequest({
       ...request.body,
-      indexes: requestedIndexes ?? ["text", "audio"],
+      indexes: requestedIndexes,
       k: 10,
     });
     response.json(effectivePlan({ ...parsed, plan: await resolveSearchPlan(parsed) }));

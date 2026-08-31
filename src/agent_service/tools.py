@@ -11,7 +11,7 @@ from src.agent_service.search_client import SearchServiceClient, search_service_
 logger = logging.getLogger(__name__)
 
 # Either a SearchServiceClient (deployed) or an AudioSearchEngine (local). Both
-# expose the same four retrieval methods, so the tools below do not branch.
+# expose the same retrieval methods, so the tools below do not branch.
 _search_engine = None
 
 
@@ -78,6 +78,9 @@ def _serialize_results(
             "confidence": segment["confidence"],
         }
         for field in ("clip_url", "clip_start_time", "clip_end_time", "clip_expires_at"):
+            if field in segment:
+                item[field] = segment[field]
+        for field in ("yamnet_audio_classes", "yamnet_matched_classes"):
             if field in segment:
                 item[field] = segment[field]
         serialized.append(item)
@@ -151,6 +154,42 @@ def buscar_evento_acustico(query: str, k: int = 5, tool_context: ToolContext | N
         return {"status": "error", "error": str(error), "results": []}
 
 
+def buscar_clase_audio(query: str, k: int = 5, tool_context: ToolContext | None = None) -> dict:
+    """Busca segmentos por clases acústicas AudioSet detectadas por YAMNet.
+
+    A diferencia de CLAP, esta búsqueda no usa similitud vectorial: traduce la
+    consulta al inglés, la compara con nombres de clases como ``Applause`` o
+    ``Music`` y pondera la coincidencia con el score del clasificador.
+
+    Args:
+        query: Evento o combinación de eventos acústicos a buscar.
+        k: Cantidad máxima de segmentos a devolver, entre 1 y 20.
+
+    Returns:
+        Resultados con las clases YAMNet coincidentes y sus scores.
+    """
+    if tool_context is not None:
+        k = int(tool_context.state.get("max_results", k))
+    if not query.strip():
+        return {"status": "error", "error": "La consulta no puede estar vacía.", "results": []}
+    if not 1 <= k <= 20:
+        return {"status": "error", "error": "k debe estar entre 1 y 20.", "results": []}
+
+    try:
+        return {
+            "status": "success",
+            "modality": "yamnet",
+            "results": _serialize_results(
+                get_search_engine().search_audio_by_classes(query, k=k),
+                search_index="yamnet",
+                search_index_label="Clases de audio (YAMNet/AudioSet)",
+            ),
+        }
+    except Exception as error:
+        logger.exception("YAMNet class search failed")
+        return {"status": "error", "error": str(error), "results": []}
+
+
 def obtener_info_segmento(segment_id: int) -> dict:
     """Obtiene los metadatos completos de un segmento recuperado previamente.
 
@@ -208,12 +247,17 @@ def get_all_tools() -> list:
     Use ``AGENT_MODALITY`` to restrict retrieval for modality ablations:
     - ``text``  → only the text/transcription search tool.
     - ``audio`` → only the CLAP cross-modal audio search tool.
-    - ``both`` (default) → all tools.
+    - ``yamnet`` → only the YAMNet/AudioSet class-search tool.
+    - ``text_clap`` → text and CLAP for existing two-way evaluations.
+    - ``both`` → deprecated compatibility alias for ``all``.
+    - ``all`` (default) → text, CLAP and YAMNet.
     """
-    modality = os.environ.get("AGENT_MODALITY", "both").lower()
+    modality = os.environ.get("AGENT_MODALITY", "all").lower()
     tools = [obtener_info_segmento, obtener_clases_audio]
-    if modality in ("both", "text"):
+    if modality in ("all", "both", "text", "text_clap"):
         tools.append(buscar_audio)
-    if modality in ("both", "audio"):
+    if modality in ("all", "both", "audio", "text_clap"):
         tools.append(buscar_evento_acustico)
+    if modality in ("all", "both", "yamnet"):
+        tools.append(buscar_clase_audio)
     return tools

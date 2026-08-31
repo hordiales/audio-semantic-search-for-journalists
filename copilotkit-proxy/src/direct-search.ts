@@ -1,6 +1,6 @@
 import { GoogleAuth } from "google-auth-library";
 
-export type SearchIndex = "text" | "audio";
+export type SearchIndex = "text" | "audio" | "yamnet";
 
 export interface SearchPlan {
   original_query: string;
@@ -8,6 +8,8 @@ export interface SearchPlan {
   text_query?: string;
   audio_query?: string;
   audio_query_en?: string;
+  yamnet_query?: string;
+  yamnet_query_en?: string;
   rationale?: string;
 }
 
@@ -26,6 +28,7 @@ interface RetrievalResult {
 
 interface RetrievalResponse {
   results?: RetrievalResult[];
+  translated_query?: string;
 }
 
 interface ServiceTransport {
@@ -35,6 +38,7 @@ interface ServiceTransport {
 const indexLabels: Record<SearchIndex, string> = {
   text: "Índice de texto (transcripciones)",
   audio: "Índice de audio (CLAP)",
+  yamnet: "Clases de audio (YAMNet/AudioSet)",
 };
 
 export class SearchServiceClient implements ServiceTransport {
@@ -63,12 +67,34 @@ export function parseSearchRequest(value: unknown): DirectSearchRequest {
   const query = typeof source.query === "string" ? source.query.trim() : "";
   if (!query) throw new Error("query es obligatorio.");
 
-  const indexes = Array.isArray(source.indexes)
-    ? source.indexes.filter((index): index is SearchIndex => index === "text" || index === "audio")
-    : [];
-  if (!indexes.length || indexes.length !== new Set(indexes).size) {
-    throw new Error("indexes debe contener texto, audio o ambos sin duplicados.");
+  if (source.include_clap !== undefined && typeof source.include_clap !== "boolean") {
+    throw new Error("include_clap debe ser booleano.");
   }
+  if (source.include_yamnet !== undefined && typeof source.include_yamnet !== "boolean") {
+    throw new Error("include_yamnet debe ser booleano.");
+  }
+  if (source.indexes !== undefined && !Array.isArray(source.indexes)) {
+    throw new Error("indexes debe ser una lista.");
+  }
+  const explicitIndexes = Array.isArray(source.indexes)
+    ? source.indexes.filter((index): index is SearchIndex =>
+      index === "text" || index === "audio" || index === "yamnet")
+    : undefined;
+  if (
+    explicitIndexes
+    && (!explicitIndexes.length
+      || explicitIndexes.length !== source.indexes?.length
+      || explicitIndexes.length !== new Set(explicitIndexes).size)
+  ) {
+    throw new Error("indexes debe contener text, audio y/o yamnet sin duplicados.");
+  }
+  // Text retrieval is always the default. CLAP and YAMNet are independent
+  // opt-ins; `indexes` remains accepted for saved/legacy clients.
+  const indexes: SearchIndex[] = explicitIndexes ?? [
+    "text",
+    ...(source.include_clap === true ? ["audio" as const] : []),
+    ...(source.include_yamnet === true ? ["yamnet" as const] : []),
+  ];
 
   const k = typeof source.k === "number" ? source.k : Number(source.k ?? 10);
   if (!Number.isInteger(k) || k < 1 || k > 50) throw new Error("k debe ser un entero entre 1 y 50.");
@@ -81,16 +107,27 @@ export function parsePlan(value: unknown, query: string, indexes: SearchIndex[])
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object") throw new Error("plan debe ser un objeto JSON.");
   const source = value as Record<string, unknown>;
+  if (source.indexes !== undefined && !Array.isArray(source.indexes)) {
+    throw new Error("plan.indexes debe ser una lista.");
+  }
   const planIndexes = Array.isArray(source.indexes)
-    ? source.indexes.filter((index): index is SearchIndex => index === "text" || index === "audio")
+    ? source.indexes.filter((index): index is SearchIndex =>
+      index === "text" || index === "audio" || index === "yamnet")
     : indexes;
-  if (!planIndexes.length || planIndexes.length !== new Set(planIndexes).size) {
-    throw new Error("plan.indexes debe contener texto, audio o ambos sin duplicados.");
+  if (
+    !planIndexes.length
+    || (Array.isArray(source.indexes) && planIndexes.length !== source.indexes.length)
+    || planIndexes.length !== new Set(planIndexes).size
+  ) {
+    throw new Error("plan.indexes debe contener text, audio y/o yamnet sin duplicados.");
   }
-  if (planIndexes.some((index) => !indexes.includes(index))) {
-    throw new Error("plan no puede agregar índices que el usuario no seleccionó.");
+  if (
+    planIndexes.length !== indexes.length
+    || planIndexes.some((index) => !indexes.includes(index))
+  ) {
+    throw new Error("plan.indexes debe coincidir con los índices elegidos por el usuario.");
   }
-  const optionalText = (field: "text_query" | "audio_query" | "audio_query_en" | "rationale") =>
+  const optionalText = (field: "text_query" | "audio_query" | "audio_query_en" | "yamnet_query" | "yamnet_query_en" | "rationale") =>
     typeof source[field] === "string" && source[field].trim() ? source[field].trim() : undefined;
   return {
     original_query: typeof source.original_query === "string" ? source.original_query : query,
@@ -98,6 +135,8 @@ export function parsePlan(value: unknown, query: string, indexes: SearchIndex[])
     text_query: optionalText("text_query"),
     audio_query: optionalText("audio_query"),
     audio_query_en: optionalText("audio_query_en"),
+    yamnet_query: optionalText("yamnet_query"),
+    yamnet_query_en: optionalText("yamnet_query_en"),
     rationale: optionalText("rationale"),
   };
 }
@@ -109,7 +148,7 @@ export function effectivePlan(request: DirectSearchRequest): SearchPlan {
     indexes: request.indexes,
     text_query: request.indexes.includes("text") ? request.query : undefined,
     audio_query: request.indexes.includes("audio") ? request.query : undefined,
-    audio_query_en: request.indexes.includes("audio") ? request.query : undefined,
+    yamnet_query: request.indexes.includes("yamnet") ? request.query : undefined,
     rationale: "Búsqueda literal.",
   };
 }
@@ -138,25 +177,54 @@ export async function executeSearch(request: DirectSearchRequest, transport: Ser
   const searches = await Promise.all(plan.indexes.map(async (index) => {
     const query = index === "text"
       ? plan.text_query || request.query
-      : plan.audio_query_en || plan.audio_query || request.query;
-    const path = index === "text" ? "/search/semantic" : "/search/audio";
+      : index === "audio"
+        ? plan.audio_query || request.query
+        : plan.yamnet_query || request.query;
+    const path = index === "text"
+      ? "/search/semantic"
+      : index === "audio"
+        ? "/search/audio"
+        : "/search/yamnet";
     try {
-      const payload = await transport.request("POST", path, { query, k: request.k });
-      return [index, {
+      const savedTranslation = index === "audio"
+        ? plan.audio_query_en
+        : index === "yamnet"
+          ? plan.yamnet_query_en
+          : undefined;
+      const body = savedTranslation
+        ? { query, query_en: savedTranslation, k: request.k }
+        : { query, k: request.k };
+      const payload = await transport.request("POST", path, body);
+      const retrieval = payload as RetrievalResponse;
+      const translatedQuery = index === "audio" || index === "yamnet"
+        ? retrieval.translated_query
+        : undefined;
+      return { index, translatedQuery, bucket: {
         available: true,
-        effective_query: index === "audio" ? (plan.audio_query || query) : query,
-        ...(index === "audio" ? { translated_query: query } : {}),
+        effective_query: query,
+        ...(translatedQuery ? { translated_query: translatedQuery } : {}),
         results: normalizeResults(payload, index),
-      }];
+      } };
     } catch (error) {
       console.error(`Direct ${index} search failed`, error);
-      return [index, unavailableIndex(query, "Índice no disponible temporalmente.")];
+      return {
+        index,
+        translatedQuery: undefined,
+        bucket: unavailableIndex(query, "Fuente de búsqueda no disponible temporalmente."),
+      };
     }
   }));
+  const audioTranslation = searches.find(({ index }) => index === "audio")?.translatedQuery;
+  const yamnetTranslation = searches.find(({ index }) => index === "yamnet")?.translatedQuery;
+  const resolvedPlan = {
+    ...plan,
+    ...(audioTranslation ? { audio_query_en: audioTranslation } : {}),
+    ...(yamnetTranslation ? { yamnet_query_en: yamnetTranslation } : {}),
+  };
   return {
     query: request.query,
-    plan,
+    plan: resolvedPlan,
     took_ms: Date.now() - start,
-    indexes: Object.fromEntries(searches),
+    indexes: Object.fromEntries(searches.map(({ index, bucket }) => [index, bucket])),
   };
 }

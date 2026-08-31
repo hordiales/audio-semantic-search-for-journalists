@@ -1,5 +1,4 @@
-export type SearchIndex = "text" | "audio";
-export type IndexSelection = SearchIndex | "both";
+export type SearchIndex = "text" | "audio" | "yamnet";
 
 export interface SearchPlan {
   original_query: string;
@@ -7,10 +6,13 @@ export interface SearchPlan {
   text_query?: string;
   audio_query?: string;
   audio_query_en?: string;
+  yamnet_query?: string;
+  yamnet_query_en?: string;
   rationale?: string;
 }
 
 export interface AudioClass {
+  class_id?: string;
   label?: string;
   class_name?: string;
   score: number;
@@ -33,7 +35,8 @@ export interface SearchResult {
   clip_start_time?: number;
   clip_end_time?: number;
   clip_expires_at?: string;
-  yamnet_top_classes?: AudioClass[];
+  yamnet_audio_classes?: AudioClass[];
+  yamnet_matched_classes?: AudioClass[];
 }
 
 export interface IndexResults {
@@ -53,7 +56,8 @@ export interface SearchResponse {
 
 export interface SearchRequest {
   query: string;
-  indexes: SearchIndex[];
+  include_clap: boolean;
+  include_yamnet: boolean;
   k: number;
   rewrite: boolean;
   plan?: SearchPlan;

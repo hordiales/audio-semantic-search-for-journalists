@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from src.agent_service.search_engine import AudioSearchEngine
 from src.dataset_storage import resolve_dataset_path
+from src.query_translation import translate_to_english
 
 logging.basicConfig(
     level=getattr(logging, os.getenv("LOG_LEVEL", "INFO")),
@@ -40,24 +41,36 @@ _startup_error: str | None = None
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Consulta en lenguaje natural")
-    k: int = Field(default=5, ge=1, le=20, description="Cantidad de segmentos")
+    k: int = Field(default=5, ge=1, le=50, description="Cantidad de segmentos")
+
+
+class AudioSearchRequest(SearchRequest):
+    query_en: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Traducción inglesa previamente resuelta para repetir exactamente un plan. "
+            "Si se omite, el servicio traduce query antes de buscar con CLAP o YAMNet."
+        ),
+    )
 
 
 class SearchResponse(BaseModel):
     """Raw engine output: the agent-side serialization stays in tools.py."""
 
     results: list[dict]
+    translated_query: str | None = None
 
 
 def _warm_up() -> AudioSearchEngine:
-    """Load the dataset, the FAISS indices and both text encoders."""
+    """Load the dataset, indices and default text encoder.
+
+    CLAP remains lazy because acoustic search is opt-in. Its first requested
+    search may therefore take longer while the checkpoint is loaded.
+    """
     engine = AudioSearchEngine(resolve_dataset_path())
-    # Encoding a throwaway string forces the lazy model properties to resolve,
-    # including the CLAP checkpoint read. Failing here is intentional: a service
-    # that cannot encode is not ready, and reporting it now beats a timeout on
-    # the first real query.
+    # Text search is the default path, so readiness waits for that encoder only.
     engine.text_model.generate_embedding("warm up")
-    engine.clap_model.generate_text_embedding("warm up")
     logger.info("Search service warm: %d segments indexed", engine.total_segments)
     return engine
 
@@ -77,7 +90,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="audio-search-retrieval",
-    description="Índices FAISS y encoders de texto/CLAP del corpus de audio",
+    description="Búsqueda por texto, CLAP y clases AudioSet/YAMNet del corpus de audio",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -100,7 +113,7 @@ async def health() -> dict[str, str]:
 
 @app.get("/readyz")
 async def readyz() -> dict:
-    """Readiness: only true once the dataset and both encoders are loaded."""
+    """Readiness: true once the dataset, indices and default text encoder are loaded."""
     if _engine is None:
         raise HTTPException(status_code=503, detail=_startup_error or "warming up")
     return {"status": "ready", "total_segments": _engine.total_segments}
@@ -125,10 +138,37 @@ async def search_semantic(request: SearchRequest) -> SearchResponse:
 
 
 @app.post("/search/audio", response_model=SearchResponse)
-async def search_audio(request: SearchRequest) -> SearchResponse:
-    """Cross-modal text-to-audio search through CLAP."""
+async def search_audio(request: AudioSearchRequest) -> SearchResponse:
+    """Cross-modal text-to-audio search through CLAP.
+
+    Fresh requests are translated to English here because CLAP's text encoder
+    is English-language. ``query_en`` is accepted only to replay a previously
+    returned search plan without translating it again.
+    """
+    translated_query = request.query_en or translate_to_english(request.query)
     return SearchResponse(
-        results=_require_engine().search_audio_by_text(request.query, k=request.k)
+        results=_require_engine().search_audio_by_text(
+            translated_query,
+            k=request.k,
+            source_language="en",
+        ),
+        translated_query=translated_query,
+    )
+
+
+@app.post("/search/yamnet", response_model=SearchResponse)
+async def search_yamnet(request: AudioSearchRequest) -> SearchResponse:
+    """Search the stored English AudioSet labels produced by YAMNet.
+
+    This is label/classifier search rather than vector similarity. The service
+    still translates fresh queries so Spanish terms can match AudioSet labels.
+    """
+    translated_query = request.query_en or translate_to_english(request.query)
+    return SearchResponse(
+        results=_require_engine().search_audio_by_classes(
+            translated_query, k=request.k, source_language="en"
+        ),
+        translated_query=translated_query,
     )
 
 
