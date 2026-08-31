@@ -38,6 +38,7 @@ dependencies = [
 # YAMNet is optional because TensorFlow substantially increases the local runtime.
 # Install it only in ingestion environments that classify acoustic events.
 yamnet = [
+    "setuptools>=70,<82",
     "tensorflow>=2.16,<2.21",
     "tensorflow-hub>=0.16,<0.17",
 ]

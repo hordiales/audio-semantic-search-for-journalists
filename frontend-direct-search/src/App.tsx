@@ -229,7 +229,7 @@ export default function App() {
           {allResults.length > 1 && <button className="quiet" onClick={startContinuous}>{queue ? "Reproduciendo ranking…" : "▶ Reproducir todos"}</button>}
         </div>
         <Filters fileFilter={fileFilter} setFileFilter={setFileFilter} fromTime={fromTime} setFromTime={setFromTime} toTime={toTime} setToTime={setToTime} />
-        <section className={`result-columns columns-${selectedIndexes.length}`} aria-label="Resultados">
+        <section className="result-columns" aria-label="Resultados">
           {selectedIndexes.map(index => <ResultColumn key={index} index={index} bucket={response.indexes[index]} fileFilter={fileFilter} fromTime={fromTime} toTime={toTime} focusedKey={focusedKey} setFocusedKey={setFocusedKey} requestPlay={requestPlay} registerPlayer={registerPlayer} onPlayerFinished={onPlayerFinished} />)}
         </section>
       </>}
@@ -267,6 +267,7 @@ function Filters({ fileFilter, setFileFilter, fromTime, setFromTime, toTime, set
 }
 
 function ResultColumn({ index, bucket, fileFilter, fromTime, toTime, focusedKey, setFocusedKey, requestPlay, registerPlayer, onPlayerFinished }: { index: SearchIndex; bucket?: IndexResults; fileFilter: string; fromTime: string; toTime: string; focusedKey: string | null; setFocusedKey: (key: string) => void; requestPlay: (audio: HTMLAudioElement) => void; registerPlayer: (key: string, command: PlayerCommand | null) => void; onPlayerFinished: (key: string) => void }) {
+  const [open, setOpen] = useState(true);
   const results = (bucket?.results ?? []).filter(result => {
     const matchesFile = result.original_file_name.toLocaleLowerCase().includes(fileFilter.toLocaleLowerCase());
     const afterStart = !fromTime || result.end_time >= Number(fromTime);
@@ -275,11 +276,21 @@ function ResultColumn({ index, bucket, fileFilter, fromTime, toTime, focusedKey,
   });
   const topSimilarity = results[0]?.similarity ?? 0;
   const threshold = weakThreshold(index);
-  return <section className="result-column">
-    <header><p className="eyebrow">{labels[index]}</p><h2>{results.length} resultado{results.length === 1 ? "" : "s"}</h2>{bucket?.effective_query && <p className="effective-query">Query: “{bucket.effective_query}”</p>}{index !== "text" && bucket?.translated_query && <p className="effective-query">En inglés: “{bucket.translated_query}”</p>}</header>
-    {!bucket ? <p className="empty">No se recibió una respuesta para este índice.</p> : !bucket.available ? <p className="notice">Índice no disponible en este dataset.{bucket.error ? ` ${bucket.error}` : ""}</p> : bucket.error ? <p className="notice error">{bucket.error}</p> : threshold !== undefined && results[0] && results[0].similarity < threshold ? <p className="notice">Coincidencias débiles: probablemente no haya buenos ejemplos en el corpus.</p> : null}
-    {bucket?.available && !bucket.error && results.length === 0 && <p className="empty">No hay resultados que coincidan con estos filtros.</p>}
-    <div className="cards">{results.map(result => <ResultCard key={resultKey(index, result)} result={result} index={index} topSimilarity={topSimilarity} focused={focusedKey === resultKey(index, result)} onFocus={() => setFocusedKey(resultKey(index, result))} requestPlay={requestPlay} registerPlayer={registerPlayer} onPlayerFinished={onPlayerFinished} />)}</div>
+  const contentId = `results-${index}`;
+  return <section className={`result-column result-column-${index}${open ? "" : " is-collapsed"}`}>
+    <header>
+      <button className="column-toggle" type="button" aria-expanded={open} aria-controls={contentId} onClick={() => setOpen(current => !current)}>
+        <span className="column-heading"><span className={`source-badge source-${index}`}>{labels[index]}</span><strong>{results.length} resultado{results.length === 1 ? "" : "s"}</strong></span>
+        <span className="collapse-indicator" aria-hidden="true">{open ? "Ocultar" : "Mostrar"} <b>{open ? "−" : "+"}</b></span>
+      </button>
+      {bucket?.effective_query && <p className="effective-query">Query: “{bucket.effective_query}”</p>}
+      {index !== "text" && bucket?.translated_query && <p className="effective-query">En inglés: “{bucket.translated_query}”</p>}
+    </header>
+    {open && <div className="result-column-body" id={contentId}>
+      {!bucket ? <p className="empty">No se recibió una respuesta para este índice.</p> : !bucket.available ? <p className="notice error">No se pudo consultar este índice ahora.{bucket.error ? ` ${bucket.error}` : ""}</p> : bucket.error ? <p className="notice error">{bucket.error}</p> : threshold !== undefined && results[0] && results[0].similarity < threshold ? <p className="notice">Coincidencias débiles: probablemente no haya buenos ejemplos en el corpus.</p> : null}
+      {bucket?.available && !bucket.error && results.length === 0 && <p className="empty">No hay resultados que coincidan con estos filtros.</p>}
+      <div className="cards">{results.map(result => <ResultCard key={resultKey(index, result)} result={result} index={index} topSimilarity={topSimilarity} focused={focusedKey === resultKey(index, result)} onFocus={() => setFocusedKey(resultKey(index, result))} requestPlay={requestPlay} registerPlayer={registerPlayer} onPlayerFinished={onPlayerFinished} />)}</div>
+    </div>}
   </section>;
 }
 

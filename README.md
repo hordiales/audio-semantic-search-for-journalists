@@ -248,6 +248,21 @@ Usá `0` para aceptar cualquier segmento con duración positiva. Los endpoints
 de consulta directa (`/search/*`) aplican este filtro; la consulta puntual
 `GET /segments/:id` continúa permitiendo inspeccionar cualquier segmento.
 
+### Traducción para CLAP y YAMNet en Cloud Run
+
+CLAP y las etiquetas AudioSet de YAMNet se consultan en inglés. Si las consultas
+del frontend están en español, el `audio-search-service` debe tener
+`QUERY_LANGUAGE=es` y recibir `OPENAI_API_KEY` desde Secret Manager. Su service
+account necesita `roles/secretmanager.secretAccessor` sobre ese secreto. Por
+ejemplo, al actualizar el servicio:
+
+```bash
+gcloud run services update audio-search-service \
+  --region REGION --project PROJECT \
+  --update-env-vars "QUERY_LANGUAGE=es" \
+  --update-secrets "OPENAI_API_KEY=audio-search-openai-api-key:latest"
+```
+
 Para generar preguntas sintéticas (requiere `OPENAI_API_KEY` y el corpus en `DATASET_PATH`):
 
 ```bash
