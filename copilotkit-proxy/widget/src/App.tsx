@@ -1,11 +1,30 @@
 import { CopilotKit } from "@copilotkit/react-core";
 import { CopilotPopup } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
-import { useState, type AnchorHTMLAttributes, type ReactNode } from "react";
+import { useRef, useState, type AnchorHTMLAttributes, type ReactNode } from "react";
 
 declare const __RUNTIME_URL__: string | undefined;
 
 const runtimeUrl = __RUNTIME_URL__ || import.meta.env.VITE_COPILOT_RUNTIME_URL || "http://localhost:8080/api/copilotkit";
+const feedbackUrl = runtimeUrl.replace(/\/api\/copilotkit\/?$/, "/api/feedback");
+
+type FeedbackKind = "thumbsUp" | "thumbsDown";
+
+function messageText(message: unknown): string {
+  return typeof (message as { content?: unknown } | undefined)?.content === "string"
+    ? (message as { content: string }).content
+    : "";
+}
+
+function sendFeedback(message: unknown, feedback: FeedbackKind, question: string): void {
+  const messageId = (message as { id?: unknown } | undefined)?.id;
+  if (typeof messageId !== "string") return;
+  void fetch(feedbackUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messageId, feedback, question, answer: messageText(message) }),
+  }).catch((error: unknown) => console.error("No se pudo registrar el feedback.", error));
+}
 
 function signedUrlExpiresAt(url: URL): number | undefined {
   const date = url.searchParams.get("X-Goog-Date");
@@ -54,12 +73,16 @@ function ClipLink({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorE
 }
 
 export default function App() {
+  const lastQuestion = useRef("");
   return (
     <CopilotKit runtimeUrl={runtimeUrl} agent="default" useSingleEndpoint showDevConsole={false}>
       <CopilotPopup
         instructions="Respondé en español y citá el archivo y timestamps que entregue el agente."
         labels={{ title: "Búsqueda de audio", initial: "¿Qué querés encontrar en el archivo de audio?" }}
         markdownTagRenderers={{ a: ClipLink }}
+        onSubmitMessage={(message: string) => { lastQuestion.current = message; }}
+        onThumbsUp={(message: unknown) => sendFeedback(message, "thumbsUp", lastQuestion.current)}
+        onThumbsDown={(message: unknown) => sendFeedback(message, "thumbsDown", lastQuestion.current)}
       />
     </CopilotKit>
   );

@@ -20,7 +20,27 @@ Para búsqueda directa configurá también `SEARCH_SERVICE_URL` con la URL de
 `audio-search-service`. El proxy obtiene un ID token de su service account para
 invocarlo: el navegador nunca llama al servicio de índices privado. Las rutas
 disponibles son `POST /api/search/plan`, `POST /api/search`,
-`GET /api/segments/:id` y `GET /api/corpus`.
+`GET /api/segments/:id`, `GET /api/corpus` y `POST /api/feedback`.
+
+## Feedback del widget
+
+Los controles de pulgar arriba/abajo de CopilotKit envían al proxy el mensaje,
+la pregunta asociada y el voto. El proxy los escribe en Cloud Logging bajo
+`audio_search_journalists_feedback`; los sinks de Terraform los exportan a la
+tabla BigQuery particionada
+`audio_search_journalists_telemetry.audio_search_journalists_feedback`.
+
+La service account del proxy necesita `roles/logging.logWriter` en el proyecto:
+
+```bash
+gcloud projects add-iam-policy-binding PROJECT \
+  --member="serviceAccount:PROXY_SERVICE_ACCOUNT" \
+  --role="roles/logging.logWriter"
+```
+
+La creación del sink y la autorización de su identidad de escritura se aplican
+con el Terraform de `deployment/terraform/`; desplegar sólo Cloud Run no crea
+la tabla de BigQuery.
 
 Con `rewrite: true`, el proxy solicita por A2A al mismo agente que usa el
 widget un plan JSON antes de consultar los índices. El plan puede reformular

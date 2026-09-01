@@ -5,6 +5,7 @@ import { A2AClient } from "@a2a-js/sdk/client";
 import { AbstractAgent, EventType, type BaseEvent, type RunAgentInput } from "@ag-ui/client";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
+import { Logging } from "@google-cloud/logging";
 import cors from "cors";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
@@ -133,11 +134,32 @@ const runtime = new CopilotRuntime({ agents: { default: new AudioSearchA2AAgent(
 const app = express();
 const origins = (process.env.ALLOWED_ORIGINS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
 const corsOptions = { origin: origins.length === 0 ? false : origins, methods: ["GET", "POST"] };
+const feedbackLog = process.env.GOOGLE_CLOUD_PROJECT
+  ? new Logging({ projectId: process.env.GOOGLE_CLOUD_PROJECT }).log("audio_search_journalists_feedback")
+  : undefined;
 app.set("trust proxy", 1);
 app.use(cors(corsOptions));
 app.use(rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false }));
 app.use(express.json({ limit: "32kb" }));
 app.get("/health", (_request, response) => response.json({ status: "ok" }));
+
+interface FeedbackPayload {
+  messageId?: unknown;
+  feedback?: unknown;
+  question?: unknown;
+  answer?: unknown;
+}
+
+function isValidFeedback(value: unknown): value is Required<FeedbackPayload> & { feedback: "thumbsUp" | "thumbsDown" } {
+  if (!value || typeof value !== "object") return false;
+  const { messageId, feedback, question, answer } = value as FeedbackPayload;
+  return typeof messageId === "string"
+    && (feedback === "thumbsUp" || feedback === "thumbsDown")
+    && typeof question === "string"
+    && typeof answer === "string"
+    && question.length <= 10_000
+    && answer.length <= 10_000;
+}
 
 function requireSearchService(response: express.Response): SearchServiceClient | undefined {
   if (searchService) return searchService;
@@ -206,5 +228,39 @@ app.get("/api/corpus", async (_request, response) => {
     response.status(502).json({ detail: "No fue posible consultar el corpus." });
   }
 });
+
+// Feedback is recorded under a dedicated Cloud Logging log name. Terraform
+// exports that log to BigQuery, keeping browser requests away from BigQuery
+// credentials and preserving a queryable audit trail.
+app.post(
+  "/api/feedback",
+  rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false }),
+  async (request, response, next) => {
+    try {
+      if (!isValidFeedback(request.body)) {
+        response.status(400).json({ detail: "Feedback inválido." });
+        return;
+      }
+
+      const payload = {
+        log_type: "feedback",
+        service_name: "audio-search-journalists",
+        message_id: request.body.messageId,
+        feedback: request.body.feedback,
+        question: request.body.question,
+        answer: request.body.answer,
+        timestamp: new Date().toISOString(),
+      };
+      if (feedbackLog) {
+        await feedbackLog.write(feedbackLog.entry({ severity: "INFO" }, payload));
+      } else {
+        console.log(JSON.stringify({ ...payload, "logging.googleapis.com/severity": "INFO" }));
+      }
+      response.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 app.use(createCopilotExpressHandler({ runtime, basePath: "/api/copilotkit", cors: corsOptions, mode: "single-route" }));
 app.listen(Number(process.env.PORT ?? 8080), () => console.log("CopilotKit proxy listening"));
