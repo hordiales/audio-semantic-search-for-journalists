@@ -134,9 +134,11 @@ const runtime = new CopilotRuntime({ agents: { default: new AudioSearchA2AAgent(
 const app = express();
 const origins = (process.env.ALLOWED_ORIGINS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
 const corsOptions = { origin: origins.length === 0 ? false : origins, methods: ["GET", "POST"] };
-const feedbackLog = process.env.GOOGLE_CLOUD_PROJECT
-  ? new Logging({ projectId: process.env.GOOGLE_CLOUD_PROJECT }).log("audio_search_journalists_feedback")
-  : undefined;
+// Cloud Run provides Application Default Credentials even when it does not
+// expose GOOGLE_CLOUD_PROJECT as an environment variable. Let the client
+// resolve the project from those credentials so feedback always reaches the
+// dedicated log consumed by the BigQuery sink.
+const feedbackLog = new Logging().log("audio_search_journalists_feedback");
 app.set("trust proxy", 1);
 app.use(cors(corsOptions));
 app.use(rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false }));
@@ -251,11 +253,7 @@ app.post(
         answer: request.body.answer,
         timestamp: new Date().toISOString(),
       };
-      if (feedbackLog) {
-        await feedbackLog.write(feedbackLog.entry({ severity: "INFO" }, payload));
-      } else {
-        console.log(JSON.stringify({ ...payload, "logging.googleapis.com/severity": "INFO" }));
-      }
+      await feedbackLog.write(feedbackLog.entry({ severity: "INFO" }, payload));
       response.json({ ok: true });
     } catch (error) {
       next(error);
