@@ -245,3 +245,34 @@ quick_yamnet_results.json
 
 # Logs históricos
 docs/archive/log-pruebas/
+
+# Directorios de configuración/logs locales de agentes y Devin
+.devin/
+.google-agents-cli/
+
+# macOS
+.DS_Store
+
+# Cachés y entornos adicionales
+.uv-cache/
+
+# Bases de sesión locales de ADK
+src/**/.adk/
+
+# Bundles generados del widget (se construyen en CI)
+widget/audio-search-widget.js
+
+# Metadatos de despliegue y backups
+agents-cli-manifest.yaml.bak
+deployment_metadata.json
+deployment_metadata.stale-*.json
+
+# Artefactos de evaluación y resultados locales (contienen datos del corpus)
+artifacts/
+evaluation/results/
+evaluation/annotations/
+
+# Variables de Terraform con valores reales
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
