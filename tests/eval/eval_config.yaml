@@ -1,0 +1,58 @@
+metrics_to_run:
+  - hallucination
+  - grounding
+  - tool_use_quality
+  - final_response_quality
+  - cita_fuente_periodistica
+  - indica_momento_temporal
+  - limita_al_contexto_recuperado
+  - idioma_consistente
+
+custom_metrics:
+  - name: cita_fuente_periodistica
+    prompt_template: |
+      Evalúa la respuesta de un agente de búsqueda de audio para periodistas.
+      Responde con JSON: {"score": 0 o 1, "explanation": "razón breve"}.
+      Otorga 1 solo si cada hallazgo citado identifica un archivo, programa o entrevista
+      de origen presente en los resultados de las tools.
+      Consulta: {prompt}
+      Respuesta: {response}
+      Traza: {agent_data}
+    judge_model: gemini-flash-latest
+    judge_model_generation_config:
+      temperature: 0
+  - name: indica_momento_temporal
+    prompt_template: |
+      Evalúa la respuesta de un agente de búsqueda de audio para periodistas.
+      Responde con JSON: {"score": 0 o 1, "explanation": "razón breve"}.
+      Otorga 1 solo si la respuesta incluye un timestamp o intervalo temporal verificable
+      para cada hallazgo, usando únicamente datos presentes en la traza.
+      Consulta: {prompt}
+      Respuesta: {response}
+      Traza: {agent_data}
+    judge_model: gemini-flash-latest
+    judge_model_generation_config:
+      temperature: 0
+  - name: limita_al_contexto_recuperado
+    prompt_template: |
+      Evalúa la respuesta de un agente de búsqueda de audio para periodistas.
+      Responde con JSON: {"score": 0 o 1, "explanation": "razón breve"}.
+      Otorga 1 solo si todas las afirmaciones factuales de la respuesta están respaldadas
+      por los resultados de tools incluidos en la traza y no agrega hechos externos.
+      Consulta: {prompt}
+      Respuesta: {response}
+      Traza: {agent_data}
+    judge_model: gemini-flash-latest
+    judge_model_generation_config:
+      temperature: 0
+  - name: idioma_consistente
+    prompt_template: |
+      Evalúa la respuesta de un agente de búsqueda de audio para periodistas.
+      Responde con JSON: {"score": 0 o 1, "explanation": "razón breve"}.
+      Otorga 1 solo si la respuesta usa el idioma de la consulta, salvo que la consulta
+      pida explícitamente otro idioma.
+      Consulta: {prompt}
+      Respuesta: {response}
+    judge_model: gemini-flash-latest
+    judge_model_generation_config:
+      temperature: 0

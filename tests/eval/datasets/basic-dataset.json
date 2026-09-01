@@ -1,0 +1,31 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "textual_journalistic_search",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {"text": "¿Qué se dijo sobre inflación? Cita el archivo y el momento del audio."}
+        ]
+      }
+    },
+    {
+      "eval_case_id": "acoustic_event_search",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {"text": "Busca aplausos durante un discurso y muestra la fuente y los timestamps."}
+        ]
+      }
+    },
+    {
+      "eval_case_id": "yamnet_class_search",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {"text": "Buscá segmentos clasificados como aplausos o discurso con YAMNet e indicá fuente y timestamps."}
+        ]
+      }
+    }
+  ]
+}

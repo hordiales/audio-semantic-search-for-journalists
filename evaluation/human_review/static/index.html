@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Revisión acústica · CLAP</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Evaluación humana</p>
+        <h1>Retrieval acústico periodístico</h1>
+      </div>
+      <div class="header-actions">
+        <label>Revisor <input id="reviewer" value="anonymous" /></label>
+        <a class="button secondary" href="/api/export">Exportar JSON</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="status-panel">
+        <div><span id="progress-count">0 / 0</span><small>juicios guardados</small></div>
+        <div><span id="question-count">0</span><small>consultas</small></div>
+        <div><span id="yamnet-status">—</span><small>YAMNet</small></div>
+        <div class="progress-track"><div id="progress-bar"></div></div>
+      </section>
+
+      <section class="workspace" aria-live="polite">
+        <aside class="query-panel">
+          <div class="query-nav">
+            <button id="previous-query" class="icon-button" title="Consulta anterior">←</button>
+            <span id="query-position"></span>
+            <button id="next-query" class="icon-button" title="Consulta siguiente">→</button>
+          </div>
+          <p id="category" class="pill"></p>
+          <h2 id="question">Cargando…</h2>
+          <div class="query-box">
+            <small>Consulta enviada al encoder textual de CLAP</small>
+            <p id="clap-query"></p>
+          </div>
+          <div class="query-box target">
+            <small>Evento o propiedad buscada</small>
+            <p id="target-description"></p>
+          </div>
+          <p class="method-note">
+            El ranking es solo una selección de candidatos. Escuchá el audio antes de asignar
+            relevancia; no uses la transcripción como sustituto del sonido.
+          </p>
+        </aside>
+
+        <article class="candidate-card">
+          <div class="candidate-heading">
+            <div>
+              <p class="eyebrow">Candidato <span id="candidate-position"></span></p>
+              <h3>Segmento <span id="segment-id"></span></h3>
+            </div>
+            <div class="score"><small>score CLAP</small><strong id="similarity"></strong></div>
+          </div>
+          <p class="candidate-stratum"><span id="stratum"></span> · rank original <b id="original-rank"></b></p>
+
+          <audio id="audio" controls preload="metadata"></audio>
+          <dl class="metadata">
+            <div><dt>Fuente</dt><dd id="source"></dd></div>
+            <div><dt>Tiempo</dt><dd id="time-range"></dd></div>
+            <div><dt>Transcripción auxiliar</dt><dd id="transcript"></dd></div>
+          </dl>
+
+          <form id="annotation-form">
+            <fieldset>
+              <legend>Relevancia para la consulta</legend>
+              <div class="grade-grid">
+                <label><input type="radio" name="relevance" value="0" required /><b>0</b> Irrelevante</label>
+                <label><input type="radio" name="relevance" value="1" /><b>1</b> Tangencial</label>
+                <label><input type="radio" name="relevance" value="2" /><b>2</b> Relevante</label>
+                <label><input type="radio" name="relevance" value="3" /><b>3</b> Directa</label>
+              </div>
+            </fieldset>
+
+            <div class="form-row">
+              <label>
+                ¿Está presente el evento?
+                <select id="event-present">
+                  <option value="unknown">No se puede determinar</option>
+                  <option value="true">Sí</option>
+                  <option value="false">No</option>
+                </select>
+              </label>
+              <label>
+                Confianza
+                <select id="confidence">
+                  <option value="1">1 · Muy baja</option>
+                  <option value="2">2 · Baja</option>
+                  <option value="3" selected>3 · Media</option>
+                  <option value="4">4 · Alta</option>
+                  <option value="5">5 · Muy alta</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              Notas
+              <textarea id="notes" rows="3" placeholder="Ambigüedades, sonidos concurrentes o motivo de la decisión"></textarea>
+            </label>
+            <div class="form-actions">
+              <span id="save-status"></span>
+              <button type="submit" class="button primary">Guardar y continuar</button>
+            </div>
+          </form>
+        </article>
+      </section>
+    </main>
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>
