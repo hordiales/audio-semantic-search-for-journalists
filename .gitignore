@@ -1,6 +1,13 @@
+# tmp files
+.github/workflows/*.yaml
+deployment/terraform/*
+
+run_human_eval.sh
+config/embeddings.toml
+.markdownlint.json
+
 # development files
-.cursorrules
-.vscode/*
+# .vscode/*
 
 #custom files
 data/*
