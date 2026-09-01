@@ -38,25 +38,6 @@
         <li><strong>Evidencia verificable</strong><br />Resultados con segmento, archivo original y rango de tiempo cuando están disponibles.</li>
       </ul>
 
-      <h2>Cómo funciona</h2>
-      <p>
-        El chat usa un widget CopilotKit. Sus mensajes viajan por AG-UI a un proxy
-        en Cloud Run, que se autentica con IAM y consulta el agente de búsqueda a
-        través del protocolo A2A. Las credenciales de Google Cloud nunca llegan al navegador.
-      </p>
-      <p>
-        <a href="direct-search/">Abrir búsqueda directa de archivo</a>: buscador estructurado
-        con escucha de segmentos, filtros y plan de búsqueda visible.
-      </p>
-      <p>
-        Para conocer la arquitectura, consultá el
-        <a href="patron-ag-ui-a2a-copilotkit.md">patrón AG-UI, A2A y CopilotKit</a>.
-      </p>
-      <p>
-        La guía de <a href="troubleshooting-direct-search.md">diagnóstico de búsqueda directa</a>
-        explica la reformulación español→inglés para CLAP y cómo verificar los despliegues.
-      </p>
-    </main>
 
     <div id="audio-search-widget"></div>
     <script type="module" src="./widget/audio-search-widget.js"></script>
