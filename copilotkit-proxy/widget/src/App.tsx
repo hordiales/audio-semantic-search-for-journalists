@@ -1,28 +1,53 @@
 import { CopilotKit } from "@copilotkit/react-core";
 import { CopilotPopup } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
-import type { AnchorHTMLAttributes, ReactNode } from "react";
+import { useState, type AnchorHTMLAttributes, type ReactNode } from "react";
 
 declare const __RUNTIME_URL__: string | undefined;
 
 const runtimeUrl = __RUNTIME_URL__ || import.meta.env.VITE_COPILOT_RUNTIME_URL || "http://localhost:8080/api/copilotkit";
 
-function isSignedClipUrl(value: string | undefined): value is string {
+function signedUrlExpiresAt(url: URL): number | undefined {
+  const date = url.searchParams.get("X-Goog-Date");
+  const expires = Number(url.searchParams.get("X-Goog-Expires"));
+  const match = date?.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+  if (!match || !Number.isFinite(expires) || expires < 0) return undefined;
+  const [, year, month, day, hour, minute, second] = match;
+  return Date.UTC(+year, +month - 1, +day, +hour, +minute, +second) + expires * 1_000;
+}
+
+export function isSignedClipUrl(value: string | undefined): value is string {
   if (!value) return false;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && url.hostname.endsWith("storage.googleapis.com") && url.pathname.endsWith(".opus");
+    const expiresAt = signedUrlExpiresAt(url);
+    return url.protocol === "https:"
+      && (url.hostname === "storage.googleapis.com" || url.hostname.endsWith(".storage.googleapis.com"))
+      && url.pathname.endsWith(".opus")
+      && url.searchParams.get("X-Goog-Algorithm") === "GOOG4-RSA-SHA256"
+      && Boolean(url.searchParams.get("X-Goog-Credential"))
+      && Boolean(url.searchParams.get("X-Goog-Signature"))
+      && expiresAt !== undefined
+      && expiresAt > Date.now();
   } catch {
     return false;
   }
 }
 
 function ClipLink({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { children?: ReactNode }) {
+  const [failedToLoad, setFailedToLoad] = useState(false);
+  const isGcsObjectUrl = typeof href === "string" && href.includes("storage.googleapis.com");
   if (!isSignedClipUrl(href)) {
+    if (isGcsObjectUrl) {
+      return <span title="El enlace de reproducción debe ser una URL V4 firmada y vigente.">Audio no disponible: renová la búsqueda.</span>;
+    }
     return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
   }
+  if (failedToLoad) {
+    return <span title="La URL firmada fue rechazada o venció mientras se cargaba.">No se pudo cargar el audio. Renová la búsqueda.</span>;
+  }
   return (
-    <audio controls preload="none" src={href}>
+    <audio controls preload="metadata" src={href} onError={() => setFailedToLoad(true)}>
       <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     </audio>
   );
