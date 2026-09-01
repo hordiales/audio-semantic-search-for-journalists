@@ -1,0 +1,59 @@
+# Local environments and secrets
+.env
+deploy.env
+.envrc
+.venv/
+env/
+venv/
+
+# macOS
+.DS_Store
+
+# Development caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.uv-cache/
+__pycache__/
+*.pyc
+*.pyo
+
+# Data and generated datasets (large, sensitive or copyrighted)
+data/
+dataset/
+results/
+tmp/
+*.pkl
+*.faiss
+*.npy
+
+# Local ADK session databases
+src/**/.adk/
+
+# Frontend/Node builds (built in multi-stage if needed)
+copilotkit-proxy/node_modules/
+copilotkit-proxy/dist/
+copilotkit-proxy/widget/node_modules/
+copilotkit-proxy/widget/dist-widget/
+frontend-direct-search/node_modules/
+frontend-direct-search/dist/
+widget/audio-search-widget.js
+
+# Git and IDE metadata
+.git/
+.gitignore
+.github/
+.vscode/
+.cursorrules
+.idea/
+
+# Terraform and deployment metadata
+deployment/
+deployment_metadata.json
+deployment_metadata.stale-*.json
+agents-cli-manifest.yaml.bak
+
+# Evaluation artifacts and annotations
+artifacts/
+evaluation/results/
+evaluation/annotations/
