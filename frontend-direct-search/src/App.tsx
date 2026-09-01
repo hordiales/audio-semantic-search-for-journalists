@@ -211,6 +211,7 @@ export default function App() {
         <p className="eyebrow">Archivo sonoro · búsqueda directa</p>
         <h1>Encontrá y escuchá la evidencia.</h1>
         <p className="lede">Los resultados vienen completos del índice. La IA sólo puede proponer cómo buscar.</p>
+        <p className="startup-note"><strong>Importante:</strong> la primera consulta puede demorar bastante porque inicializa los servicios.</p>
       </header>
 
       <section className="search-panel" aria-label="Búsqueda">

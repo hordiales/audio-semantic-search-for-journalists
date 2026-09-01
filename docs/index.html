@@ -18,6 +18,7 @@
       .lead { font-size: 1.2rem; color: #42526e; }
       .features { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); padding: 0; list-style: none; }
       .features li { background: #fff; padding: 1.1rem; border: 1px solid #dce3ef; border-radius: .75rem; }
+      .startup-note { margin: 2rem 0; padding: 1rem 1.1rem; color: #315447; background: #e9f1ed; border-left: 4px solid #2d8066; }
       a { color: #214aa5; }
       code { background: #e9eef8; padding: .15rem .3rem; border-radius: .25rem; }
     </style>
@@ -38,8 +39,10 @@
         <li><strong>Evidencia verificable</strong><br />Resultados con segmento, archivo original y rango de tiempo cuando están disponibles.</li>
       </ul>
 
+      <p class="startup-note"><strong>Importante:</strong> la primera consulta puede demorar bastante porque inicializa los servicios.</p>
 
-    <div id="audio-search-widget"></div>
-    <script type="module" src="./widget/audio-search-widget.js"></script>
+      <div id="audio-search-widget"></div>
+      <script type="module" src="./widget/audio-search-widget.js"></script>
+    </main>
   </body>
 </html>

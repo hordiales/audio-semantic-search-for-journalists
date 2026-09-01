@@ -10,6 +10,7 @@ button { cursor: pointer; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.2rem, 5vw, 4.3rem); font-weight: 500; letter-spacing: -.055em; line-height: .98; margin-bottom: 14px; }
 .lede { color: #58645f; font-size: 1.08rem; line-height: 1.5; }
+.startup-note { background: #e9f1ed; border-left: 4px solid #2d8066; color: #315447; margin: 18px 0 0; padding: 10px 12px; }
 .search-panel, .plan { background: #fffefa; border: 1px solid #d9dbd2; box-shadow: 0 5px 20px rgba(41, 52, 43, .06); }
 .search-panel { padding: 16px; }
 .search-line { display: flex; gap: 10px; }

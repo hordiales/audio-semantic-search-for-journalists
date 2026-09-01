@@ -5,9 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#11211d" />
     <title>Archivo sonoro</title>
+    <style>
+      .app-loading-notice { margin: 2rem auto; max-width: 42rem; padding: 1rem 1.25rem; color: #315447; background: #e9f1ed; border-left: 4px solid #2d8066; font: 1rem/1.5 system-ui, sans-serif; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <p class="app-loading-notice">La primera consulta puede demorar bastante porque inicializa los servicios.</p>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
