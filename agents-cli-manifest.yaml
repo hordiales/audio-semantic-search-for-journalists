@@ -10,4 +10,4 @@ create_params:
   session_type: none
   cicd_runner: github_actions
   is_a2a: true
-  agent_guidance_filename: AGENTS.md
+  agent_guidance_filename: README.md

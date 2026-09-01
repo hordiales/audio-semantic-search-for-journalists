@@ -188,6 +188,6 @@ def _parse_gcs_uri(source_uri: str) -> tuple[str, str]:
     if parsed.scheme != "gs" or not parsed.netloc:
         raise ValueError(
             f"{_CLIPS_GCS_URI_ENV} must be a GCS prefix such as "
-            "gs://audio-search-datasets/releases/2026-08-26/segment_clips"
+            "gs://your-bucket/releases/2026-08-26/segment_clips"
         )
     return parsed.netloc, prefix

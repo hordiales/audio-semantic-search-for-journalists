@@ -8,13 +8,13 @@ from src.segment_clips import clip_file_name
 
 def test_clips_uri_derives_from_dataset_release(monkeypatch):
     monkeypatch.delenv("SEGMENT_CLIPS_GCS_URI", raising=False)
-    monkeypatch.setenv("DATASET_GCS_URI", "gs://audio-search-datasets/releases/v1")
+    monkeypatch.setenv("DATASET_GCS_URI", "gs://your-test-bucket/releases/v1")
 
-    assert resolve_clips_gcs_uri() == "gs://audio-search-datasets/releases/v1/segment_clips"
+    assert resolve_clips_gcs_uri() == "gs://your-test-bucket/releases/v1/segment_clips"
 
 
 def test_explicit_clips_uri_wins(monkeypatch):
-    monkeypatch.setenv("DATASET_GCS_URI", "gs://audio-search-datasets/releases/v1")
+    monkeypatch.setenv("DATASET_GCS_URI", "gs://your-test-bucket/releases/v1")
     monkeypatch.setenv("SEGMENT_CLIPS_GCS_URI", "gs://other-bucket/clips/")
 
     assert resolve_clips_gcs_uri() == "gs://other-bucket/clips"
@@ -64,7 +64,7 @@ def test_gcs_store_signs_once_and_reuses_the_url(monkeypatch):
 
     store = SegmentClipStore(
         dataset_path="/tmp/unused",
-        clips_gcs_uri="gs://audio-search-datasets/releases/v1/segment_clips",
+        clips_gcs_uri="gs://your-test-bucket/releases/v1/segment_clips",
         ttl_seconds=900,
     )
     monkeypatch.setattr(store, "_get_bucket", lambda: _FakeBucket())
@@ -88,13 +88,13 @@ def test_gcs_store_signs_once_and_reuses_the_url(monkeypatch):
 def test_gcs_store_rejects_plain_object_url(monkeypatch):
     class _FakeBlob:
         def generate_signed_url(self, **kwargs):
-            return "https://storage.googleapis.com/audio-search-datasets/segment_12.opus"
+            return "https://storage.googleapis.com/your-test-bucket/segment_12.opus"
 
     class _FakeBucket:
         def blob(self, name):
             return _FakeBlob()
 
-    store = SegmentClipStore(clips_gcs_uri="gs://audio-search-datasets/releases/v1/segment_clips")
+    store = SegmentClipStore(clips_gcs_uri="gs://your-test-bucket/releases/v1/segment_clips")
     monkeypatch.setattr(store, "_get_bucket", lambda: _FakeBucket())
     monkeypatch.setattr(store, "_signing_kwargs", dict)
 

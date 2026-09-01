@@ -149,8 +149,7 @@ curl http://localhost:8000/health
 
 Antes de sacar conclusiones sobre CLAP en el corpus propio, conviene descartar
 un bug de integración corriéndolo contra el banco de pruebas público en el que
-fue entrenado. Ver la guía completa en
-[docs/evaluar-clap-clotho.md](docs/evaluar-clap-clotho.md).
+fue entrenado.
 
 ```bash
 uv run python -m benchmarks.evaluate_clap_clotho \
@@ -191,8 +190,8 @@ uv run python -m evaluation.retrieval_evaluation \
 
 Para estudiar si CLAP mejora cuando las preguntas sí mencionan eventos sonoros,
 se puede generar un dataset pareado: una pregunta de contenido y una acústica
-por segmento. Ver `docs/reporte-comparativo-texto-clap.md` §5.3 para los
-resultados de este experimento.
+por segmento. Los resultados de este experimento están en la documentación
+interna del proyecto.
 
 ```bash
 # Generar en español (idioma por defecto del proyecto)
@@ -348,10 +347,9 @@ UV_CACHE_DIR=.uv-cache uv run uvicorn evaluation.human_review.app:app \
   --host 127.0.0.1 --port 8010
 ```
 
-Abrir `http://127.0.0.1:8010`. Ver la metodología, resultados y limitaciones en
-[`docs/reporte-evaluacion-dataset-actual.md`](docs/reporte-evaluacion-dataset-actual.md)
-y el protocolo operativo en
-[`evaluation/human_review/README.md`](evaluation/human_review/README.md).
+Abrir `http://127.0.0.1:8010`. La metodología, resultados y limitaciones de la
+revisión humana, así como el protocolo operativo, están en la documentación
+interna del proyecto.
 
 ## Tests
 
