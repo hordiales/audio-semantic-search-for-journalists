@@ -1,0 +1,14 @@
+# Agent Runtime only needs the Python agent source and the root build files.
+# Keep generated datasets, frontend dependencies, evaluation artifacts, and
+# infrastructure definitions out of the Docker build upload.
+*
+!Dockerfile
+!Dockerfile.search-service
+!pyproject.toml
+!README.md
+!uv.lock
+!src/
+!src/**
+src/**/__pycache__/
+src/**/*.pyc
+src/**/.adk/

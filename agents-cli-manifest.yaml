@@ -1,0 +1,13 @@
+name: audio-search-journalists
+acli_version: 1.4.1
+agent_directory: src
+region: us-east1
+base_template: adk
+generated_at: '2026-08-09T15:49:56.772104+00:00'
+language: python
+create_params:
+  deployment_target: agent_runtime
+  session_type: none
+  cicd_runner: github_actions
+  is_a2a: true
+  agent_guidance_filename: AGENTS.md
