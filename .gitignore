@@ -271,8 +271,16 @@ deployment_metadata.stale-*.json
 artifacts/
 evaluation/results/
 evaluation/annotations/
+# Los datasets de evaluación con transcripciones reales pertenecen a un repo privado
+# o a almacenamiento local; no publicarlos.
+evaluation/test_datasets/synthetic/*.json
+!evaluation/test_datasets/synthetic/*example*.json
+!evaluation/test_datasets/synthetic/.gitkeep
 
 # Variables de Terraform con valores reales
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
+
+# Directorio heredado de comparaciones con otras arquitecturas (no forma parte del producto)
+spec-comparar/
