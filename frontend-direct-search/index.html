@@ -6,10 +6,16 @@
     <meta name="theme-color" content="#11211d" />
     <title>Archivo sonoro</title>
     <style>
+      body { margin: 0; }
+      .project-home-link { display: block; padding: .8rem 1.25rem; color: #dfeee8; background: #11211d; font: 500 .95rem/1.45 system-ui, sans-serif; text-align: center; }
+      .project-home-link:hover { background: #1b3930; }
       .app-loading-notice { margin: 2rem auto; max-width: 42rem; padding: 1rem 1.25rem; color: #315447; background: #e9f1ed; border-left: 4px solid #2d8066; font: 1rem/1.5 system-ui, sans-serif; }
     </style>
   </head>
   <body>
+    <a class="project-home-link" href="https://hordiales.github.io/audio-semantic-search-for-journalists/">
+      Inicio: conocé el proyecto y conversá con un agente para buscar semánticamente en un corpus de archivo periodístico.
+    </a>
     <div id="root">
       <p class="app-loading-notice">La primera consulta puede demorar bastante porque inicializa los servicios.</p>
     </div>
