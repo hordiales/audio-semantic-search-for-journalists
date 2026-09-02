@@ -19,9 +19,9 @@
       .features { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); padding: 0; list-style: none; }
       .features li { background: #fff; padding: 1.1rem; border: 1px solid #dce3ef; border-radius: .75rem; }
       .startup-note { margin: 2rem 0; padding: 1rem 1.1rem; color: #315447; background: #e9f1ed; border-left: 4px solid #2d8066; }
-      .direct-search-link { display: block; margin: 2rem 0; padding: 1.1rem; color: #15213b; background: #fff; border: 1px solid #dce3ef; border-radius: .75rem; text-decoration: none; }
+      .direct-search-link, .agent-widget-note { display: block; margin: 2rem 0; padding: 1.1rem; color: #15213b; background: #fff; border: 1px solid #dce3ef; border-radius: .75rem; text-decoration: none; }
       .direct-search-link:hover { border-color: #214aa5; box-shadow: 0 2px 8px rgb(21 33 59 / 10%); }
-      .direct-search-link strong { color: #214aa5; }
+      .direct-search-link strong, .agent-widget-note strong { color: #214aa5; }
       a { color: #214aa5; }
       code { background: #e9eef8; padding: .15rem .3rem; border-radius: .25rem; }
     </style>
@@ -34,9 +34,6 @@
         Encontrá declaraciones, temas y eventos acústicos en material sonoro procesado,
         con referencias al archivo de origen y sus timestamps.
       </p>
-      <p>
-        Usá el widget de la esquina inferior derecha para conversar con el agente y hacer búsquedas semánticas en el archivo periodístico.
-      </p>
 
       <h2>Qué puede buscar</h2>
       <ul class="features">
@@ -46,6 +43,11 @@
       </ul>
 
       <p class="startup-note"><strong>Importante:</strong> la primera consulta puede demorar bastante porque inicializa los servicios.</p>
+
+      <div class="agent-widget-note">
+        <strong>Conversá con el agente →</strong><br />
+        Usá el widget de la esquina inferior derecha para conversar con el agente y hacer búsquedas semánticas en el archivo periodístico.
+      </div>
 
       <a class="direct-search-link" href="https://hordiales.github.io/audio-semantic-search-for-journalists/direct-search/?">
         <strong>Búsqueda directa en distintos índices →</strong><br />
