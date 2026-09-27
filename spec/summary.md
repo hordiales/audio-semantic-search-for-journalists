@@ -98,7 +98,8 @@ audio-semantic-search-for-journalists/
 │   │   └── main.py             # Servicio local del agente (desarrollo)
 │   ├── app_utils/              # Telemetry OTel, servicios, A2A, adapter reasoning engine
 │   ├── search_service/         # Servicio de retrieval para Cloud Run
-│   │   └── app.py              # /search/semantic, /search/audio, /search/yamnet, /corpus
+│   │   ├── app.py              # /datasets, /search/*, /segments/*, /corpus
+│   │   └── dataset_registry.py # Catálogo multi-dataset, carga lazy y caché LRU
 │   ├── audio_transcription.py  # Transcripción con Whisper
 │   ├── fast_api_app.py         # Superficie ADK de producción (A2A, feedback, /query)
 │   ├── embedding_config.py     # Config de ingesta desde variables de entorno
@@ -151,8 +152,9 @@ audio-semantic-search-for-journalists/
    clases acústicas YAMNet
 2. El agente responde consultas en lenguaje natural usando tools de búsqueda semántica
 3. La búsqueda es multimodal: puede buscar por contenido textual (transcripción) y por eventos acústicos
-4. RAGAS evalúa la calidad de respuestas del agente con Faithfulness >= 0.7 y las cuatro Expectations periodísticas
+4. El buscador directo permite seleccionar un dataset del catálogo y mantiene esa selección en todas las búsquedas
+5. RAGAS evalúa la calidad de respuestas del agente con Faithfulness >= 0.7 y las cuatro Expectations periodísticas
    alcanzan >= 0.8 promedio cada una
-5. agents-cli eval registra trazas ADK y evalúa grounding, uso de tools y calidad de respuesta
-6. El retrieval aislado alcanza Precision@5 >= 0.6 y MRR >= 0.5 en el dataset de evaluación periodístico
-7. La solución se despliega en Google Agent Platform (Agent Runtime) con CI/CD automatizado
+6. agents-cli eval registra trazas ADK y evalúa grounding, uso de tools y calidad de respuesta
+7. El retrieval aislado alcanza Precision@5 >= 0.6 y MRR >= 0.5 en el dataset de evaluación periodístico
+8. La solución se despliega en Google Agent Platform (Agent Runtime) con CI/CD automatizado

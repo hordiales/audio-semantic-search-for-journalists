@@ -296,8 +296,10 @@ Además, el lifespan configura **telemetría OpenTelemetry**
 de sesión/artefactos compartidos entre las rutas ADK, A2A y el adapter.
 
 El search service de Cloud Run expone su propia API de retrieval
-(`/search/semantic`, `/search/audio`, `/search/yamnet`, `/segments/{id}`,
-`/segments/{id}/audio-classes`, `/corpus`, `/health`, `/readyz`); el proxy
+(`/datasets`, `/search/semantic`, `/search/audio`, `/search/yamnet`, `/segments/{id}`,
+`/segments/{id}/audio-classes`, `/corpus`, `/health`, `/readyz`). Los endpoints de
+búsqueda, corpus y segmento aceptan `dataset_id`; las respuestas de búsqueda
+incluyen `dataset_id`, `dataset_label` y `dataset_release`. El proxy
 CopilotKit la usa para la búsqueda directa (`/api/search*`, ver spec 08).
 
 ### POST `/query`
@@ -339,7 +341,10 @@ CopilotKit la usa para la búsqueda directa (`/api/search*`, ver spec 08).
 | Variable | Default | Descripción |
 | ---------- | --------- | ------------- |
 | `DATASET_PATH` | `./dataset` | Ruta al dataset procesado (o destino del snapshot GCS) |
-| `DATASET_GCS_URI` | — | Release versionado en GCS a descargar al arrancar |
+| `DATASET_GCS_URI` | — | Release único en GCS; fallback cuando no hay catálogo |
+| `DATASET_CATALOG_GCS_URI` | — | URI `gs://` del catálogo JSON multi-dataset (versión 1) |
+| `DEFAULT_DATASET_ID` | primera entrada | Dataset usado cuando el request no incluye `dataset_id` |
+| `DATASET_CACHE_MAX_ENTRIES` | `2` | Máximo de motores cargados en la caché LRU del search service |
 | `SEARCH_SERVICE_URL` | — | Si está definida, el retrieval se delega al search service Cloud Run |
 | `SEARCH_SERVICE_TIMEOUT` | `180` | Timeout (s) de cada llamada al search service (cubre cold start) |
 | `MIN_SEGMENT_DURATION_SECONDS` | `5` | Descarta resultados con duración menor o igual a este valor |

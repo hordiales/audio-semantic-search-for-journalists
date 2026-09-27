@@ -2,8 +2,9 @@
 
 ## 1. Problema
 
-Hoy la única interfaz es conversacional (agente ADK + widget CopilotKit). El agente devuelve resultados como texto
-plano:
+El problema que motivó esta interfaz era que la única superficie disponible era conversacional (agente ADK + widget
+CopilotKit) y devolvía resultados como texto plano. La búsqueda directa descrita en este documento ya está implementada
+y convive con el chat:
 
 ```text
 Segmento 1
@@ -29,7 +30,7 @@ Esto falla para el caso de uso central del periodista:
 4. **La "similitud" se presenta de forma engañosa.** "13.9%" sugiere baja confianza, cuando en CLAP los scores coseno
    del top-1 suelen estar en ese rango. El número absoluto no es interpretable por el usuario.
 
-## 2. Propuesta
+## 2. Solución implementada
 
 Una **aplicación de búsqueda estructurada** (no chat): un buscador tipo "consola de archivo" que expone tres fuentes de
 recuperación de forma explícita y hace de la escucha del segmento la acción primaria, a un clic del resultado: texto, el
@@ -163,6 +164,9 @@ Se agrega una API estructurada en dos pasos: el LLM construye un plan de búsque
 >   desarrollo, Vite redirige `/api/*` a `http://localhost:8080`.
 
 ```text
+GET  /api/datasets
+  resp: { datasets: [{ id, label, language, active_indexes, dataset_version? }] }
+
 POST /api/search/plan
   body: { query: str, indexes?: ["text"|"audio"|"yamnet"] }
   resp: {
@@ -184,10 +188,11 @@ POST /api/search
     include_yamnet: bool = false,
     k: int (1..50),
     rewrite: bool = true,
+    dataset_id?: str,
     plan?: SearchPlan
   }
   resp: {
-    query, plan, took_ms,
+    query, dataset_id, dataset_label, dataset_release, plan, took_ms,
     indexes: {
       text:  { available: bool, effective_query: str, results: [SearchResult], error?: str },
       audio: { available: bool, effective_query: str, translated_query?: str, results: [SearchResult], error?: str },
@@ -207,8 +212,8 @@ SearchResult = {
   yamnet_matched_classes?  # clases que justifican un resultado YAMNet
 }
 
-GET  /api/segments/{segment_id}     -> metadatos completos + sentimiento + clases YAMNet
-GET  /api/corpus                    -> { total_segments, files: [...], active_indexes, dataset_version }
+GET  /api/segments/{segment_id}?dataset_id=... -> metadatos completos + sentimiento + clases YAMNet
+GET  /api/corpus?dataset_id=...                  -> { dataset_id, total_segments, files, active_indexes, dataset_version }
 ```
 
 La URL del clip sale de `SegmentClipStore.reference(segment_id)`; en desarrollo
@@ -219,6 +224,8 @@ volver a pedir la referencia) si el usuario deja la página abierta más que
 
 Notas de diseño:
 
+- Al montar, el frontend consulta `GET /api/datasets`, selecciona el dataset indicado por `?dataset=<id>` o el primero disponible y envía su `dataset_id` en cada búsqueda. El selector sólo habilita índices declarados en `active_indexes`.
+- El search service carga el dataset elegido de forma diferida mediante `DatasetRegistry`; un ID desconocido produce 404. La respuesta identifica el dataset y release efectivos para hacer reproducible el resultado.
 - Con `rewrite=true` , el backend obtiene primero un `SearchPlan` estructurado. El LLM puede convertir “¿se escucha una
   cortina mientras habla el entrevistado?” en una descripción acústica breve; el search service la traduce al inglés
   antes del encoder CLAP.
@@ -246,6 +253,7 @@ Notas de diseño:
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────┐
+│  Dataset: [ Noticias 2026 ▼ ]                                      │
 │  [ ¿hay música mientras habla el entrevistado?       ]  [ Buscar ]    │
 │  [✓] Texto  [ ] CLAP  [ ] YAMNet         [✓] Reformular con IA │
 │  Plan: Texto "música" · CLAP "música de fondo" · YAMNet "música" │
@@ -307,10 +315,10 @@ clasificador, no similitud.
 
 - Filtro por archivo de origen y por rango temporal dentro del archivo.
 - Control de `k` (5 / 10 / 20 / 50).
+- Selector de dataset cargado desde `/api/datasets`; muestra estados de carga/error y persiste la selección en `?dataset=`.
 - Estados explícitos: cargando (con aviso de warm-up de CLAP en la primera query), sin resultados, índice no disponible
   en este dataset, error de backend.
-- URL con estado (`?q=...&text=0&clap=1&yamnet=1&k=10`) para compartir la selección; texto se activa si falta `text=0` ,
-  y CLAP/YAMNet sólo se activan con sus parámetros.
+- URL con estado (`?dataset=news-2026&q=...&text=0&clap=1&yamnet=1&k=10`) para compartir corpus y selección; texto se activa si falta `text=0`, y CLAP/YAMNet sólo se activan con sus parámetros.
 
 ## 9. Stack propuesto
 

@@ -428,7 +428,6 @@ uv run python src/simple_dataset_pipeline.py \
     --output ./dataset \
     --whisper-model base \
     --batch-size 8 \
-    --workers 4 \
     --verbose
 ```
 
@@ -459,7 +458,7 @@ están definidos en `.env` (los flags tienen prioridad). Ver spec 07.
 ### Reejecución incremental
 
 La ingesta es **incremental**: el pipeline conserva un estado en
-`final/pipeline_state.json` y sólo reprocesa lo que cambió.
+`final/ingestion_state.json` y sólo reprocesa lo que cambió.
 
 - **Fingerprint por archivo**: cada audio fuente se identifica por `sha256` +
   tamaño (`_file_fingerprint`), de modo que reemplazar un archivo conservando
@@ -472,7 +471,7 @@ La ingesta es **incremental**: el pipeline conserva un estado en
 - **Limpieza**: se eliminan clips huérfanos de segmentos que ya no existen y
   los índices de modalidades desactivadas.
 - **Log de corrida**: cada ejecución registra parámetros y resultados para
-  auditoría (`_write_process_run_log`).
+  auditoría en `final/process_run.json` (`_write_process_run_log`).
 
 No existe un comando `resume_pipeline.py`: basta reejecutar el mismo comando y
 el estado incremental decide qué trabajo falta.

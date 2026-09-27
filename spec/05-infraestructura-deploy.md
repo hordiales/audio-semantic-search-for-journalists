@@ -153,6 +153,35 @@ gs://<bucket>/releases/<fecha>/
 - Retención de releases viejas: política de lifecycle pendiente de definir
   (ver decisiones abiertas en spec 08 §12).
 
+### Catálogo multi-dataset
+
+El search service admite varios releases sin duplicar servicios. `DATASET_CATALOG_GCS_URI` apunta a un JSON en GCS:
+
+```json
+{
+  "version": 1,
+  "datasets": [
+    {
+      "id": "news-2026",
+      "label": "Noticias 2026",
+      "language": "es",
+      "release_uri": "gs://<bucket>/releases/news-2026",
+      "enabled": true
+    }
+  ]
+}
+```
+
+`DEFAULT_DATASET_ID` selecciona el corpus inicial y `DATASET_CACHE_MAX_ENTRIES`
+(default 2) limita los motores simultáneamente cargados. El dataset inicial se
+calienta durante el startup; los restantes se descargan y cargan bajo demanda en
+`/tmp/audio-search-datasets/`, con expulsión LRU. Los encoders de texto y CLAP se
+comparten entre motores. El service account del search service necesita lectura
+tanto del catálogo como de todos los releases referenciados.
+
+Si `DATASET_CATALOG_GCS_URI` no está definido, sigue vigente el modo de un solo
+release con `DATASET_GCS_URI`/`DATASET_PATH`.
+
 ## Configuración de GCP
 
 ### Secrets y variables de GitHub
@@ -194,7 +223,12 @@ AGENT_MODALITY=all            # text | audio | yamnet | text_clap | all
 
 # Dataset
 DATASET_PATH=./dataset
-# DATASET_GCS_URI=gs://<bucket>/releases/<fecha>   # descarga release al arrancar
+# Modo catálogo (producción con varios corpus)
+# DATASET_CATALOG_GCS_URI=gs://<bucket>/catalogs/datasets.json
+# DEFAULT_DATASET_ID=news-2026
+DATASET_CACHE_MAX_ENTRIES=2
+# Fallback de un solo corpus
+# DATASET_GCS_URI=gs://<bucket>/releases/<fecha>
 AUDIO_INPUT_DIR=./data/audio
 DATASET_OUTPUT=./dataset
 
@@ -271,8 +305,9 @@ usar `terraform import` en lugar de reintentar la creación.
 
 - **Agente**: `GET /health` → `healthy` cuando el runner está listo,
   `degraded` durante el arranque.
-- **Search service**: `GET /health` (liveness) y `GET /readyz` (readiness;
-  falso hasta que termina el warm-up de encoders e índices, para que Cloud Run
+- **Search service**: `GET /health` (liveness), `GET /readyz` (readiness;
+  falso hasta que termina el warm-up del dataset por defecto, su índice textual y encoder) y
+  `GET /datasets` (catálogo público sin URIs privadas), para que Cloud Run
   no enrute tráfico a una instancia fría).
 
 ### Logging y trazas

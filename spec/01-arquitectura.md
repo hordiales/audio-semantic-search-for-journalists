@@ -113,7 +113,8 @@ por audio (embeddings acústicos).
 | Componente | Archivo | Descripción |
 | --- | --- | --- |
 | AudioSearchEngine | `src/agent_service/search_engine.py` | Motor de búsqueda con FAISS |
-| Search service | `src/search_service/app.py` | Misma lógica expuesta por HTTP en Cloud Run (imagen con checkpoint CLAP) |
+| Search service | `src/search_service/app.py` | Lógica de retrieval expuesta por HTTP en Cloud Run (imagen con checkpoint CLAP) |
+| Registro de datasets | `src/search_service/dataset_registry.py` | Catálogo GCS, selección por `dataset_id`, carga diferida y caché LRU de motores |
 | Configuración | `src/embedding_config.py` | Lee `EMBEDDINGS_ACTIVE`/`CLASSIFIERS_ACTIVE` del entorno y autogenera `config/embeddings.toml` (no editar a mano) |
 | CLAP Embeddings | `src/clap_audio_embeddings.py` | Embeddings audio-texto cross-modal |
 | Gemini Embeddings | `src/gemini_multimodal_embeddings.py` | Embeddings nativos texto-audio para comparación |
@@ -133,6 +134,14 @@ por audio (embeddings acústicos).
 5. **YAMNet (ingesta)**: clasifica cada segmento en etiquetas AudioSet y publica un índice
    invertido JSON (`indices/yamnet_inverted_index.json`). No es un índice
    vectorial: cada token de una etiqueta apunta a sus segmentos y scores.
+
+**Selección multi-dataset**:
+
+- `DatasetRegistry` lee un catálogo JSON versionado desde `DATASET_CATALOG_GCS_URI` y sólo expone entradas habilitadas.
+- Cada request de retrieval puede incluir `dataset_id`; si se omite se usa `DEFAULT_DATASET_ID` o la primera entrada habilitada.
+- Los releases se descargan bajo `/tmp/audio-search-datasets/<dataset_id>/<release>` sólo al usarse por primera vez.
+- Los motores se conservan en una caché LRU de tamaño `DATASET_CACHE_MAX_ENTRIES` (default 2). Los modelos de texto y CLAP se comparten entre motores para evitar duplicar checkpoints en memoria.
+- Sin catálogo, se conserva compatibilidad con el modo único basado en `DATASET_GCS_URI` y `DATASET_PATH`, identificado como `default`.
 
 **Índices vectoriales**:
 
