@@ -142,6 +142,32 @@ por audio (embeddings acústicos).
 - Los releases se descargan bajo `/tmp/audio-search-datasets/<dataset_id>/<release>` sólo al usarse por primera vez.
 - Los motores se conservan en una caché LRU de tamaño `DATASET_CACHE_MAX_ENTRIES` (default 2). Los modelos de texto y CLAP se comparten entre motores para evitar duplicar checkpoints en memoria.
 - Sin catálogo, se conserva compatibilidad con el modo único basado en `DATASET_GCS_URI` y `DATASET_PATH`, identificado como `default`.
+- La búsqueda directa propaga `dataset_id`; `SearchServiceClient`, usado por las tools del agente, no lo envía. Por eso
+  `/query`, A2A y el widget conversacional consultan el dataset por defecto.
+- `list_datasets()` sólo conoce `active_indexes` y `dataset_version` después de cargar cada engine. En el código actual
+  los datasets no cargados salen con `active_indexes: []`; como el frontend usa esa lista para habilitar sus controles,
+  el selector no permite buscar un dataset no cargado. El contrato debe resolverse cargando metadatos livianos o
+  declarando los índices en el catálogo antes de considerar completa la selección multi-dataset.
+
+Formato de catálogo aceptado:
+
+```json
+{
+  "version": 1,
+  "datasets": [
+    {
+      "id": "news-2026",
+      "label": "Noticias 2026",
+      "language": "es",
+      "release_uri": "gs://bucket/releases/news-2026",
+      "enabled": true
+    }
+  ]
+}
+```
+
+El catálogo es configuración confiable: la implementación actual no valida `id` como slug ni comprueba al construir el
+registro que `DEFAULT_DATASET_ID` pertenezca al catálogo. Esas validaciones son requisitos operativos pendientes.
 
 **Índices vectoriales**:
 
@@ -183,7 +209,7 @@ por audio (embeddings acústicos).
 La división agente/retrieval existe porque el checkpoint CLAP (~1.7 GB) y las
 dependencias ML son una mala combinación con un runtime scale-to-zero: el agente
 se despliega sin PyTorch/FAISS y llama al search service por HTTP con
-`SEARCH_SERVICE_URL`. Ver `ARCHITECTURE-CLOUD.md`.
+`SEARCH_SERVICE_URL`. Ver `DOC-interna/ARCHITECTURE-CLOUD.md`.
 
 ## Flujo de Datos
 
@@ -231,6 +257,10 @@ se despliega sin PyTorch/FAISS y llama al search service por HTTP con
    │
 7. ▼ Respuesta JSON al usuario con segmentos relevantes
 ```
+
+En búsqueda directa, el navegador obtiene `GET /api/datasets`, envía `dataset_id` al proxy y éste lo incluye en cada
+llamada paralela al search service. La respuesta conserva `dataset_id`, `dataset_label` y `dataset_release` para poder
+identificar el corpus efectivo.
 
 ## Modelos de Datos
 

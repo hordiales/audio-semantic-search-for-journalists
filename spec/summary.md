@@ -3,13 +3,14 @@
 ## Visión General
 
 Sistema de **búsqueda agéntica multimodal** (texto y audio) diseñado para periodistas. Un agente de IA con acceso a
-herramientas (tools) realiza búsqueda semántica sobre un corpus de audios previamente transcritos e indexados,
-combinando embeddings de texto y embeddings acústicos para ofrecer resultados relevantes en lenguaje natural.
+herramientas (tools) realiza búsqueda semántica sobre audios previamente transcritos e indexados, combinando embeddings
+de texto, embeddings acústicos y etiquetas AudioSet. La búsqueda directa admite un catálogo de corpus; el agente
+conversacional consulta el dataset por defecto del search service.
 
 La solución se evalúa en dos niveles:
 
-1. **Calidad del agente** — usando RAGAS y agents-cli eval (grounding, uso de tools y calidad de respuesta), más cuatro
-   Expectations periodísticas: cita de fuente, momento temporal, grounding e idioma consistente
+1. **Calidad del agente** — usando RAGAS o DeepEval y, por separado, agents-cli eval (grounding, uso de tools y calidad
+   de respuesta), más cuatro Expectations periodísticas: cita de fuente, momento temporal, grounding e idioma consistente
 2. **Calidad del retrieval** — métricas clásicas de Information Retrieval (Precision@K, Recall@K, MRR, NDCG@K)
 
 ## Dominio de Aplicación
@@ -40,8 +41,8 @@ Periodistas que necesitan:
 | Servicio de retrieval | FastAPI en Cloud Run (contenedor con checkpoint CLAP) | — |
 | Frontends | React 18 + TypeScript + Vite | direct-search + widget CopilotKit |
 | Proxy | Node.js (Express) | CopilotKit AG-UI + API de búsqueda directa |
-| Evaluación agente | RAGAS o DeepEval + agents-cli eval | >= 0.1 / >= 1.1 |
-| Evaluación retrieval | Custom (Precision@K, MRR, NDCG) + benchmark Clotho para CLAP | — |
+| Evaluación agente | RAGAS o DeepEval + agents-cli eval | >= 0.1 / >= 4.1 / 1.1.0 |
+| Evaluación retrieval | Custom (Precision/Recall/F1@K, MRR, NDCG, FP Cost) + benchmark Clotho para CLAP | — |
 | Infraestructura | GCP Agent Runtime + Cloud Run + GCS + GitHub Pages | — |
 | CI/CD | GitHub Actions | — |
 | Containerización | Docker | — |
@@ -116,7 +117,6 @@ audio-semantic-search-for-journalists/
 │   └── ...
 ├── copilotkit-proxy/           # Proxy Node: widget conversacional + API /api/search
 ├── frontend-direct-search/     # Front React de búsqueda directa (GitHub Pages)
-├── widget/                     # Bundle publicado del widget embebible
 ├── benchmarks/                 # Evaluación y benchmarks
 │   ├── evaluate_clap_clotho.py # Sanity check de CLAP contra Clotho
 │   ├── compare_clap_by_question_type.py
@@ -126,6 +126,7 @@ audio-semantic-search-for-journalists/
 │   ├── deepeval_evaluation.py  # Backend alternativo DeepEval
 │   ├── evaluation_config.py    # Fuentes de dataset manual/synthetic/hybrid
 │   ├── retrieval_evaluation.py # Evaluación retrieval aislado
+│   ├── audit_corpus_acoustic_events.py # Cribado YAMNet sobre grabaciones completas
 │   ├── generate_synthetic_questions.py # Generación sintética de preguntas
 │   ├── test_datasets/          # Datasets de evaluación
 │   └── results/                # Resultados de evaluación
@@ -152,9 +153,11 @@ audio-semantic-search-for-journalists/
    clases acústicas YAMNet
 2. El agente responde consultas en lenguaje natural usando tools de búsqueda semántica
 3. La búsqueda es multimodal: puede buscar por contenido textual (transcripción) y por eventos acústicos
-4. El buscador directo permite seleccionar un dataset del catálogo y mantiene esa selección en todas las búsquedas
-5. RAGAS evalúa la calidad de respuestas del agente con Faithfulness >= 0.7 y las cuatro Expectations periodísticas
-   alcanzan >= 0.8 promedio cada una
-6. agents-cli eval registra trazas ADK y evalúa grounding, uso de tools y calidad de respuesta
+4. El buscador directo permite seleccionar un dataset cargable del catálogo y mantiene esa selección en todas las
+   búsquedas; los índices disponibles deben conocerse antes de deshabilitar controles en la UI
+5. RAGAS evalúa la calidad de respuestas del agente con Faithfulness >= 0.7
+6. agents-cli eval registra trazas ADK, evalúa grounding, uso de tools y calidad de respuesta, y las cuatro Expectations
+   periodísticas alcanzan >= 0.8 promedio cada una
 7. El retrieval aislado alcanza Precision@5 >= 0.6 y MRR >= 0.5 en el dataset de evaluación periodístico
-8. La solución se despliega en Google Agent Platform (Agent Runtime) con CI/CD automatizado
+8. El agente se despliega en Google Agent Platform (Agent Runtime) con CI/CD; search service y proxy viven en Cloud Run,
+   aunque sus workflows de despliegue aún no están en el repositorio

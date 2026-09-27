@@ -1,9 +1,13 @@
 # Plan de incorporación de `spec-comparar`
 
 **Fecha:** 2026-08-09  
-**Última actualización de estado:** 2026-08-30  
+**Última actualización de estado:** 2026-09-27
+
 **Objetivo:** incorporar en las especificaciones vigentes los aportes útiles de `spec-comparar` , sin declarar como
 implementadas decisiones futuras ni introducir contradicciones con el código actual.
+
+> Nota de revisión: `spec-comparar/` ya no está presente en el árbol actual. Las referencias al final de este documento
+> son históricas y no son enlaces operativos. El estado vigente se describe en las specs 01–05, 07 y 08.
 
 ## Decisión general
 
@@ -35,7 +39,7 @@ Runtime y GitHub Actions fueron aprobados e iniciados.
   evaluación.
 - [x] Expectations periodísticas incorporadas a la spec de evaluación y a `tests/eval/eval_config.yaml`.
 - [x] Dependencias ADK/LiteLLM declaradas; `uv.lock` generado para el flujo requerido por agents-cli.
-- [x] Validación determinista: 9 tests pasan y Ruff no reporta problemas en los archivos migrados.
+- [x] Validación determinista incorporada a la suite de tests y Ruff para los archivos migrados.
 - [x] Dataset sintético de prueba generado en `dataset/`, con tres segmentos, manifiesto e índices FAISS de texto/audio.
 - [x] Clasificación opcional YAMNet integrada en la ingesta: persiste clases AudioSet por segmento, agrega scores entre
   ventanas y expone `obtener_clases_audio` al agente. Requiere instalar el extra `yamnet` y reprocesar corpus reales.
@@ -83,7 +87,7 @@ Runtime y GitHub Actions fueron aprobados e iniciados.
 - [x] Corregir las referencias históricas restantes a Cloud Run/local-only, en particular `spec/memory.md` y las
   secciones no migradas de infraestructura (2026-08-30).
 - [x] Documentar la arquitectura de producción, ruta de servicio, contrato de API y estrategia de despliegue:
-  `ARCHITECTURE-CLOUD.md` + spec 05 reescrita (2026-08-30).
+  `DOC-interna/ARCHITECTURE-CLOUD.md` + spec 05 reescrita (2026-08-30).
 - [x] Completar la actualización de `spec/summary.md` , `01-arquitectura.md` , `03-agente-busqueda.md` y
   `05-infraestructura-deploy.md` (2026-08-30).
 
@@ -147,8 +151,8 @@ producción usa Google ADK con LiteLLM y conserva GPT-4o-mini como modelo config
 - [x] Evaluar la compatibilidad de RAGAS con el lockfile: `ragas<=0.4.x` importa
   `langchain_community.chat_models.vertexai` incondicionalmente; quedó pinneado por debajo de esa versión hasta el fix
   upstream (ragas #2741/#2753, nota en `pyproject.toml` ).
-- [ ] Completar la adopción de agents-cli eval: la configuración y los casos existen, pero falta verificar generación y
-  grading de trazas.
+- [x] Completar la adopción de agents-cli eval: la configuración y los casos existen y hay resultados versionados en
+  `evaluation/results/`; las Expectations siguen siendo un flujo separado de RAGAS/DeepEval.
 - [x] Adoptar DeepEval con versiones, juez y formato fijados: `evaluation/deepeval_evaluation.py` +
   `EVALUATION_FRAMEWORK=deepeval` (extra `eval-deepeval` ).
 - [x] Usar una única fuente anotada para datasets, aun si se ejecutan varios evaluadores: `EVALUATION_DATASET_SOURCE`

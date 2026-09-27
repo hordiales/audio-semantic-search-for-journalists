@@ -16,15 +16,14 @@ separadas**, más los frontends estáticos:
 4. **Frontends → GitHub Pages**: widget embebible y front de búsqueda directa,
    más la documentación de `docs/`.
 
-El dataset se publica en GCS como **release versionado** y se descarga como
-snapshot atómico al arrancar; los clips Opus se sirven on-demand con URLs
-firmadas. El pipeline CI/CD está implementado con GitHub Actions y Workload
-Identity Federation. No se usa Datastore: los metadatos viajan dentro del
-release del dataset.
+Cada dataset se publica en GCS como **release versionado**. El release por defecto se descarga como snapshot atómico al
+arrancar y los demás se cargan bajo demanda cuando hay catálogo; los clips Opus se sirven on-demand con URLs firmadas.
+GitHub Actions automatiza checks, despliegue del agente y GitHub Pages. El despliegue del search service y del proxy no
+tiene workflow propio en el árbol actual. No se usa Datastore: los metadatos viajan dentro de cada release.
 
 La división agente/retrieval existe porque el checkpoint CLAP y las
 dependencias ML inflaban la imagen del agente a ~8 GB y Agent Runtime nunca
-terminaba de descargarla. Detalle en `ARCHITECTURE-CLOUD.md`.
+terminaba de descargarla. Detalle en `DOC-interna/ARCHITECTURE-CLOUD.md`.
 
 ## Arquitectura de Infraestructura
 
@@ -106,14 +105,23 @@ Cuatro workflows en `.github/workflows/`:
 
 | Workflow | Disparo | Qué hace |
 | --- | --- | --- |
-| `pr_checks.yaml` | Pull request a `main` | `uv sync --locked`, `pytest tests/unit`, tests deterministas |
-| `staging.yaml` | Push a `main` (`src/**`, `tests/**`, `deployment/**`) | Deploy a **staging** en Agent Runtime (`uvx google-agents-cli@1.1.0 deploy`), actualiza env vars (`COMMIT_SHA`, `LOGS_BUCKET_NAME`), corre load test (`tests/load_test/`) y exporta resultados a GCS; al terminar invoca `deploy-to-prod.yaml` |
+| `pr_checks.yaml` | Pull request a `main` con cambios en `src/**`, `tests/**`, `deployment/**` o `poetry.lock` | `uv sync --locked`, `pytest tests/unit`, tests deterministas |
+| `staging.yaml` | Push a `main` con esos mismos filtros | Deploy a **staging** en Agent Runtime (`uvx google-agents-cli@1.1.0 deploy`), actualiza env vars (`COMMIT_SHA`, `LOGS_BUCKET_NAME`), corre load test (`tests/load_test/`) y exporta resultados a GCS; al terminar invoca `deploy-to-prod.yaml` |
 | `deploy-to-prod.yaml` | `workflow_dispatch` / `workflow_call` | Deploy a **producción** en Agent Runtime |
-| `deploy-pages.yaml` | Push a `main` (`docs/**`, `copilotkit-proxy/widget/**`, `frontend-direct-search/**`) o manual | Build del widget y del front direct-search (npm/Vite), empaqueta `_site/` con `docs/`, `widget/` y `direct-search/`, y despliega a GitHub Pages |
+| `deploy-pages.yaml` | Push a `main` (`docs/**`, `copilotkit-proxy/widget/**`, `frontend-direct-search/**` o el workflow) o manual | Build del widget y del front direct-search (npm/Vite), copia `docs/index.html` y ambos bundles a `_site/`, y despliega a GitHub Pages |
 
 La autenticación a GCP usa **Workload Identity Federation**
 (`google-github-actions/auth@v2` con `WIF_POOL_ID`/`WIF_PROVIDER_ID` y
 `GCP_SERVICE_ACCOUNT`), sin claves JSON versionadas.
+
+Límites del CI actual:
+
+- `pr_checks.yaml` y `staging.yaml` filtran por `poetry.lock`, aunque el proyecto usa `uv.lock`; cambios exclusivos en
+  `pyproject.toml` o `uv.lock` no disparan esos workflows.
+- `staging.yaml` llama siempre a `deploy-to-prod.yaml` después del load test. La aprobación sólo existe si el entorno
+  `production` tiene *required reviewers* configurados en GitHub; `workflow_dispatch` no es la única vía de producción.
+- No hay jobs para construir y desplegar `Dockerfile.search-service` ni `copilotkit-proxy/Dockerfile`; esos despliegues
+  siguen siendo operaciones separadas.
 
 ## Despliegue del Agente (Agent Runtime)
 
@@ -178,6 +186,16 @@ calienta durante el startup; los restantes se descargan y cargan bajo demanda en
 `/tmp/audio-search-datasets/`, con expulsión LRU. Los encoders de texto y CLAP se
 comparten entre motores. El service account del search service necesita lectura
 tanto del catálogo como de todos los releases referenciados.
+
+Estado actual del contrato: `/datasets` obtiene `active_indexes` y `dataset_version` del engine en memoria. Por eso sólo
+el dataset calentado tiene esos datos; las demás entradas salen con lista vacía y versión nula hasta su primera carga.
+Como el frontend deshabilita las fuentes según esa lista, hoy no puede iniciar la primera búsqueda de un dataset frío.
+El catálogo debe declarar metadatos de índices o el endpoint debe leer el manifiesto antes de completar esta función.
+
+Aunque los comentarios de `src/search_service/app.py` describen CLAP como perezoso, `DatasetRegistry._load_engine()`
+accede a `engine.clap_model` para guardarlo como modelo compartido. Ese acceso instancia CLAP durante el warm-up del
+dataset por defecto. La operación y el dimensionamiento de memoria deben asumir carga de CLAP en startup hasta corregir
+esa inicialización.
 
 Si `DATASET_CATALOG_GCS_URI` no está definido, sigue vigente el modo de un solo
 release con `DATASET_GCS_URI`/`DATASET_PATH`.
@@ -306,7 +324,7 @@ usar `terraform import` en lugar de reintentar la creación.
 - **Agente**: `GET /health` → `healthy` cuando el runner está listo,
   `degraded` durante el arranque.
 - **Search service**: `GET /health` (liveness), `GET /readyz` (readiness;
-  falso hasta que termina el warm-up del dataset por defecto, su índice textual y encoder) y
+  falso hasta que termina el warm-up del dataset por defecto, sus índices y, en el código actual, ambos encoders) y
   `GET /datasets` (catálogo público sin URIs privadas), para que Cloud Run
   no enrute tráfico a una instancia fría).
 
@@ -328,12 +346,16 @@ usar `terraform import` en lugar de reintentar la creación.
 
 ## Criterios de Aceptación
 
-1. Un push a `main` corre los checks de PR, despliega a staging y ejecuta el load test
-2. El deploy a producción es una acción manual explícita (`workflow_dispatch`)
+1. Un pull request o push a `main` que coincida con los filtros corre, respectivamente, checks o deploy de staging con
+   load test
+2. El deploy a producción requiere aprobación mediante la protección del entorno `production`, incluso cuando lo
+   invoca automáticamente el workflow de staging
 3. Health checks (`/health`, `/readyz`) pasan después de cada deploy
 4. El agente responde en < 5s (p95) una vez caliente el search service
 5. El search service escala a cero sin tráfico y su cold start queda cubierto por `SEARCH_SERVICE_TIMEOUT`
-6. Los frontends se publican en GitHub Pages al modificar `docs/`, `widget/` o `frontend-direct-search/`
+6. Los frontends se publican en GitHub Pages al modificar `docs/`, `copilotkit-proxy/widget/`,
+   `frontend-direct-search/` o el propio workflow
 7. Secrets no expuestos en código ni en logs (WIF sin claves JSON)
 8. La imagen del agente no contiene el grupo `ml` (descargable por Agent Runtime)
 9. Los clips Opus nunca se descargan al runtime: sólo URLs firmadas con TTL acotado
+10. Todos los datasets habilitados informan sus índices antes de ser seleccionados y se pueden cargar desde la UI

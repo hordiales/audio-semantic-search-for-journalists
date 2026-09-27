@@ -149,14 +149,14 @@ Se agrega una API estructurada en dos pasos: el LLM construye un plan de búsque
 `AudioSearchEngine` ejecuta ese plan sin dejar que el LLM filtre o reordene resultados.
 
 > **Estado de implementación (2026-08-30): IMPLEMENTADO.** La API vive en el
-> proxy `copilotkit-proxy` (`src/server.ts`: `POST /api/search/plan`,
-> `POST /api/search`, `GET /api/segments/:segmentId`, `GET /api/corpus`):
+> proxy `copilotkit-proxy` (`copilotkit-proxy/src/server.ts`: `GET /api/datasets`,
+> `POST /api/search/plan`, `POST /api/search`, `GET /api/segments/:segmentId`, `GET /api/corpus`):
 >
 > - El planner (`copilotkit-proxy/src/a2a-planner.ts`) pide el `SearchPlan` al
 >   agente por A2A usando el modo interno `DIRECT_SEARCH_PLANNER_V1` del system
 >   prompt, y respeta siempre los índices elegidos por el usuario.
 > - El retrieval corre contra el search service de Cloud Run
->   (`src/search_service/app.py`: `/search/semantic`, `/search/audio`,
+>   (`src/search_service/app.py`: `/datasets`, `/search/semantic`, `/search/audio`,
 >   `/search/yamnet`, `/segments/{id}`, `/corpus`) con autenticación IAM (ID
 >   token); el search service conserva IAM y sólo el proxy lo invoca.
 > - El front (`frontend-direct-search/`, desplegado en GitHub Pages) apunta con
@@ -212,20 +212,28 @@ SearchResult = {
   yamnet_matched_classes?  # clases que justifican un resultado YAMNet
 }
 
-GET  /api/segments/{segment_id}?dataset_id=... -> metadatos completos + sentimiento + clases YAMNet
+GET  /api/segments/{segment_id}                -> metadatos completos del dataset por defecto
 GET  /api/corpus?dataset_id=...                  -> { dataset_id, total_segments, files, active_indexes, dataset_version }
 ```
 
-La URL del clip sale de `SegmentClipStore.reference(segment_id)`; en desarrollo
-local, sin bucket configurado, resuelve al archivo dentro de `DATASET_PATH` y el
-front lo consume por una ruta estática. El front debe renovar los resultados (o
-volver a pedir la referencia) si el usuario deja la página abierta más que
-`SEGMENT_CLIP_URL_TTL_SECONDS`.
+La URL del clip sale de `SegmentClipStore.reference(segment_id)`. Con GCS es una URL V4 firmada. Sin bucket, el código
+actual devuelve un URI `file://` al clip dentro de `DATASET_PATH`; ni el search service ni el proxy montan una ruta
+estática para ese archivo, por lo que el frontend servido por HTTP no puede reproducirlo de forma portable. El modo
+local necesita una ruta HTTP de clips o un bucket de desarrollo. Para GCS, el front debe renovar los resultados si el
+usuario deja la página abierta más que `SEGMENT_CLIP_URL_TTL_SECONDS`.
 
 Notas de diseño:
 
-- Al montar, el frontend consulta `GET /api/datasets`, selecciona el dataset indicado por `?dataset=<id>` o el primero disponible y envía su `dataset_id` en cada búsqueda. El selector sólo habilita índices declarados en `active_indexes`.
-- El search service carga el dataset elegido de forma diferida mediante `DatasetRegistry`; un ID desconocido produce 404. La respuesta identifica el dataset y release efectivos para hacer reproducible el resultado.
+- Al montar, el frontend consulta `GET /api/datasets`, selecciona el dataset indicado por `?dataset=<id>` o el primero
+  disponible y envía su `dataset_id` en cada búsqueda. El selector sólo habilita índices declarados en `active_indexes`.
+  Hoy el endpoint devuelve esa lista vacía para todo engine aún no cargado, por lo que la UI no puede disparar su primera
+  búsqueda. La selección multi-dataset está integrada de punta a punta, pero este bootstrap sigue pendiente.
+- El search service carga el dataset elegido de forma diferida mediante `DatasetRegistry`; un ID desconocido produce
+  404 allí. `/api/search` captura ese error por índice y devuelve una respuesta 200 con las fuentes no disponibles. La
+  respuesta exitosa identifica el dataset y release efectivos para hacer reproducible el resultado.
+- El search service acepta `dataset_id` al consultar segmentos. La ruta actual del proxy
+  `GET /api/segments/:segmentId` no reenvía ese parámetro y resuelve el dataset por defecto; debe corregirse antes de usar
+  la vista de detalle con otros corpus.
 - Con `rewrite=true` , el backend obtiene primero un `SearchPlan` estructurado. El LLM puede convertir “¿se escucha una
   cortina mientras habla el entrevistado?” en una descripción acústica breve; el search service la traduce al inglés
   antes del encoder CLAP.
@@ -244,8 +252,8 @@ Notas de diseño:
   separado.
 - La respuesta del LLM se valida contra un schema cerrado; si el planner falla o excede su timeout, la API devuelve un
   error claro. El usuario puede desactivar `rewrite` para ejecutar una búsqueda literal deliberada.
-- La carga del modelo CLAP es perezosa porque su uso es opt-in. El `lifespan` prepara dataset, índices y encoder
-  textual; la primera búsqueda con CLAP puede tardar mientras carga el checkpoint.
+- El diseño buscaba cargar CLAP de forma perezosa, pero `DatasetRegistry._load_engine()` accede hoy a
+  `engine.clap_model` al registrar el modelo compartido. Ese acceso carga CLAP durante el warm-up del dataset por defecto.
 
 ## 8. UX
 
@@ -300,9 +308,10 @@ Regla de producto: **nunca mostrar el coseno crudo como porcentaje de confianza.
   sí."*
 - **Nunca mezclar ni promediar** scores de las tres fuentes en un ranking único: texto y CLAP son espacios vectoriales
   distintos; YAMNet usa otro score de ranking.
-- Si el top-1 de un índice cae por debajo de un umbral configurable, mostrar un aviso: *"Coincidencias débiles:
-  probablemente no haya buenos ejemplos en el corpus."* En vez de presentar cinco resultados irrelevantes como
-  hallazgos.
+- Si el top-1 de un índice cae por debajo del umbral opcional de
+  `VITE_WEAK_TEXT_SIMILARITY`, `VITE_WEAK_AUDIO_SIMILARITY` o `VITE_WEAK_YAMNET_SCORE`, se muestra un aviso de
+  coincidencias débiles. Además, cada tarjeta por debajo de `VITE_LOW_SCORE_WARNING` (default `0.10`) marca score, barra
+  y borde en rojo. Los umbrales por índice quedan sin valor por defecto hasta calibrarlos con el corpus real.
 
 ### 8.4 Evidencia acústica adicional
 
@@ -366,9 +375,10 @@ cita. Desplegado en GitHub Pages por `deploy-pages.yaml`.
 
 **Fase 3 — Refinamientos. EN CURSO.** Ya implementados: filtros locales por
 archivo y timestamp, clases YAMNet en la tarjeta, reproducción continua del
-ranking, estado en URL (`?q=...&text=0&clap=1&yamnet=1&k=10`), descarga de
-clip y renovación preventiva de URLs firmadas. Pendiente: umbral de
-"coincidencia débil" por índice.
+ranking, estado en URL (`?dataset=...&q=...&text=0&clap=1&yamnet=1&k=10`), descarga de
+clip, renovación preventiva de URLs firmadas y avisos configurables de coincidencia débil. El selector multi-dataset y
+su propagación en búsquedas están implementados; quedan pendientes el bootstrap de `active_indexes` para datasets fríos
+y el reenvío de `dataset_id` desde `/api/segments/:segmentId`.
 
 **Fase 4 — Convivencia.** Toggle "Búsqueda directa" / "Preguntar al agente" que reutiliza el widget conversacional
 existente para consultas exploratorias.
@@ -393,6 +403,9 @@ existente para consultas exploratorias.
    portable: quien la recibe puede compartirla y seguirá funcionando hasta que expire. Definir si `/api/search` requiere
    autenticación, y si el TTL de 15 minutos es aceptable para el material del corpus.
 3. **Umbral de "coincidencia débil"** por índice: requiere medirlo sobre el corpus real; hay insumos en
-   `docs/reporte-comparativo-texto-clap.md` y `docs/resultados-evaluacion-clotho.md` .
+   `DOC-interna/docs/reporte-comparativo-texto-clap.md` y `docs/resultados-evaluacion-clotho.md` . La UI ya acepta los
+   tres umbrales por variables Vite; falta fijar valores editoriales.
 4. **Retención de releases viejas:** con los clips, cada release pasa a pesar ≈14 MB por hora de audio. Definir política
    de borrado o lifecycle en el bucket.
+5. **Metadatos de datasets fríos:** decidir si `active_indexes`/`dataset_version` se declaran en el catálogo o se leen
+   del manifiesto sin cargar el engine completo.

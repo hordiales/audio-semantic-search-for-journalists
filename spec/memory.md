@@ -32,20 +32,29 @@ Key modules:
 - src/agent_service/search_engine.py - AudioSearchEngine (FAISS, in-process)
 - src/agent_service/search_client.py - SearchServiceClient (HTTP) selected by SEARCH_SERVICE_URL; keeps agent image free
   of PyTorch/FAISS
-- src/search_service/app.py - Cloud Run retrieval service (/search/semantic, /search/audio, /search/yamnet,
-  /segments/{id}, /corpus, /health, /readyz)
+- src/search_service/app.py - Cloud Run retrieval service (/datasets, /search/semantic, /search/audio, /search/yamnet,
+  /segments/{id}, /corpus, /health, /readyz); direct retrieval accepts dataset_id
+- src/search_service/dataset_registry.py - GCS catalog, default dataset, lazy staging under /tmp, shared encoders and
+  LRU eviction; falls back to the DATASET_GCS_URI/DATASET_PATH single-dataset mode
 - src/fast_api_app.py - Production ADK surface (/query, /evaluate/query, /feedback, A2A routes, reasoning engine
   adapter, OTel telemetry)
 - src/app_utils/ - telemetry, services, A2A v1.0, reasoning_engine_adapter
-- evaluation/retrieval_evaluation.py - IR metrics (P@K, MRR, NDCG)
+- evaluation/retrieval_evaluation.py - IR metrics (Precision/Recall/F1@K, MRR, NDCG, FP Cost)
+- evaluation/audit_corpus_acoustic_events.py - continuous YAMNet screening of complete recordings correlated with
+  human event-presence judgments; screening evidence, not ground truth
 - evaluation/ragas_evaluation.py / deepeval_evaluation.py - selectable via EVALUATION_FRAMEWORK
 - evaluation/evaluation_config.py - dataset sources manual/synthetic/hybrid via EVALUATION_DATASET_SOURCE
 - benchmarks/evaluate_clap_clotho.py - CLAP sanity check vs Clotho (Recall@1/5/10)
-- copilotkit-proxy/ - Node proxy: conversational widget (AG-UI/A2A) + structured direct-search API (/api/search,
-  /api/search/plan, /api/segments/:id, /api/corpus)
+- copilotkit-proxy/ - Node proxy: conversational widget (AG-UI/A2A) + structured direct-search API (/api/datasets,
+  /api/search, /api/search/plan, /api/segments/:id, /api/corpus)
 - frontend-direct-search/ - React+Vite archive-console UI (GitHub Pages)
 - copilotkit-proxy/widget/ - embeddable widget build (GitHub Pages)
 - scripts/publish_dataset_release.py - publishes dataset release to GCS
+
+Multi-dataset scope: direct search passes dataset_id through browser -> proxy -> search service. SearchServiceClient,
+used by the conversational agent, does not pass dataset_id and therefore uses DEFAULT_DATASET_ID. The current /datasets
+response only has active_indexes for engines that have already loaded; non-default datasets are returned with an empty
+list, and the frontend consequently disables every source for them. Full selector operation remains pending.
 
 Scope decisions: production on Google Agent Platform (Agent Runtime) for the agent, Cloud Run for the retrieval service
 (ships CLAP checkpoint), GitHub Pages for static frontends, CI/CD with GitHub Actions (pr_checks, staging,

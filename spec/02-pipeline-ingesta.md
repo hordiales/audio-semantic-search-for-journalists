@@ -485,6 +485,10 @@ manifiesto y `segment_clips/`. El runtime lo descarga con
 excepto los clips, que se sirven on-demand con URLs firmadas V4
 (`src/segment_clip_storage.py`). Ver spec 05 y spec 08 §6.
 
+La publicación crea el release, pero no registra el corpus en el catálogo multi-dataset. Si se usa
+`DATASET_CATALOG_GCS_URI`, la operación debe añadir o actualizar por separado una entrada con `id`, `label`, `language`,
+`release_uri` y `enabled`.
+
 ## Configuración de Recursos
 
 ### Recomendaciones por Hardware

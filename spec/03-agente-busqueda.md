@@ -203,11 +203,17 @@ Las tools operan contra un backend polimórfico elegido una sola vez por
   service de Cloud Run (`src/search_service/app.py`). El proceso del agente no
   importa PyTorch, FAISS ni el dataset (imports perezosos), por lo que la imagen
   se construye con `--no-group ml` y es desplegable en Agent Runtime.
-  `SEARCH_SERVICE_TIMEOUT` (default 180 s) cubre el cold start de Cloud Run.
+  El default del código para `SEARCH_SERVICE_TIMEOUT` es 30 s; `.env.example` y la configuración operativa recomiendan
+  180 s para cubrir el cold start de Cloud Run. `SEARCH_SERVICE_AUTH=none` desactiva el ID token sólo para desarrollo
+  local; cualquier otro valor usa autenticación IAM.
 - **`AudioSearchEngine`** (`src/agent_service/search_engine.py`): modo local
   (desarrollo, playground, ingesta). Carga dataset, embeddings e índices en
   proceso. Si `DATASET_GCS_URI` está definido, `resolve_dataset_path` descarga
   antes el release de GCS a un snapshot local atómico.
+
+El cliente del agente conserva la interfaz histórica y no acepta `dataset_id`. Cuando apunta al search service, todas
+las tools usan el dataset por defecto del registro. La selección de corpus está implementada únicamente en la API de
+búsqueda directa.
 
 ### Inicialización (AudioSearchEngine)
 
@@ -302,6 +308,16 @@ búsqueda, corpus y segmento aceptan `dataset_id`; las respuestas de búsqueda
 incluyen `dataset_id`, `dataset_label` y `dataset_release`. El proxy
 CopilotKit la usa para la búsqueda directa (`/api/search*`, ver spec 08).
 
+Detalles del contrato actual:
+
+- Un `dataset_id` inexistente produce 404 en el search service. En `POST /api/search`, el proxy captura por separado el
+  error de cada índice y responde 200 con el bucket marcado `available: false`; no conserva el detalle del 404.
+- `GET /api/corpus` sí reenvía `dataset_id`. `GET /api/segments/:segmentId` no reenvía hoy el query param y consulta el
+  dataset por defecto, aunque `/segments/{id}` del search service sí lo acepta.
+- `GET /datasets` no expone `release_uri`, pero para engines aún no cargados devuelve `active_indexes: []` y
+  `dataset_version: null`. La UI interpreta la lista vacía como ausencia de índices; falta completar este contrato para
+  habilitar de forma efectiva los datasets cargados bajo demanda.
+
 ### POST `/query`
 
 **Request**:
@@ -346,7 +362,8 @@ CopilotKit la usa para la búsqueda directa (`/api/search*`, ver spec 08).
 | `DEFAULT_DATASET_ID` | primera entrada | Dataset usado cuando el request no incluye `dataset_id` |
 | `DATASET_CACHE_MAX_ENTRIES` | `2` | Máximo de motores cargados en la caché LRU del search service |
 | `SEARCH_SERVICE_URL` | — | Si está definida, el retrieval se delega al search service Cloud Run |
-| `SEARCH_SERVICE_TIMEOUT` | `180` | Timeout (s) de cada llamada al search service (cubre cold start) |
+| `SEARCH_SERVICE_TIMEOUT` | `30` en código; `180` recomendado | Timeout (s) de cada llamada al search service |
+| `SEARCH_SERVICE_AUTH` | `iam` | Usar `none` sólo contra un search service local sin IAM |
 | `MIN_SEGMENT_DURATION_SECONDS` | `5` | Descarta resultados con duración menor o igual a este valor |
 | `OPENAI_API_KEY` | (requerido) | API key de OpenAI |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Modelo LLM a usar |
@@ -437,6 +454,8 @@ Plan:
 | Sin resultados | Agente sugiere reformulación |
 | Timeout de LLM | Retry hasta max_iterations, luego error 500 |
 | FAISS index corrupto | Reconstruir desde embeddings en memoria |
+| `dataset_id` desconocido (search service) | 404; mediante `/api/search` el proxy lo convierte en fuentes no disponibles |
+| Dataset no cargado listado en `/datasets` | Actualmente informa cero índices y la UI no permite iniciar su primera búsqueda |
 
 ## Criterios de Aceptación
 

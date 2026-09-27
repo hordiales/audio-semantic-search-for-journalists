@@ -6,6 +6,8 @@ run_human_eval.sh
 config/embeddings.toml
 .markdownlint.json
 
+#DOC-interna/
+
 # development files
 # .vscode/*
 

@@ -25,7 +25,7 @@ Para obtener resultados reales, es necesario procesar archivos de audio. El pipe
 embeddings y construye los índices de búsqueda.
 
 El procedimiento operativo actualizado para WAV/OPUS reales está en
-[`docs/guia-dataset-real.md`](../docs/guia-dataset-real.md); esta spec conserva
+[`guia-dataset-real.md`](../DOC-interna/guia-dataset-real.md); esta spec conserva
 el contexto de diseño y el fixture de integración.
 
 ## 2. Preparar el entorno
@@ -119,7 +119,8 @@ ninguno de los dos, el comando falla pidiendo `--input` .
 
 ## 4. Elegir el directorio de salida
 
-El directorio de salida contiene artefactos generados. Por defecto se usa `dataset/`:
+El directorio de salida contiene artefactos generados. No hay un default interno si `DATASET_OUTPUT` no está definido;
+para el fixture y desarrollo se recomienda `dataset/`:
 
 ```bash
 DATASET_OUTPUT=dataset
@@ -143,7 +144,7 @@ los flags `--input` /`--output` pueden omitirse; se muestran aquí de forma expl
 ```bash
 uv run python src/simple_dataset_pipeline.py \
   --input data/audio \
-  --output "$DATASET_OUTPUT" \
+  --output dataset-real \
   --whisper-model base \
   --language es \
   --batch-size 8
@@ -183,9 +184,10 @@ El pipeline ejecuta estas etapas:
 4. Genera embeddings texto-audio con CLAP.
 5. Si YAMNet está activo, clasifica eventos acústicos y guarda las mejores
    clases por segmento.
-6. Calcula sentimiento de la transcripción.
-7. Construye índices FAISS para texto y audio.
-8. Guarda el dataset final y un manifiesto de configuración.
+6. Genera un clip Opus por segmento, con contexto configurable, salvo que se use `--no-segment-clips`.
+7. Calcula sentimiento de la transcripción.
+8. Construye índices FAISS y, si corresponde, el índice invertido YAMNet.
+9. Guarda el dataset final, el estado incremental, el manifiesto y el log de la corrida.
 
 ## 7. Verificar la salida
 
@@ -201,11 +203,16 @@ dataset-real/
 │   └── audio_embeddings/
 ├── indices/
 │   ├── text_index.faiss
-│   └── audio_index.faiss
+│   ├── audio_index.faiss
+│   └── yamnet_inverted_index.json       # si YAMNet está activo
+├── segment_clips/
+│   └── segment_{id}.opus                # salvo --no-segment-clips
 └── final/
     ├── complete_dataset.pkl
     ├── dataset_metadata.csv
-    └── dataset_manifest.json
+    ├── dataset_manifest.json
+    ├── ingestion_state.json
+    └── process_run.json
 ```
 
 Comprobar que los archivos esenciales existen:
@@ -265,6 +272,30 @@ las clases del `segment_id` encontrado. La tool `obtener_clases_audio` devuelve
 etiquetas AudioSet en inglés y su score de clasificación; no son porcentajes de
 similitud de CLAP.
 
+### Publicar varios datasets
+
+`scripts/publish_dataset_release.py` publica un directorio procesado como release independiente. El script no modifica
+el catálogo: después de publicar, hay que actualizar el JSON al que apunta `DATASET_CATALOG_GCS_URI`.
+
+```bash
+uv run python scripts/publish_dataset_release.py \
+  --dataset ./dataset-real \
+  --bucket <bucket> \
+  --release news-2026
+```
+
+Para desarrollo local y para el agente conversacional basta `DATASET_PATH`. En producción multi-dataset:
+
+```bash
+DATASET_CATALOG_GCS_URI=gs://<bucket>/catalogs/datasets.json
+DEFAULT_DATASET_ID=news-2026
+DATASET_CACHE_MAX_ENTRIES=2
+```
+
+El agente conversacional no permite elegir `dataset_id`: usa el default. La selección de corpus pertenece al frontend de
+búsqueda directa. En el código actual, además, los datasets fríos aparecen sin `active_indexes` en `/datasets`, lo que
+debe resolverse antes de operar el selector con más de un corpus.
+
 ## 9. Preparar el dataset de evaluación
 
 Después de comprobar que el agente funciona con el corpus real:
@@ -288,9 +319,11 @@ No evaluar calidad semántica con el fixture sintético: sus embeddings no repre
 | CLAP falla o tarda demasiado | Probar primero `--mock-audio`; para producción, revisar la instalación de PyTorch/CLAP y la disponibilidad de GPU. |
 | YAMNet no está disponible | Ejecutar `uv sync --extra yamnet`, definir `CLASSIFIERS_ACTIVE=yamnet` en `.env` y reprocesar el corpus. |
 | El agente no encuentra dataset | Verificar `DATASET_PATH` y la presencia de `final/complete_dataset.pkl` e `indices/*.faiss`. |
+| Un dataset del selector no habilita ningún índice | `/datasets` sólo informa índices de engines cargados; usar el default mientras se completa el bootstrap de metadatos para datasets fríos. |
 | Resultados poco relevantes | Revisar transcripciones, tamaño del corpus, anotaciones y elegir un modelo Whisper mayor antes de modificar umbrales de evaluación. |
 
 ## Resultado esperado
 
-Al finalizar, `DATASET_PATH` apunta a un directorio que contiene el dataset, sus metadatos y ambos índices FAISS. Ese
-directorio es la entrada para el agente local, la API, la evaluación y el snapshot de producción.
+Al finalizar, `DATASET_PATH` apunta a un directorio que contiene el dataset, sus metadatos y los índices habilitados por
+la configuración (texto y/o CLAP), además del índice invertido YAMNet si se activó ese clasificador. Ese directorio es
+la entrada para el agente local, la API, la evaluación y el snapshot de producción.
