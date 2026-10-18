@@ -1,0 +1,38 @@
+{
+  "name": "audio-semantic-search-vercel-eve",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vercel + Neon (pgvector) + Eve Agents deployment for journalistic audio semantic search",
+  "scripts": {
+    "dev": "eve dev",
+    "dev:web": "vite",
+    "build": "eve build && tsc --noEmit",
+    "build:web": "tsc -p tsconfig.web.json --noEmit && vite build",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.96",
+    "@neondatabase/serverless": "^0.10.4",
+    "@vercel/blob": "^0.27.1",
+    "ai": "^7.0.137",
+    "eve": "^0.80.1",
+    "express": "^5.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vercel/node": "^5.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "just-bash": "^3.6.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.7.2",
+    "vite": "^6.3.5"
+  }
+}
